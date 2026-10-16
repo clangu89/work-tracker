@@ -1,0 +1,1351 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบติดตามงาน (Work Tracker)</title>
+
+  <!-- Google Fonts: Prompt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#eff8ff',
+              100: '#dbeafe',
+              500: '#2491fa',
+              600: '#2491fa',
+              700: '#1a7ce0',
+              800: '#1565c0',
+              900: '#0d47a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Font Awesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+
+  <!-- SweetAlert2 -->
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+  <!-- Flatpickr (DD/MM/YYYY Date Picker) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
+
+  <!-- Custom Styles -->
+  <?!= include('Styles'); ?>
+</head>
+<body class="bg-white min-h-screen text-[#201E1C] flex flex-col">
+
+  <!-- ================= LOGIN SCREEN OVERLAY ================= -->
+  <div id="loginScreen" class="fixed inset-0 z-50 bg-[#201E1C]/90 backdrop-blur-md flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border border-[#EFE9DC]">
+      
+      <!-- Brand & Header -->
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 rounded-2xl bg-[#2491FA] text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-500/25 p-2.5">
+          <!-- Modern Work Tracker Logo SVG -->
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full text-white">
+            <rect x="18" y="20" width="64" height="68" rx="14" stroke="currentColor" stroke-width="6" fill="currentColor" fill-opacity="0.12" />
+            <rect x="36" y="11" width="28" height="15" rx="6" fill="currentColor" />
+            <rect x="43" y="16" width="14" height="4.5" rx="2" fill="#2491FA" />
+            <path d="M29 40L35.5 46.5L48 34" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+            <rect x="55" y="37.5" width="23" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+            <path d="M29 57L35.5 63.5L48 51" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+            <rect x="55" y="54.5" width="20" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+            <circle cx="38.5" cy="73" r="4.5" fill="currentColor" />
+            <rect x="55" y="70.5" width="16" height="5" rx="2.5" fill="currentColor" fill-opacity="0.6" />
+          </svg>
+        </div>
+        <h2 class="text-xl font-bold text-[#201E1C]">ระบบติดตามงาน</h2>
+        <p class="text-xs text-[#6E6862] mt-1 font-medium">ระบบบริหารและติดตามสถานะงาน (Work Tracker)</p>
+      </div>
+
+      <!-- STEP 1: INPUT USERNAME -->
+      <div id="loginStep1" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-[#201E1C] mb-1.5">ชื่อผู้ใช้ (Username)</label>
+          <div class="relative">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <i class="fa-regular fa-user"></i>
+            </div>
+            <input type="text" id="loginUsername" placeholder="กรอกชื่อผู้ใช้" autocomplete="username"
+                   class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
+          </div>
+          <p class="text-[11px] text-[#6E6862] mt-1.5 flex items-center gap-1">
+            <i class="fa-brands fa-telegram text-[#2491FA]"></i>
+            <span>ระบบจะสุ่มรหัส PIN 6 หลัก และส่งเข้า Telegram ของคุณ</span>
+          </p>
+        </div>
+
+        <button type="button" id="btnRequestPin" onclick="handleRequestPin()"
+                class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+          <i class="fa-brands fa-telegram text-base"></i>
+          <span>ขอรหัส PIN ทาง Telegram</span>
+        </button>
+      </div>
+
+      <!-- STEP 2: INPUT 6-DIGIT PIN -->
+      <div id="loginStep2" class="hidden space-y-5">
+        <div class="bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC] flex items-center justify-between">
+          <div class="flex items-center gap-2 text-xs text-[#201E1C]">
+            <div class="w-7 h-7 rounded-full bg-[#2491FA] text-white flex items-center justify-center text-xs">
+              <i class="fa-regular fa-user"></i>
+            </div>
+            <div>
+              <div id="loginUserDisplay" class="font-bold">-</div>
+              <div id="loginUsernameDisplay" class="text-[10px] text-[#2491FA]">-</div>
+            </div>
+          </div>
+          <button onclick="backToStep1()" class="text-xs text-[#6E6862] hover:text-[#2491FA] underline">
+            เปลี่ยนผู้ใช้
+          </button>
+        </div>
+
+        <div>
+          <div class="flex items-center justify-between mb-2">
+            <label class="text-xs font-semibold text-[#201E1C]">กรอกรหัส PIN 6 หลัก</label>
+            <span id="pinCountdown" class="text-xs font-semibold text-rose-600 flex items-center gap-1">
+              <i class="fa-regular fa-clock text-[11px]"></i>
+              <span id="countdownTimerText">05:00</span>
+            </span>
+          </div>
+
+          <!-- 6 PIN Digit Input Boxes -->
+          <div class="flex justify-between gap-1.5 sm:gap-2" id="pinInputsContainer">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-0">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-1">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-2">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-3">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-4">
+            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-5">
+          </div>
+        </div>
+
+        <button type="button" id="btnVerifyPin" onclick="handleVerifyPin()"
+                class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+          <i class="fa-solid fa-lock-open text-xs"></i>
+          <span>เข้าสู่ระบบ</span>
+        </button>
+
+        <div class="text-center">
+          <button type="button" id="btnResendPin" onclick="handleRequestPin()"
+                class="text-xs font-medium text-[#6E6862] hover:text-[#2491FA] transition-colors">
+            ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================= TOP HEADER / NAVBAR ================= -->
+  <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-4">
+        
+        <!-- Logo & App Title -->
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-[#2491FA] flex items-center justify-center text-white shadow-md shadow-blue-500/25 p-1.5 flex-shrink-0">
+            <!-- Modern Work Tracker Logo SVG -->
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full text-white">
+              <rect x="18" y="20" width="64" height="68" rx="14" stroke="currentColor" stroke-width="6" fill="currentColor" fill-opacity="0.12" />
+              <rect x="36" y="11" width="28" height="15" rx="6" fill="currentColor" />
+              <rect x="43" y="16" width="14" height="4.5" rx="2" fill="#2491FA" />
+              <path d="M29 40L35.5 46.5L48 34" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+              <rect x="55" y="37.5" width="23" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+              <path d="M29 57L35.5 63.5L48 51" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+              <rect x="55" y="54.5" width="20" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+              <circle cx="38.5" cy="73" r="4.5" fill="currentColor" />
+              <rect x="55" y="70.5" width="16" height="5" rx="2.5" fill="currentColor" fill-opacity="0.6" />
+            </svg>
+          </div>
+          <div>
+            <h1 class="text-base sm:text-lg font-bold text-[#201E1C] leading-tight">ระบบติดตามงาน</h1>
+            <p class="text-[11px] text-[#6E6862] font-medium">Work Tracker System</p>
+          </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          <!-- Logged-in User Profile Badge -->
+          <div id="userProfileBadge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC]">
+            <i class="fa-solid fa-circle-user text-[#2491FA] text-sm"></i>
+            <span id="navUserFullName" class="font-semibold max-w-[120px] truncate">-</span>
+            <span id="navUserRole" class="text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
+          </div>
+
+          <!-- Online Users Counter & View Button -->
+          <button id="btnOnlineUsers" onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
+                  class="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span class="font-semibold text-xs text-[#201E1C]"><span id="onlineUsersCount">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
+          </button>
+
+          <!-- Archive Modal Button -->
+          <button id="btnOpenArchiveModal" onclick="openArchiveModal()" title="เปิดดูคลังงานที่จัดเก็บถาวร (Archive)"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <i class="fa-solid fa-box-archive text-amber-700 text-xs"></i>
+            <span class="font-semibold hidden sm:inline">คลังงาน</span>
+          </button>
+
+          <!-- Link to Google Sheet -->
+          <a id="sheetLinkBtn" href="#" target="_blank" title="เปิดดูข้อมูลใน Google Sheets"
+             class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-100/70 hover:bg-emerald-100 border border-emerald-300/60 rounded-xl transition-colors">
+            <i class="fa-solid fa-file-excel text-emerald-700"></i>
+            <span>Google Sheet</span>
+          </a>
+
+          <!-- Real-time Live Sync Status Indicator -->
+          <div id="liveSyncStatus" title="ระบบเชื่อมต่อแบบ Real-time (ซิงค์อัตโนมัติ)"
+               class="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all">
+            <span class="relative flex h-2 w-2">
+              <span id="liveSyncPulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span id="liveSyncDot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span class="hidden md:inline font-bold text-[11px]" id="liveSyncText">Live Sync</span>
+          </div>
+
+          <!-- Refresh Data -->
+          <button onclick="loadInitialData()" title="รีเฟรชข้อมูล (หรือรอระบบซิงค์ Real-time อัตโนมัติ)"
+                  class="p-2 text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-xl transition-colors border border-[#EFE9DC]">
+            <i class="fa-solid fa-arrows-rotate" id="btnRefreshIcon"></i>
+          </button>
+
+          <!-- Settings Button -->
+          <button onclick="openSettingsModal()" title="ตั้งค่าระบบ / สมาชิก / Telegram"
+                  class="p-2 text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-xl transition-colors border border-[#EFE9DC]">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+
+          <!-- Add Task Button (Primary) -->
+          <button onclick="openCreateTaskModal()"
+                  class="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all hover:shadow-lg active:scale-95 cursor-pointer">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span>เพิ่มงานใหม่</span>
+          </button>
+
+          <!-- Logout Button -->
+          <button onclick="handleLogout()" title="ออกจากระบบ"
+                  class="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- ================= MAIN CONTAINER ================= -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- KPI Summary Cards (Clubhouse Warm Cream) -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      
+      <!-- Total Tasks -->
+      <div class="bg-[#F7F4EA] p-3.5 sm:p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-blue-100/70 text-[#2491FA] flex items-center justify-center text-base">
+          <i class="fa-solid fa-list-check"></i>
+        </div>
+        <div>
+          <div class="text-xs font-medium text-[#6E6862]">งานทั้งหมด</div>
+          <div id="statTotal" class="text-lg sm:text-xl font-bold text-[#201E1C]">0</div>
+        </div>
+      </div>
+
+      <!-- To Do -->
+      <div class="bg-[#F7F4EA] p-3.5 sm:p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-stone-200/80 text-stone-700 flex items-center justify-center text-base">
+          <i class="fa-solid fa-hourglass-start"></i>
+        </div>
+        <div>
+          <div class="text-xs font-medium text-[#6E6862]">รอดำเนินการ</div>
+          <div id="statTodo" class="text-lg sm:text-xl font-bold text-[#201E1C]">0</div>
+        </div>
+      </div>
+
+      <!-- In Progress -->
+      <div class="bg-[#F7F4EA] p-3.5 sm:p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-base">
+          <i class="fa-solid fa-person-digging"></i>
+        </div>
+        <div>
+          <div class="text-xs font-medium text-[#6E6862]">กำลังทำ</div>
+          <div id="statInProgress" class="text-lg sm:text-xl font-bold text-amber-700">0</div>
+        </div>
+      </div>
+
+      <!-- Review -->
+      <div class="bg-[#F7F4EA] p-3.5 sm:p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-base">
+          <i class="fa-solid fa-magnifying-glass-chart"></i>
+        </div>
+        <div>
+          <div class="text-xs font-medium text-[#6E6862]">รอตรวจงาน</div>
+          <div id="statReview" class="text-lg sm:text-xl font-bold text-purple-700">0</div>
+        </div>
+      </div>
+
+      <!-- Completed -->
+      <div class="bg-[#F7F4EA] p-3.5 sm:p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-base">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+        <div>
+          <div class="text-xs font-medium text-[#6E6862]">เสร็จสิ้น</div>
+          <div id="statDone" class="text-lg sm:text-xl font-bold text-emerald-700">0</div>
+        </div>
+      </div>
+
+      <!-- Overdue -->
+      <div class="bg-[#F7F4EA] p-3.5 sm:p-4 rounded-2xl border border-rose-200 shadow-2xs flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-base">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </div>
+        <div>
+          <div class="text-xs font-medium text-rose-600">เกินกำหนด</div>
+          <div id="statOverdue" class="text-lg sm:text-xl font-bold text-rose-700">0</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Filters & View Switcher Bar (Clubhouse Warm Cream) -->
+    <div class="bg-[#F7F4EA] p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      
+      <!-- Filters (Site, Priority, Search) -->
+      <div class="flex flex-wrap items-center gap-3 flex-1">
+        
+        <!-- Site Filter Dropdown -->
+        <div class="w-full sm:w-auto min-w-[200px]">
+          <div class="relative">
+            <select id="siteFilter" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+              <option value="ALL">🏢 ทุกไซต์งานทั้งหมด</option>
+            </select>
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
+              <i class="fa-solid fa-location-dot text-xs"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Assignee Filter Dropdown -->
+        <div class="w-full sm:w-auto min-w-[190px]">
+          <div class="relative">
+            <select id="assigneeFilter" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+              <option value="ALL">👤 ผู้รับผิดชอบทั้งหมด</option>
+            </select>
+            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
+              <i class="fa-solid fa-user text-xs"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Priority Filter -->
+        <div class="w-full sm:w-auto">
+          <select id="priorityFilter" class="w-full px-3 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+            <option value="ALL">⚡ ทุกระดับความสำคัญ</option>
+            <option value="ด่วนมาก">🔴 ด่วนมาก</option>
+            <option value="สูง">🟠 สูง</option>
+            <option value="ปานกลาง">🟡 ปานกลาง</option>
+            <option value="ทั่วไป">🟢 ทั่วไป</option>
+          </select>
+        </div>
+
+        <!-- Due Date Range Filter (Clubhouse Warm Cream) -->
+        <div class="w-full sm:w-auto flex flex-wrap items-center gap-1.5 bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl px-2.5 py-1 text-xs text-[#201E1C]">
+          <div class="flex items-center gap-1 text-[#6E6862] font-semibold whitespace-nowrap pl-0.5">
+            <i class="fa-solid fa-calendar-days text-[#2491FA] text-xs"></i>
+            <span>ครบกำหนด:</span>
+          </div>
+          <div class="flex items-center gap-1">
+            <input type="text" id="dueDateFromFilter" placeholder="วว/ดด/ปปปป" maxlength="10" title="ตั้งแต่วันที่ (วว/ดด/ปปปป)" autocomplete="off"
+                   class="w-24 px-2 py-1 text-xs bg-white/90 border border-[#EFE9DC] rounded-lg text-[#201E1C] placeholder-[#9E9890] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none">
+            <span class="text-[#6E6862] text-xs font-medium">ถึง</span>
+            <input type="text" id="dueDateToFilter" placeholder="วว/ดด/ปปปป" maxlength="10" title="ถึงวันที่ (วว/ดด/ปปปป)" autocomplete="off"
+                   class="w-24 px-2 py-1 text-xs bg-white/90 border border-[#EFE9DC] rounded-lg text-[#201E1C] placeholder-[#9E9890] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none">
+          </div>
+          
+          <!-- Checkbox รวมงานไม่มีกำหนด -->
+          <label class="flex items-center gap-1 text-[11px] text-[#6E6862] hover:text-[#201E1C] cursor-pointer ml-1 select-none" title="ติ๊กเพื่อแสดงงานที่ไม่ได้ระบุวันครบกำหนดด้วย">
+            <input type="checkbox" id="includeNoDueDateFilter" class="rounded text-[#2491FA] focus:ring-0 cursor-pointer">
+            <span>รวมไม่มีกำหนด</span>
+          </label>
+
+          <div class="flex items-center gap-0.5 ml-1 border-l border-[#D9D1C3] pl-1.5">
+            <!-- ปุ่มรีเซ็ตเป็นช่วงงานค้าง -->
+            <button id="btnResetDueDateRange" type="button"
+                    title="รีเซ็ตเป็นช่วงวันครบกำหนดของงานที่ยังไม่เสร็จ (น้อยสุด - มากสุด)"
+                    class="px-1.5 py-0.5 text-[11px] font-semibold text-[#2491FA] hover:bg-white/80 rounded transition-colors flex items-center gap-1 cursor-pointer">
+              <i class="fa-solid fa-rotate-left text-[10px]"></i>
+              <span>งานค้าง</span>
+            </button>
+            <!-- ปุ่มล้างตัวกรองวันที่ -->
+            <button id="btnClearDueDateRange" type="button"
+                    title="ล้างตัวกรองวันที่ (แสดงงานทั้งหมดทุกช่วงเวลา)"
+                    class="px-1.5 py-0.5 text-[11px] font-medium text-[#6E6862] hover:text-rose-600 hover:bg-white/80 rounded transition-colors flex items-center gap-1 cursor-pointer">
+              <i class="fa-solid fa-xmark text-xs"></i>
+              <span>ทั้งหมด</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Search Input -->
+        <div class="w-full sm:w-64 relative">
+          <input type="text" id="searchInput" placeholder="ค้นหางาน, ช่าง, ไซต์งาน..."
+                 class="w-full pl-9 pr-3 py-2 text-xs bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] placeholder-[#6E6862] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- View Switcher Tabs (Kanban vs Table) -->
+      <div class="flex items-center gap-1 bg-[#EDE7DA] p-1 rounded-xl self-end md:self-auto border border-[#EFE9DC]">
+        <button id="btnViewKanban" class="px-3.5 py-1.5 text-xs font-bold rounded-lg bg-[#2491FA] text-white shadow-2xs transition-colors flex items-center gap-1.5">
+          <i class="fa-solid fa-table-columns"></i>
+          <span>กระดานคัมบัง</span>
+        </button>
+        <button id="btnViewTable" class="px-3.5 py-1.5 text-xs font-medium rounded-lg text-[#201E1C] hover:bg-white/60 transition-colors flex items-center gap-1.5">
+          <i class="fa-solid fa-list"></i>
+          <span>ตารางงาน</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- ================= VIEW 1: KANBAN BOARD ================= -->
+    <div id="kanbanViewSection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-start">
+      
+      <!-- 1. รอดำเนินการ -->
+      <div class="bg-[#FAF8F2] rounded-3xl p-4 border border-[#EFE9DC] flex flex-col">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2 font-bold text-[#201E1C] text-sm">
+            <span class="w-2.5 h-2.5 rounded-full bg-stone-500"></span>
+            <span>รอดำเนินการ</span>
+            <span id="count-รอดำเนินการ" class="text-xs bg-[#EDE7DA] text-[#201E1C] px-2.5 py-0.5 rounded-full font-bold border border-[#EFE9DC]">0</span>
+          </div>
+          <button onclick="openCreateTaskModal('รอดำเนินการ')" title="เพิ่มงานในหมวดนี้"
+                  class="w-6 h-6 rounded-lg hover:bg-[#EDE7DA] text-[#6E6862] hover:text-[#201E1C] flex items-center justify-center transition-colors">
+            <i class="fa-solid fa-plus text-xs"></i>
+          </button>
+        </div>
+        <div id="col-tasks-รอดำเนินการ" class="kanban-col space-y-3"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event, 'รอดำเนินการ')">
+        </div>
+      </div>
+
+      <!-- 2. กำลังดำเนินการ -->
+      <div class="bg-[#FAF8F2] rounded-3xl p-4 border border-[#EFE9DC] flex flex-col">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2 font-bold text-[#201E1C] text-sm">
+            <span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+            <span>กำลังดำเนินการ</span>
+            <span id="count-กำลังดำเนินการ" class="text-xs bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold border border-amber-200">0</span>
+          </div>
+          <button onclick="openCreateTaskModal('กำลังดำเนินการ')" title="เพิ่มงานในหมวดนี้"
+                  class="w-6 h-6 rounded-lg hover:bg-[#EDE7DA] text-[#6E6862] hover:text-[#201E1C] flex items-center justify-center transition-colors">
+            <i class="fa-solid fa-plus text-xs"></i>
+          </button>
+        </div>
+        <div id="col-tasks-กำลังดำเนินการ" class="kanban-col space-y-3"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event, 'กำลังดำเนินการ')">
+        </div>
+      </div>
+
+      <!-- 3. รอตรวจสอบ -->
+      <div class="bg-[#FAF8F2] rounded-3xl p-4 border border-[#EFE9DC] flex flex-col">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2 font-bold text-[#201E1C] text-sm">
+            <span class="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+            <span>รอตรวจสอบ</span>
+            <span id="count-รอตรวจสอบ" class="text-xs bg-purple-100 text-purple-800 px-2.5 py-0.5 rounded-full font-bold border border-purple-200">0</span>
+          </div>
+          <button onclick="openCreateTaskModal('รอตรวจสอบ')" title="เพิ่มงานในหมวดนี้"
+                  class="w-6 h-6 rounded-lg hover:bg-[#EDE7DA] text-[#6E6862] hover:text-[#201E1C] flex items-center justify-center transition-colors">
+            <i class="fa-solid fa-plus text-xs"></i>
+          </button>
+        </div>
+        <div id="col-tasks-รอตรวจสอบ" class="kanban-col space-y-3"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event, 'รอตรวจสอบ')">
+        </div>
+      </div>
+
+      <!-- 4. เสร็จสิ้น -->
+      <div class="bg-[#FAF8F2] rounded-3xl p-4 border border-[#EFE9DC] flex flex-col">
+        <div class="flex items-center justify-between mb-3 px-1">
+          <div class="flex items-center gap-2 font-bold text-[#201E1C] text-sm">
+            <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+            <span>เสร็จสิ้น</span>
+            <span id="count-เสร็จสิ้น" class="text-xs bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-bold border border-emerald-200">0</span>
+          </div>
+          <div class="flex items-center gap-1.5">
+            <!-- ปุ่มจัดเก็บงานเข้าคลัง -->
+            <button onclick="handleArchiveCompletedPrompt()" title="จัดเก็บงานเสร็จสิ้นเข้าคลังถาวร (Archive)"
+                    class="px-2 py-1 text-[11px] font-semibold text-amber-800 bg-amber-100/80 hover:bg-amber-100 rounded-lg border border-amber-300/60 transition-colors flex items-center gap-1 cursor-pointer">
+              <i class="fa-solid fa-box-archive text-[10px]"></i>
+              <span class="hidden sm:inline">จัดเก็บ</span>
+            </button>
+            <button onclick="openCreateTaskModal('เสร็จสิ้น')" title="เพิ่มงานในหมวดนี้"
+                    class="w-6 h-6 rounded-lg hover:bg-[#EDE7DA] text-[#6E6862] hover:text-[#201E1C] flex items-center justify-center transition-colors">
+              <i class="fa-solid fa-plus text-xs"></i>
+            </button>
+          </div>
+        </div>
+        <div id="col-tasks-เสร็จสิ้น" class="kanban-col space-y-3"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event, 'เสร็จสิ้น')">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ================= VIEW 2: TABLE VIEW ================= -->
+    <div id="tableViewSection" class="hidden bg-white rounded-3xl border border-[#EFE9DC] shadow-2xs overflow-hidden">
+      <div class="px-5 py-3 border-b border-[#EFE9DC] flex items-center justify-between bg-[#FAF8F2]">
+        <span class="text-xs font-semibold text-[#6E6862]">รายการงานทั้งหมด (<span id="tableRowCount">0</span>)</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b border-[#EFE9DC] bg-[#FAF8F2] text-[#6E6862] text-xs font-semibold uppercase tracking-wider">
+              <th class="px-4 py-3">รหัสงาน</th>
+              <th class="px-4 py-3">ไซต์งาน</th>
+              <th class="px-4 py-3">ชื่องาน / รายละเอียด</th>
+              <th class="px-4 py-3">ผู้รับผิดชอบ</th>
+              <th class="px-4 py-3">ความสำคัญ</th>
+              <th class="px-4 py-3">กำหนดส่ง</th>
+              <th class="px-4 py-3">สถานะ</th>
+              <th class="px-4 py-3 text-right">จัดการ</th>
+            </tr>
+          </thead>
+          <tbody id="taskTableBody" class="divide-y divide-[#EFE9DC]">
+            <!-- Dynamic Rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================= MODAL: ADD / EDIT TASK ================= -->
+  <div id="taskModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="closeTaskModal()"></div>
+    <div class="flex min-h-full items-center justify-center p-3 sm:p-4 md:p-6">
+      <div class="relative w-full max-w-4xl lg:max-w-5xl rounded-3xl bg-[#FAF8F2] p-5 sm:p-7 shadow-2xl border border-[#EFE9DC] transition-all my-4 text-left">
+        
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-4 border-b border-[#EFE9DC] mb-5">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-blue-50 text-[#2491FA] flex items-center justify-center font-bold text-lg shadow-2xs border border-blue-100">
+              <i class="fa-solid fa-clipboard-list"></i>
+            </div>
+            <div>
+              <h3 id="taskModalTitle" class="text-base sm:text-lg font-bold text-[#201E1C]">สร้างงานใหม่</h3>
+              <p class="text-[11px] text-[#6E6862]">กรอกข้อมูลงาน รายละเอียด กำหนดเวลา และแนบเอกสารที่เกี่ยวข้อง</p>
+            </div>
+          </div>
+          <button type="button" onclick="closeTaskModal()" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-2 rounded-xl transition-colors cursor-pointer" title="ปิดหน้าต่าง">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <form id="taskForm">
+          <input type="hidden" id="taskId">
+
+          <!-- 2-Column Horizontal Grid -->
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-5">
+
+            <!-- ฝั่งซ้าย: ข้อมูลเนื้องาน & เอกสารแนบ (7 Cols / ~58%) -->
+            <div class="md:col-span-7 space-y-4">
+              <!-- ไซต์งาน -->
+              <div>
+                <label class="block text-xs font-semibold text-[#201E1C] mb-1">
+                  ไซต์งาน / สถานที่ <span class="text-rose-500">*</span>
+                </label>
+                <select id="taskSiteSelect" class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] cursor-pointer">
+                  <!-- Rendered via JS -->
+                </select>
+              </div>
+
+              <!-- กรอกไซต์งานใหม่เอง (ถ้าเลือกเพิ่มไซต์งานใหม่) -->
+              <div id="customSiteWrapper" class="hidden">
+                <label class="block text-xs font-semibold text-[#2491FA] mb-1">ระบุชื่อไซต์งานใหม่</label>
+                <input type="text" id="taskSiteCustom" placeholder="เช่น ไซต์ D - โรงพยาบาล..."
+                       class="w-full px-3 py-2 text-sm bg-blue-50/40 border border-blue-200 rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none text-[#201E1C]">
+              </div>
+
+              <!-- ชื่องาน -->
+              <div>
+                <label class="block text-xs font-semibold text-[#201E1C] mb-1">
+                  ชื่องาน <span class="text-rose-500">*</span>
+                </label>
+                <input type="text" id="taskTitle" required placeholder="เช่น ตรวจเช็กระบบประปาและปั๊มน้ำ"
+                       class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C]">
+              </div>
+
+              <!-- รายละเอียดงาน -->
+              <div>
+                <label class="block text-xs font-semibold text-[#201E1C] mb-1">รายละเอียดงานเพิ่มเติม</label>
+                <textarea id="taskDesc" rows="4" placeholder="ระบุขอบเขตงาน รายละเอียด หรือหมายเหตุ..."
+                          class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C]"></textarea>
+              </div>
+
+              <!-- เอกสารและไฟล์แนบที่เกี่ยวข้อง (ไม่จำกัดจำนวนและประเภทไฟล์) -->
+              <div class="space-y-2 pt-2 border-t border-[#EFE9DC]">
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-bold text-[#201E1C] flex items-center gap-1.5">
+                    <i class="fa-solid fa-paperclip text-[#2491FA]"></i>
+                    <span>เอกสารและไฟล์แนบที่เกี่ยวข้อง</span>
+                  </label>
+                  <span id="attachedFilesCountBadge" class="text-[11px] font-bold text-[#6E6862] bg-[#FAF8F2] px-2 py-0.5 rounded-full border border-[#EFE9DC]">
+                    0 ไฟล์
+                  </span>
+                </div>
+
+                <!-- Drag & Drop Zone -->
+                <div id="taskFileDropZone"
+                     onclick="document.getElementById('taskFileInput').click()"
+                     class="border-2 border-dashed border-[#EFE9DC] hover:border-[#2491FA] bg-[#FAF8F2] hover:bg-[#F3EFE6] rounded-2xl p-3.5 text-center cursor-pointer transition-all group">
+                  <input type="file" id="taskFileInput" multiple class="hidden" onchange="handleFileSelect(event)">
+                  <div class="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
+                    <div class="w-9 h-9 rounded-xl bg-blue-50 text-[#2491FA] group-hover:scale-110 flex items-center justify-center text-base shadow-2xs transition-transform">
+                      <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <p class="text-xs font-bold text-[#201E1C]">
+                      ลากไฟล์มาวางที่นี่ หรือ <span class="text-[#2491FA] underline">คลิกเลือกไฟล์</span>
+                    </p>
+                    <p class="text-[10px] text-[#6E6862]">
+                      ไม่จำกัดจำนวนและประเภทไฟล์ (PDF, Word, Excel, รูปภาพ, DWG, ZIP ฯลฯ)
+                    </p>
+                  </div>
+                </div>
+
+                <!-- Upload Progress Bar (แสดงขณะบันทึกและอัปโหลด) -->
+                <div id="taskUploadProgressWrapper" class="hidden bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC] space-y-1.5">
+                  <div class="flex items-center justify-between text-xs">
+                    <span id="uploadProgressText" class="font-semibold text-[#2491FA] flex items-center gap-1.5">
+                      <i class="fa-solid fa-circle-notch fa-spin text-xs"></i>
+                      <span>กำลังอัปโหลดไฟล์...</span>
+                    </span>
+                    <span id="uploadProgressPercent" class="font-bold text-[#201E1C]">0%</span>
+                  </div>
+                  <div class="w-full bg-[#EDE7DA] h-2 rounded-full overflow-hidden">
+                    <div id="uploadProgressBar" class="bg-[#2491FA] h-full w-0 rounded-full transition-all duration-300"></div>
+                  </div>
+                </div>
+
+                <!-- Existing Attached Files (ไฟล์เดิมในระบบ สำหรับโหมดแก้ไข) -->
+                <div id="existingFilesContainer" class="hidden space-y-1.5 pt-1">
+                  <p class="text-[11px] font-bold text-[#6E6862] flex items-center gap-1">
+                    <i class="fa-solid fa-folder-open text-[#2491FA]"></i>
+                    <span>ไฟล์ที่แนบไว้ในระบบ:</span>
+                  </p>
+                  <div id="existingFilesList" class="space-y-1.5 max-h-32 overflow-y-auto pr-1"></div>
+                </div>
+
+                <!-- Selected New Files Queue (ไฟล์ใหม่ที่เลือกไว้ รอการบันทึก) -->
+                <div id="selectedFilesQueueContainer" class="hidden space-y-1.5 pt-1">
+                  <p class="text-[11px] font-bold text-[#2491FA] flex items-center gap-1">
+                    <i class="fa-solid fa-circle-plus"></i>
+                    <span>ไฟล์ใหม่ที่เตรียมอัปโหลด:</span>
+                  </p>
+                  <div id="selectedFilesQueueList" class="space-y-1.5 max-h-32 overflow-y-auto pr-1"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ฝั่งขวา: กำหนดการ ผู้เกี่ยวข้อง & การติดตาม (5 Cols / ~42%) -->
+            <div class="md:col-span-5 space-y-4">
+              <!-- การ์ด 1: ข้อมูลผู้เกี่ยวข้อง (People & Reporting) -->
+              <div class="bg-[#EDE7DA]/35 p-4 rounded-2xl border border-[#EFE9DC] space-y-3.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-[#201E1C] pb-2 border-b border-[#EFE9DC]">
+                  <i class="fa-solid fa-user-tag text-[#2491FA]"></i>
+                  <span>ข้อมูลการแจ้งและผู้รับผิดชอบ</span>
+                </div>
+
+                <!-- ผู้แจ้ง & วันที่แจ้ง (2 Columns) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-semibold text-[#201E1C] mb-1">
+                      <i class="fa-solid fa-bullhorn text-[#2491FA] mr-1 text-[11px]"></i>ผู้แจ้ง
+                    </label>
+                    <input type="text" id="taskReporter" list="userReportersList" placeholder="ชื่อผู้แจ้งงาน..."
+                           class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C]">
+                    <datalist id="userReportersList">
+                      <!-- Rendered via JS -->
+                    </datalist>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-[#201E1C] mb-1">
+                      <i class="fa-solid fa-calendar-plus text-[#2491FA] mr-1 text-[11px]"></i>วันที่แจ้ง
+                    </label>
+                    <div class="relative flex items-center">
+                      <input type="text" id="taskReportDate" placeholder="วว/ดด/ปปปป" maxlength="10" autocomplete="off"
+                             class="w-full pl-3 pr-8 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] placeholder-[#9E9890]">
+                      <button type="button" id="btnPickerReportDate" title="คลิกเลือกจากปฏิทิน"
+                              class="absolute right-2 text-[#2491FA] hover:text-[#1A7CE0] p-1 cursor-pointer transition-colors">
+                        <i class="fa-regular fa-calendar text-sm"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- ผู้รับผิดชอบ -->
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">ผู้รับผิดชอบ (ชื่อ-นามสกุล)</label>
+                  <select id="taskAssigneeSelect" onchange="handleAssigneeSelectChange()"
+                          class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer text-[#201E1C]">
+                    <!-- Options populated dynamically from state.users -->
+                  </select>
+                </div>
+
+                <!-- ระบุผู้รับผิดชอบอื่นเอง (ถ้าเลือก ระบุชื่ออื่นเอง) -->
+                <div id="customAssigneeWrapper" class="hidden">
+                  <label class="block text-xs font-semibold text-[#2491FA] mb-1">ระบุชื่อ-นามสกุล ผู้รับผิดชอบ</label>
+                  <input type="text" id="taskAssigneeCustom" placeholder="เช่น นายสมชาย ใจกล้า (ช่างภายนอก)"
+                         class="w-full px-3 py-2 text-sm bg-blue-50/40 border border-blue-200 rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none text-[#201E1C]">
+                </div>
+              </div>
+
+              <!-- การ์ด 2: สถานะ กำหนดเวลา และความสำคัญ (Status & Scheduling) -->
+              <div class="bg-[#EDE7DA]/35 p-4 rounded-2xl border border-[#EFE9DC] space-y-3.5">
+                <div class="flex items-center gap-1.5 text-xs font-bold text-[#201E1C] pb-2 border-b border-[#EFE9DC]">
+                  <i class="fa-solid fa-sliders text-[#2491FA]"></i>
+                  <span>สถานะและการกำหนดเวลา</span>
+                </div>
+
+                <!-- ระดับความสำคัญ & สถานะงาน (2 Columns) -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-semibold text-[#201E1C] mb-1">ระดับความสำคัญ</label>
+                    <select id="taskPriority" class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] cursor-pointer">
+                      <option value="ด่วนมาก">🔴 ด่วนมาก</option>
+                      <option value="สูง">🟠 สูง</option>
+                      <option value="ปานกลาง" selected>🟡 ปานกลาง</option>
+                      <option value="ทั่วไป">🟢 ทั่วไป</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-[#201E1C] mb-1">สถานะงาน</label>
+                    <select id="taskStatus" class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] cursor-pointer">
+                      <option value="รอดำเนินการ">รอดำเนินการ</option>
+                      <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                      <option value="รอตรวจสอบ">รอตรวจสอบ</option>
+                      <option value="เสร็จสิ้น">เสร็จสิ้น</option>
+                    </select>
+                  </div>
+                </div>
+
+                <!-- วันครบกำหนดส่ง -->
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">
+                    <i class="fa-regular fa-calendar-check text-[#2491FA] mr-1 text-[11px]"></i>วันครบกำหนดส่ง (วว/ดด/ปปปป)
+                  </label>
+                  <div class="relative flex items-center">
+                    <input type="text" id="taskDueDate" placeholder="วว/ดด/ปปปป" maxlength="10" autocomplete="off"
+                           class="w-full pl-3 pr-8 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] placeholder-[#9E9890]">
+                    <button type="button" id="btnPickerDueDate" title="คลิกเลือกจากปฏิทิน"
+                            class="absolute right-2 text-[#2491FA] hover:text-[#1A7CE0] p-1 cursor-pointer transition-colors">
+                      <i class="fa-regular fa-calendar text-sm"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex items-center justify-end gap-2.5 pt-4 mt-5 border-t border-[#EFE9DC]">
+            <button type="button" onclick="closeTaskModal()"
+                    class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
+              ยกเลิก
+            </button>
+            <button type="submit" id="btnSubmitTask"
+                    class="px-5 py-2 text-xs font-semibold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>บันทึกงาน</span>
+            </button>
+          </div>
+
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: SETTINGS (GENERAL & USERS) ================= -->
+  <div id="settingsModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="modal-backdrop fixed inset-0"></div>
+    <div class="min-h-screen px-4 text-center flex items-center justify-center">
+      <div class="inline-block w-full max-w-2xl p-6 my-8 text-left bg-white rounded-2xl shadow-2xl relative z-10 transform transition-all border border-slate-100">
+        
+        <div class="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-gear text-slate-700"></i>
+            <h3 class="text-base font-bold text-slate-900">การตั้งค่าระบบ</h3>
+          </div>
+          <button onclick="closeSettingsModal()" class="text-slate-400 hover:text-slate-600 p-1">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Settings Tabs -->
+        <div class="flex border-b border-[#EFE9DC] mb-4 gap-1.5 sm:gap-2 overflow-x-auto">
+          <button type="button" id="btnTabGeneral" onclick="switchSettingsTab('general')"
+                  class="pb-2.5 px-3 text-xs font-bold border-b-2 border-[#2491FA] text-[#2491FA] flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer">
+            <i class="fa-brands fa-telegram text-sm"></i>
+            <span>Telegram Bot</span>
+          </button>
+          <button type="button" id="btnTabSites" onclick="switchSettingsTab('sites')"
+                  class="pb-2.5 px-3 text-xs font-semibold border-b-2 border-transparent text-[#6E6862] hover:text-[#201E1C] flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer">
+            <i class="fa-solid fa-location-dot text-sm"></i>
+            <span>จัดการไซต์งาน (Sites)</span>
+          </button>
+          <button type="button" id="btnTabUsers" onclick="switchSettingsTab('users')"
+                  class="pb-2.5 px-3 text-xs font-semibold border-b-2 border-transparent text-[#6E6862] hover:text-[#201E1C] flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer">
+            <i class="fa-solid fa-users text-sm"></i>
+            <span>จัดการสมาชิก (Users)</span>
+          </button>
+        </div>
+
+        <!-- TAB 1: TELEGRAM BOT SETTINGS -->
+        <div id="settingsTabGeneral">
+          <form id="settingsForm" class="space-y-4">
+            <!-- Telegram Settings Section -->
+            <div class="bg-[#FAF8F2] p-4 rounded-2xl border border-[#EFE9DC] space-y-3">
+              <div class="flex items-center gap-2 text-[#2491FA] font-bold text-xs">
+                <i class="fa-brands fa-telegram text-lg"></i>
+                <span>การแจ้งเตือนและการส่ง OTP ผ่าน Telegram Bot</span>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-[#201E1C] mb-1">Telegram Bot Token</label>
+                <input type="password" id="settingTelegramToken" placeholder="เช่น 123456789:ABCdefGhIJKlmNoPQ..."
+                       class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none text-[#201E1C]">
+                <span class="text-[11px] text-[#6E6862]">สร้าง Bot ได้จาก <a href="https://t.me/BotFather" target="_blank" class="text-[#2491FA] underline">@BotFather</a></span>
+              </div>
+
+              <div>
+                <label class="block text-xs font-medium text-[#201E1C] mb-1">Telegram Group / Channel ID หลัก (Default สำหรับไซต์งานทั่วไป)</label>
+                <input type="text" id="settingTelegramChatId" placeholder="เช่น -1001234567890 หรือ Chat ID กลุ่มหลัก"
+                       class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none text-[#201E1C]">
+                <span class="text-[11px] text-[#6E6862]">ห้องแชตกลุ่มหลัก สำหรับไซต์งานที่ไม่ได้ระบุกลุ่มเฉพาะ (Fallback)</span>
+              </div>
+
+              <!-- Toggles for Notification Events -->
+              <div class="space-y-2 pt-1">
+                <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer">
+                  <input type="checkbox" id="settingNotifyCreate" class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+                  <span>ส่งแจ้งเตือนเข้าห้องแชตกลุ่มเมื่อสร้างงานใหม่</span>
+                </label>
+                <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer">
+                  <input type="checkbox" id="settingNotifyStatus" class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+                  <span>ส่งแจ้งเตือนเข้าห้องแชตกลุ่มเมื่อเปลี่ยนสถานะงาน</span>
+                </label>
+                <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer border-t border-[#EFE9DC]/80 pt-2">
+                  <input type="checkbox" id="settingNotifyAssignee" class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+                  <span class="font-medium text-[#201E1C]">ส่งแจ้งเตือนเข้า Telegram ส่วนตัวของผู้รับผิดชอบเมื่องานถูกสร้างใหม่</span>
+                </label>
+                <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer border-t border-[#EFE9DC]/80 pt-2">
+                  <input type="checkbox" id="settingNotifyMainGroupAlways" class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+                  <span>ส่งแจ้งเตือนเข้าห้องแชตกลุ่มหลักส่วนกลางด้วยเสมอ (แม้ไซต์งานนั้นจะมีกลุ่มเฉพาะแล้วก็ตาม)</span>
+                </label>
+              </div>
+
+              <!-- Multi-Site Telegram Hint Callout -->
+              <div class="bg-blue-50/70 border border-blue-200/80 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div class="flex items-start gap-2.5">
+                  <i class="fa-solid fa-circle-nodes text-[#2491FA] mt-0.5 text-sm flex-shrink-0"></i>
+                  <div class="text-[11px] text-[#201E1C]">
+                    <span class="font-bold text-[#2491FA]">ต้องการแยกการแจ้งเตือนตามไซต์งาน?</span>
+                    <p class="text-[#6E6862] mt-0.5">คุณสามารถระบุ Telegram Group ID แยกเฉพาะสำหรับแต่ละไซต์งานได้ที่แท็บ <b>"จัดการไซต์งาน (Sites)"</b> โดยใช้ Bot ตัวเดียวกัน</p>
+                  </div>
+                </div>
+                <button type="button" onclick="switchSettingsTab('sites')"
+                        class="px-3 py-1.5 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-2xs transition-colors whitespace-nowrap self-start sm:self-auto flex items-center gap-1.5 cursor-pointer">
+                  <i class="fa-solid fa-location-dot text-xs"></i>
+                  <span>ไปตั้งค่ากลุ่มไซต์งาน</span>
+                </button>
+              </div>
+
+              <!-- Test Connection Button -->
+              <div class="pt-2">
+                <button type="button" id="btnTestTelegram"
+                        class="w-full py-2 text-xs font-bold text-[#2491FA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
+                  <i class="fa-brands fa-telegram text-sm"></i>
+                  <span>ทดสอบส่งข้อความไปยัง Telegram (กลุ่มหลัก)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Google Drive Authorization Section -->
+            <div class="bg-[#FAF8F2] p-4 rounded-2xl border border-[#EFE9DC] space-y-2">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-[#2491FA] font-bold text-xs">
+                  <i class="fa-brands fa-google-drive text-lg"></i>
+                  <span>สิทธิ์การเข้าถึง Google Drive สำหรับไฟล์แนบ</span>
+                </div>
+                <span class="text-[10px] bg-blue-100/70 text-[#2491FA] px-2 py-0.5 rounded-full font-bold">DriveApp</span>
+              </div>
+              <p class="text-[11px] text-[#6E6862]">
+                หากพบปัญหาเรื่องสิทธิ์การเข้าถึง Google Drive ผู้ดูแลระบบสามารถคลิกปุ่มด้านล่างเพื่อเปิดหน้าต่าง Apps Script Editor แล้วกดปุ่ม <b>▶️ Run</b> ฟังก์ชัน <code>authorizeDriveApp</code> เพื่อกดยืนยันสิทธิ์ได้ทันที
+              </p>
+              <a href="https://script.google.com/d/1cd4_bnt_nnuKTQzu3F6gDmMpwWoeBBcuNyqPCn3lDBsAfmguacW1aUBE/edit" target="_blank" rel="noopener noreferrer"
+                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#2491FA] bg-white hover:bg-blue-50 border border-blue-200 rounded-xl transition-colors shadow-2xs">
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                <span>เปิด Google Apps Script เพื่อตรวจสอบ/ยืนยันสิทธิ์</span>
+              </a>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-[#EFE9DC]">
+              <button type="button" onclick="closeSettingsModal()"
+                      class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors">
+                ปิด
+              </button>
+              <button type="submit"
+                      class="px-5 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-check"></i>
+                <span>บันทึกการตั้งค่า Telegram</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- TAB 2: SITES MANAGEMENT (SEPARATE TAB) -->
+        <div id="settingsTabSites" class="hidden space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h4 class="text-xs font-bold text-[#201E1C]">รายชื่อไซต์งานและการแยกกลุ่ม Telegram</h4>
+              <p class="text-[11px] text-[#6E6862]">จัดการไซต์งานและผูก Telegram Group ID เพื่อแยกการแจ้งเตือนตามไซต์งาน</p>
+            </div>
+            <button type="button" onclick="toggleBulkSitesMode()"
+                    class="text-[11px] text-[#2491FA] hover:underline font-medium self-start sm:self-auto flex items-center gap-1 cursor-pointer">
+              <i class="fa-solid fa-paste"></i>
+              <span id="bulkSitesToggleText">โหมดพิมพ์หลายบรรทัด</span>
+            </button>
+          </div>
+
+          <!-- Quick Add Site Form -->
+          <div id="quickAddSiteWrapper" class="bg-[#FAF8F2] p-3 rounded-2xl border border-[#EFE9DC] flex flex-col sm:flex-row gap-2">
+            <div class="relative flex-1">
+              <i class="fa-solid fa-location-dot absolute left-3 top-1/2 -translate-y-1/2 text-xs text-[#6E6862]"></i>
+              <input type="text" id="inputNewSiteName" placeholder="พิมพ์ชื่อไซต์งานใหม่ เช่น ไซต์ D - อาคารสาทร..."
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();addNewSiteFromSettings();}"
+                     class="w-full pl-8 pr-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C]">
+            </div>
+            <button type="button" onclick="addNewSiteFromSettings()"
+                    class="px-4 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap">
+              <i class="fa-solid fa-plus text-xs"></i>
+              <span>เพิ่มไซต์งาน</span>
+            </button>
+          </div>
+
+          <!-- Bulk Textarea Mode (Hidden by default) -->
+          <div id="bulkSitesWrapper" class="hidden bg-[#FAF8F2] p-3 rounded-2xl border border-[#EFE9DC] space-y-2">
+            <div class="flex items-center justify-between text-xs font-semibold text-[#201E1C]">
+              <span>วางรายชื่อไซต์งาน (บรรทัดละ 1 ไซต์งาน)</span>
+              <span class="text-[11px] text-[#6E6862]">วางแล้วกด นำเข้ารายการ</span>
+            </div>
+            <textarea id="bulkSitesTextarea" rows="4" placeholder="ไซต์ A - คอนโดทองหล่อ&#10;ไซต์ B - สำนักงานใหญ่&#10;ไซต์ C - สุขุมวิท"
+                      class="w-full p-2.5 text-xs font-mono bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 text-[#201E1C]"></textarea>
+            <div class="flex justify-end gap-2">
+              <button type="button" onclick="applyBulkSites()"
+                      class="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer">
+                <i class="fa-solid fa-file-import mr-1"></i> นำเข้ารายการด้านบน
+              </button>
+            </div>
+          </div>
+
+          <!-- Sites List Table / Cards -->
+          <div class="bg-white rounded-2xl border border-[#EFE9DC] overflow-hidden shadow-2xs">
+            <div class="px-4 py-2.5 bg-[#FAF8F2] border-b border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#201E1C]">
+              <span>รายการไซต์งานในระบบ (<span id="sitesCountBadge">0</span>)</span>
+              <span class="text-[11px] text-[#6E6862] font-normal">จำนวนงานในระบบ</span>
+            </div>
+            <div id="sitesListContainer" class="divide-y divide-[#EFE9DC] max-h-64 overflow-y-auto">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- Save Sites Button -->
+          <div class="flex items-center justify-between pt-2 border-t border-[#EFE9DC]">
+            <span class="text-[11px] text-[#6E6862]"><i class="fa-solid fa-circle-info text-[#2491FA] mr-1"></i>กดปุ่มบันทึกเพื่ออัปเดตรายชื่อไซต์งานขึ้นระบบ</span>
+            <div class="flex items-center gap-2">
+              <button type="button" onclick="closeSettingsModal()"
+                      class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors">
+                ปิด
+              </button>
+              <button type="button" id="btnSaveSites" onclick="saveSitesChanges()"
+                      class="px-5 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-check"></i>
+                <span>บันทึกรายชื่อไซต์งาน</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: USER MANAGEMENT -->
+        <div id="settingsTabUsers" class="hidden space-y-4">
+          <div class="flex items-center justify-between">
+            <p class="text-xs text-slate-500">จัดการรายชื่อผู้ใช้ที่สามารถเข้าสู่ระบบและ Telegram Chat ID สำหรับรับรหัส PIN</p>
+            <button type="button" onclick="openAddUserForm()"
+                    class="px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors flex items-center gap-1">
+              <i class="fa-solid fa-plus text-[10px]"></i>
+              <span>เพิ่มผู้ใช้ใหม่</span>
+            </button>
+          </div>
+
+          <!-- Add / Edit User Form (collapsible) -->
+          <div id="userFormContainer" class="hidden bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
+            <h4 id="userFormTitle" class="text-xs font-bold text-slate-800">เพิ่มผู้ใช้ใหม่</h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-700 mb-1">Username (สำหรับล็อกอิน) *</label>
+                <input type="text" id="inputUserUsername" placeholder="เช่น somchai"
+                       class="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-700 mb-1">ชื่อ-นามสกุล *</label>
+                <input type="text" id="inputUserFullName" placeholder="เช่น สมชาย ช่างไฟ"
+                       class="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-700 mb-1">Telegram Chat ID (ส่วนตัว) *</label>
+                <input type="text" id="inputUserChatId" placeholder="เช่น 987654321"
+                       class="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                <span class="text-[10px] text-slate-400">ดู ID ได้จาก <a href="https://t.me/userinfobot" target="_blank" class="text-sky-600 underline">@userinfobot</a></span>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-700 mb-1">สิทธิ์การใช้งาน (Role)</label>
+                <select id="inputUserRole" class="w-full px-2.5 py-1.5 text-xs bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                  <option value="Member">Member (ใช้งานทั่วไป)</option>
+                  <option value="Admin">Admin (จัดการระบบ)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Site Access Permissions -->
+            <div class="pt-2 border-t border-slate-200">
+              <label class="block text-[11px] font-semibold text-slate-700 mb-1.5">
+                <i class="fa-solid fa-location-dot text-[#2491FA] mr-1"></i>สิทธิ์การเข้าถึงไซต์งาน (Site Access Permission)
+              </label>
+              
+              <div class="flex items-center gap-4 mb-2 text-xs">
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="siteAccessType" value="ALL" checked onchange="handleSiteAccessTypeChange()" class="text-[#2491FA] focus:ring-[#2491FA]">
+                  <span class="font-medium text-[#201E1C]">เข้าถึงได้ทุกไซต์งาน (All Sites)</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer">
+                  <input type="radio" name="siteAccessType" value="CUSTOM" onchange="handleSiteAccessTypeChange()" class="text-[#2491FA] focus:ring-[#2491FA]">
+                  <span class="font-medium text-[#201E1C]">กำหนดเฉพาะไซต์งานที่เลือก</span>
+                </label>
+              </div>
+
+              <!-- Specific Sites Selection Box (Hidden by default) -->
+              <div id="userSpecificSitesContainer" class="hidden bg-white p-3 rounded-xl border border-slate-200 space-y-2">
+                <div class="flex items-center justify-between text-[11px]">
+                  <span class="text-slate-600 font-medium">เลือกไซต์งานที่อนุญาตให้ผู้ใช้นี้เข้าถึง:</span>
+                  <div class="flex items-center gap-2">
+                    <button type="button" onclick="selectAllUserSites(true)" class="text-[#2491FA] hover:underline font-semibold cursor-pointer">เลือกทั้งหมด</button>
+                    <span class="text-slate-300">|</span>
+                    <button type="button" onclick="selectAllUserSites(false)" class="text-slate-500 hover:underline cursor-pointer">ล้างทั้งหมด</button>
+                  </div>
+                </div>
+                <div id="userSitesCheckboxList" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto pr-1">
+                  <!-- Checkboxes rendered dynamically via JS -->
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+              <button type="button" onclick="cancelUserForm()"
+                      class="px-3 py-1 text-xs text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-100">
+                ยกเลิก
+              </button>
+              <button type="button" onclick="submitUserForm()"
+                      class="px-4 py-1 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                บันทึกผู้ใช้
+              </button>
+            </div>
+          </div>
+
+          <!-- Users Table -->
+          <div class="border border-slate-200 rounded-xl overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
+                <tr>
+                  <th class="px-3 py-2.5">ชื่อผู้ใช้ (Username)</th>
+                  <th class="px-3 py-2.5">ชื่อ-นามสกุล</th>
+                  <th class="px-3 py-2.5">Telegram Chat ID</th>
+                  <th class="px-3 py-2.5">สิทธิ์ผู้ใช้</th>
+                  <th class="px-3 py-2.5">สิทธิ์ไซต์งาน</th>
+                  <th class="px-3 py-2.5 text-right">จัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="usersTableBody" class="divide-y divide-slate-100">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <div class="flex justify-end pt-2">
+            <button type="button" onclick="closeSettingsModal()"
+                    class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors">
+              ปิด
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ONLINE USERS (ผู้ใช้งานที่กำลังออนไลน์) ================= -->
+  <div id="onlineUsersModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="modal-backdrop fixed inset-0" onclick="closeOnlineUsersModal()"></div>
+    <div class="min-h-screen px-4 text-center flex items-center justify-center">
+      <div class="inline-block w-full max-w-md p-5 sm:p-6 my-8 text-left bg-white rounded-2xl shadow-2xl relative z-10 transform transition-all border border-[#EFE9DC]">
+        
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-[#EFE9DC] mb-4">
+          <div class="flex items-center gap-2.5">
+            <span class="relative flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <div>
+              <h3 class="text-base font-bold text-[#201E1C] flex items-center gap-2">
+                <span>ผู้ใช้งานที่กำลังออนไลน์</span>
+                <span id="onlineUsersModalBadge" class="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 font-semibold rounded-full border border-emerald-300/50">0 คน</span>
+              </h3>
+              <p class="text-[11px] text-[#6E6862]">รายชื่อผู้ใช้ที่กำลังเข้าใช้งานระบบอยู่ในขณะนี้</p>
+            </div>
+          </div>
+          <button onclick="closeOnlineUsersModal()" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-1.5 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Online Users List Container -->
+        <div id="onlineUsersListContainer" class="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-between pt-3.5 mt-4 border-t border-[#EFE9DC]">
+          <div class="text-[11px] text-[#6E6862] flex items-center gap-1.5">
+            <i class="fa-regular fa-clock text-[10px]"></i>
+            <span>อัปเดตอัตโนมัติทุก 45 วิ</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btnRefreshOnlineUsers" onclick="refreshOnlineUsers()" title="รีเฟรชสถานะทันที"
+                    class="px-3 py-1.5 text-xs font-semibold text-[#2491FA] bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-arrows-rotate text-xs"></i>
+              <span>รีเฟรช</span>
+            </button>
+            <button type="button" onclick="closeOnlineUsersModal()"
+                    class="px-4 py-1.5 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
+              ปิด
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: ARCHIVE (คลังงานถาวร) ================= -->
+  <div id="archiveModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onclick="closeArchiveModal()"></div>
+    <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
+      <div class="relative w-full max-w-5xl rounded-3xl bg-[#FAF8F2] p-5 sm:p-6 shadow-2xl border border-[#EFE9DC] transition-all my-8 max-h-[90vh] flex flex-col">
+        
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-[#EFE9DC]">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-lg shadow-2xs border border-amber-200">
+              <i class="fa-solid fa-box-archive"></i>
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-bold text-[#201E1C]">คลังงานที่จัดเก็บถาวร (Archive)</h3>
+              <p class="text-xs text-[#6E6862]">ค้นหา ดูรายละเอียด/ไฟล์แนบ และกู้คืนงานที่เสร็จสิ้นกลับมายังระบบหลัก</p>
+            </div>
+          </div>
+          <button onclick="closeArchiveModal()" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-1.5 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Filter & Search Bar in Archive -->
+        <div class="py-3 flex flex-wrap items-center justify-between gap-3 border-b border-[#EFE9DC]/60">
+          <div class="flex flex-wrap items-center gap-2.5 flex-1">
+            <!-- Search input -->
+            <div class="w-full sm:w-64 relative">
+              <input type="text" id="archiveSearchInput" placeholder="ค้นหารหัส, ชื่องาน, ไซต์, ผู้รับผิดชอบ..."
+                     class="w-full pl-9 pr-3 py-1.5 text-xs bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] placeholder-[#6E6862] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
+                <i class="fa-solid fa-magnifying-glass text-xs"></i>
+              </div>
+            </div>
+
+            <!-- Site Filter -->
+            <select id="archiveSiteFilter" class="px-3 py-1.5 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+              <option value="ALL">🏢 ทุกไซต์งานทั้งหมด</option>
+            </select>
+
+            <!-- Refresh Button -->
+            <button onclick="loadArchivedTasks()" title="รีเฟรชข้อมูลคลัง"
+                    class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-white rounded-lg transition-colors border border-[#EFE9DC]">
+              <i class="fa-solid fa-arrows-rotate text-xs"></i>
+            </button>
+          </div>
+
+          <div class="text-xs font-semibold text-[#6E6862]">
+            <span>พบทั้งหมด </span><span id="archiveTasksCount" class="text-[#2491FA] font-bold">0</span><span> รายการ</span>
+          </div>
+        </div>
+
+        <!-- Table Container (Scrollable) -->
+        <div class="flex-1 overflow-y-auto mt-2 min-h-[250px] max-h-[480px] rounded-2xl border border-[#EFE9DC] bg-white">
+          <table class="w-full text-left text-xs text-[#201E1C]">
+            <thead class="bg-[#FAF8F2] text-[#6E6862] border-b border-[#EFE9DC] sticky top-0 font-semibold z-10">
+              <tr>
+                <th class="px-3.5 py-2.5">รหัสงาน</th>
+                <th class="px-3.5 py-2.5">ไซต์งาน</th>
+                <th class="px-3.5 py-2.5">ชื่องาน / รายละเอียด</th>
+                <th class="px-3.5 py-2.5">ผู้รับผิดชอบ</th>
+                <th class="px-3.5 py-2.5">วันครบกำหนด</th>
+                <th class="px-3.5 py-2.5">วันที่จัดเก็บ</th>
+                <th class="px-3.5 py-2.5 text-right">การจัดการ</th>
+              </tr>
+            </thead>
+            <tbody id="archiveTableBody" class="divide-y divide-[#EFE9DC]">
+              <!-- Dynamically rendered -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-between pt-3 mt-3 border-t border-[#EFE9DC]">
+          <div class="text-[11px] text-[#6E6862]">
+            <i class="fa-solid fa-shield-halved text-emerald-600 mr-1"></i>
+            <span>ไฟล์แนบของงานในคลังยังคงจัดเก็บอย่างปลอดภัยใน Google Drive</span>
+          </div>
+          <button type="button" onclick="closeArchiveModal()"
+                  class="px-4 py-1.5 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
+            ปิด
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: VIEW ARCHIVED TASK (ดูรายละเอียดงานในคลัง) ================= -->
+  <div id="viewArchivedTaskModal" class="hidden fixed inset-0 z-55 overflow-y-auto">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="closeViewArchivedTaskModal()"></div>
+    <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
+      <div class="relative w-full max-w-2xl rounded-3xl bg-[#FAF8F2] p-6 shadow-2xl border border-[#EFE9DC] transition-all my-8">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-[#EFE9DC]">
+          <div class="flex items-center gap-2">
+            <span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+              <i class="fa-solid fa-box-archive mr-1"></i> งานในคลัง
+            </span>
+            <span id="viewArchivedTaskId" class="font-mono text-xs font-bold text-[#6E6862]"></span>
+          </div>
+          <button onclick="closeViewArchivedTaskModal()" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-1.5 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Content -->
+        <div class="py-4 space-y-4">
+          <div>
+            <h4 id="viewArchivedTaskTitle" class="text-base sm:text-lg font-bold text-[#201E1C]"></h4>
+            <div class="flex flex-wrap items-center gap-2 mt-2">
+              <span id="viewArchivedTaskSite" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200"></span>
+              <span id="viewArchivedTaskPriority" class="text-xs font-semibold px-2 py-0.5 rounded-full"></span>
+              <span id="viewArchivedTaskAssignee" class="text-xs text-[#6E6862] flex items-center gap-1 font-medium bg-[#EDE7DA] px-2 py-0.5 rounded-full"></span>
+              <span id="viewArchivedTaskReporter" class="hidden text-xs text-[#201E1C] flex items-center gap-1 font-medium bg-blue-50 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-full"></span>
+            </div>
+          </div>
+
+          <div class="bg-white p-3.5 rounded-2xl border border-[#EFE9DC]">
+            <div class="text-xs font-semibold text-[#6E6862] mb-1">รายละเอียดงาน:</div>
+            <div id="viewArchivedTaskDesc" class="text-xs text-[#201E1C] whitespace-pre-wrap leading-relaxed"></div>
+          </div>
+
+          <!-- Attachments List -->
+          <div>
+            <div class="text-xs font-semibold text-[#6E6862] mb-1.5 flex items-center gap-1.5">
+              <i class="fa-solid fa-paperclip text-[#2491FA]"></i>
+              <span>ไฟล์แนบที่เกี่ยวข้อง (<span id="viewArchivedAttachmentsCount">0</span>)</span>
+            </div>
+            <div id="viewArchivedAttachmentsList" class="space-y-1.5 max-h-40 overflow-y-auto">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Metadata -->
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px] text-[#6E6862] bg-[#EDE7DA]/50 p-3 rounded-xl border border-[#EFE9DC]">
+            <div><span class="font-semibold">วันที่แจ้ง:</span> <span id="viewArchivedTaskReportDate">-</span></div>
+            <div><span class="font-semibold">วันครบกำหนด:</span> <span id="viewArchivedTaskDueDate">-</span></div>
+            <div><span class="font-semibold">วันที่สร้าง:</span> <span id="viewArchivedTaskCreatedAt">-</span></div>
+            <div><span class="font-semibold">วันที่จัดเก็บ:</span> <span id="viewArchivedTaskArchivedAt">-</span></div>
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div class="flex items-center justify-between pt-3 border-t border-[#EFE9DC]">
+          <button type="button" id="btnRestoreFromViewModal"
+                  class="px-3.5 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer">
+            <i class="fa-solid fa-rotate-left"></i>
+            <span>กู้คืนงานนี้กลับไปยังระบบหลัก</span>
+          </button>
+          <button type="button" onclick="closeViewArchivedTaskModal()"
+                  class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
+            ปิด
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= GLOBAL LOADING SPINNER ================= -->
+  <div id="globalLoader" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-900/30 backdrop-blur-[2px] transition-opacity">
+    <div class="bg-white p-5 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-100">
+      <div class="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+      <span class="text-sm font-medium text-slate-700">กำลังโหลดข้อมูล...</span>
+    </div>
+  </div>
+
+  <!-- Client-side JavaScript -->
+  <?!= include('JavaScript'); ?>
+</body>
+</html>

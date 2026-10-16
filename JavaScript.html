@@ -1,0 +1,4070 @@
+<script>
+/**
+ * =========================================================================
+ * WORK TRACKER (โปรแกรมติดตามงาน)
+ * Client-side Controller & State Management (JavaScript.html)
+ * =========================================================================
+ */
+
+// Application State
+const state = {
+  tasks: [],
+  sites: [],
+  users: [],
+  statuses: ['รอดำเนินการ', 'กำลังดำเนินการ', 'รอตรวจสอบ', 'เสร็จสิ้น'],
+  priorities: ['ด่วนมาก', 'สูง', 'ปานกลาง', 'ทั่วไป'],
+  settings: {},
+  stats: { total: 0, todo: 0, inProgress: 0, review: 0, done: 0, overdue: 0 },
+  onlineUsers: [],
+  onlineCount: 0,
+  heartbeatInterval: null,
+  realtimeSyncInterval: null,
+  isSyncing: false,
+  tasksVersion: '0',
+  highlightTaskId: null,
+  lastOwnActionTime: 0,
+  lastOwnTaskId: null,
+  taskFileQueue: [],
+  currentEditingAttachments: [],
+  sheetUrl: '',
+  webAppUrl: '',
+  filters: {
+    site: 'ALL',
+    assignee: 'ALL',
+    status: 'ALL',
+    priority: 'ALL',
+    search: '',
+    dueDateFrom: '',
+    dueDateTo: '',
+    includeNoDueDate: false,
+    dueDateInitialized: false
+  },
+  currentView: 'kanban', // 'kanban' | 'table'
+  draggedTaskId: null,
+  currentUser: null,
+  loginUsername: '',
+  countdownInterval: null,
+  archivedTasks: []
+};
+
+// Site Color Palettes for visual differentiation
+const SITE_COLORS = [
+  { bg: 'bg-sky-100', text: 'text-sky-800', border: 'border-sky-300' },
+  { bg: 'bg-emerald-100', text: 'text-emerald-800', border: 'border-emerald-300' },
+  { bg: 'bg-amber-100', text: 'text-amber-800', border: 'border-amber-300' },
+  { bg: 'bg-purple-100', text: 'text-purple-800', border: 'border-purple-300' },
+  { bg: 'bg-rose-100', text: 'text-rose-800', border: 'border-rose-300' },
+  { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-300' },
+  { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300' }
+];
+
+// Document Ready
+document.addEventListener('DOMContentLoaded', () => {
+  setupEventListeners();
+  setupPinInputHandlers();
+  checkAuthSession();
+});
+
+/**
+ * ดึงข้อมูลเริ่มต้นจาก Google Apps Script Backend
+ */
+function loadInitialData() {
+  showLoading(true);
+  const username = state.currentUser ? state.currentUser.username : '';
+  google.script.run
+    .withSuccessHandler(onDataLoaded)
+    .withFailureHandler(onServerError)
+    .getInitialData(username);
+}
+
+/**
+ * จัดการเมื่อโหลดข้อมูลสำเร็จ
+ */
+function onDataLoaded(response) {
+  showLoading(false);
+  if (!response || !response.success) {
+    Swal.fire({
+      icon: 'error',
+      title: 'โหลดข้อมูลไม่สำเร็จ',
+      text: response ? response.error : 'ไม่ได้รับข้อมูลจากเซิร์ฟเวอร์'
+    });
+    return;
+  }
+
+  state.tasks = response.tasks || [];
+  state.sites = response.sites || [];
+  state.allSites = response.allSites || response.sites || [];
+  state.users = response.users || [];
+  state.statuses = response.statuses || state.statuses;
+  state.priorities = response.priorities || state.priorities;
+  state.settings = response.settings || {};
+  state.tempSiteChatIds = { ...(state.settings.siteTelegramChatIds || {}) };
+  state.stats = response.stats || state.stats;
+  state.sheetUrl = response.sheetUrl || '';
+  state.webAppUrl = response.webAppUrl || '';
+
+  // อัปเดตสถานะผู้ใช้งานที่กำลังออนไลน์
+  if (response.onlineUsers !== undefined) {
+    updateOnlineUsersDisplay(response.onlineCount, response.onlineUsers);
+  }
+
+  // อัปเดตข้อมูลผู้ใช้ปัจจุบันหากเซิร์ฟเวอร์ส่งกลับมา
+  if (response.currentUserProfile && state.currentUser) {
+    state.currentUser = { ...state.currentUser, ...response.currentUserProfile };
+    sessionStorage.setItem('work_tracker_session', JSON.stringify(state.currentUser));
+    updateNavbarUser();
+  }
+
+  // อัปเดตลิงก์ไปยัง Google Sheet
+  const sheetLinkBtn = document.getElementById('sheetLinkBtn');
+  if (sheetLinkBtn && state.sheetUrl) {
+    sheetLinkBtn.href = state.sheetUrl;
+    sheetLinkBtn.classList.remove('hidden');
+  }
+
+  // อัปเดตตัวเลือก Dropdown ไซต์งาน และ ผู้รับผิดชอบ
+  renderSiteFilterOptions();
+  renderAssigneeFilterOptions();
+  renderSiteFormOptions();
+  renderAssigneeFormOptions();
+  renderUserReportersList();
+
+  // กำหนดค่าเริ่มต้นช่วงวันครบกำหนดส่ง (ดีฟอลต์เป็นทั้งหมดทุกช่วงเวลา)
+  initDueDateFilter(false);
+
+  // บันทึกเวอร์ชันข้อมูลและเริ่มการตรวจสอบ Real-time อัตโนมัติ (Zero-Quota Background Sync)
+  if (response.version) {
+    state.tasksVersion = String(response.version);
+  }
+  startRealtimeSync();
+
+  // เรนเดอร์การแสดงผล
+  renderDashboard();
+}
+
+function onServerError(error) {
+  showLoading(false);
+  Swal.fire({
+    icon: 'error',
+    title: 'การเชื่อมต่อผิดพลาด',
+    text: error.message || 'เกิดข้อผิดพลาดในการติดต่อ Google Apps Script'
+  });
+}
+
+/**
+ * ผูก Event Listeners ในหน้าจอ
+ */
+function setupEventListeners() {
+  // ฟิลเตอร์ไซต์งาน
+  document.getElementById('siteFilter').addEventListener('change', (e) => {
+    state.filters.site = e.target.value;
+    renderDashboard();
+  });
+
+  // ฟิลเตอร์ผู้รับผิดชอบ
+  const assigneeFilterEl = document.getElementById('assigneeFilter');
+  if (assigneeFilterEl) {
+    assigneeFilterEl.addEventListener('change', (e) => {
+      state.filters.assignee = e.target.value;
+      renderDashboard();
+    });
+  }
+
+  // ฟิลเตอร์ระดับความสำคัญ
+  document.getElementById('priorityFilter').addEventListener('change', (e) => {
+    state.filters.priority = e.target.value;
+    renderDashboard();
+  });
+
+  // ฟิลเตอร์ช่วงวันครบกำหนดส่ง
+  const fromEl = document.getElementById('dueDateFromFilter');
+  const toEl = document.getElementById('dueDateToFilter');
+  const includeNoDueEl = document.getElementById('includeNoDueDateFilter');
+  const btnResetDue = document.getElementById('btnResetDueDateRange');
+  const btnClearDue = document.getElementById('btnClearDueDateRange');
+
+  // เริ่มต้น Date Pickers และ Auto-masking สำหรับช่องตัวกรอง
+  initDatePickerInput('dueDateFromFilter');
+  initDatePickerInput('dueDateToFilter');
+
+  // เริ่มต้น Date Pickers และ Auto-masking สำหรับช่องใน Modal เพิ่ม/แก้ไขงาน
+  initDatePickerInput('taskReportDate', 'btnPickerReportDate');
+  initDatePickerInput('taskDueDate', 'btnPickerDueDate');
+
+  if (fromEl) {
+    fromEl.addEventListener('change', (e) => {
+      const isoVal = parseDmyToIso(e.target.value);
+      state.filters.dueDateFrom = isoVal;
+      // หากเลือก From มากกว่า To ให้ปรับ To ให้เท่ากับ From
+      if (toEl && toEl.value && isoVal) {
+        const toIso = parseDmyToIso(toEl.value);
+        if (toIso && isoVal > toIso) {
+          setDateInputValue('dueDateToFilter', isoVal);
+          state.filters.dueDateTo = isoVal;
+        }
+      }
+      renderDashboard();
+    });
+  }
+
+  if (toEl) {
+    toEl.addEventListener('change', (e) => {
+      const isoVal = parseDmyToIso(e.target.value);
+      state.filters.dueDateTo = isoVal;
+      // หากเลือก To น้อยกว่า From ให้ปรับ From ให้เท่ากับ To
+      if (fromEl && fromEl.value && isoVal) {
+        const fromIso = parseDmyToIso(fromEl.value);
+        if (fromIso && isoVal < fromIso) {
+          setDateInputValue('dueDateFromFilter', isoVal);
+          state.filters.dueDateFrom = isoVal;
+        }
+      }
+      renderDashboard();
+    });
+  }
+
+  if (includeNoDueEl) {
+    includeNoDueEl.addEventListener('change', (e) => {
+      state.filters.includeNoDueDate = e.target.checked;
+      renderDashboard();
+    });
+  }
+
+  if (btnResetDue) {
+    btnResetDue.addEventListener('click', () => {
+      initDueDateFilter(true);
+      renderDashboard();
+    });
+  }
+
+  if (btnClearDue) {
+    btnClearDue.addEventListener('click', () => {
+      clearDueDateFilter();
+    });
+  }
+
+  // ช่องค้นหา
+  let debounceTimer;
+  document.getElementById('searchInput').addEventListener('input', (e) => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(() => {
+      state.filters.search = e.target.value.trim().toLowerCase();
+      renderDashboard();
+    }, 200);
+  });
+
+  // สลับมุมมอง Kanban / ตาราง
+  document.getElementById('btnViewKanban').addEventListener('click', () => switchView('kanban'));
+  document.getElementById('btnViewTable').addEventListener('click', () => switchView('table'));
+
+  // ฟอร์มบันทึกงาน
+  document.getElementById('taskForm').addEventListener('submit', handleTaskFormSubmit);
+
+  // สลับการกรอกไซต์งานใหม่
+  const siteSelect = document.getElementById('taskSiteSelect');
+  const customSiteWrapper = document.getElementById('customSiteWrapper');
+  siteSelect.addEventListener('change', (e) => {
+    if (e.target.value === '__NEW__') {
+      customSiteWrapper.classList.remove('hidden');
+      document.getElementById('taskSiteCustom').focus();
+    } else {
+      customSiteWrapper.classList.add('hidden');
+    }
+  });
+
+  // ฟอร์มตั้งค่า
+  document.getElementById('settingsForm').addEventListener('submit', handleSettingsSubmit);
+  document.getElementById('btnTestTelegram').addEventListener('click', handleTestTelegram);
+
+  // ตั้งค่ากล่องลากวางไฟล์แนบ
+  setupTaskFileDropZone();
+
+  // ตัวกรองและค้นหาในคลังงาน (Archive)
+  const archiveSearchEl = document.getElementById('archiveSearchInput');
+  if (archiveSearchEl) {
+    let archiveDebounce;
+    archiveSearchEl.addEventListener('input', () => {
+      clearTimeout(archiveDebounce);
+      archiveDebounce = setTimeout(() => {
+        loadArchivedTasks();
+      }, 300);
+    });
+  }
+
+  const archiveSiteEl = document.getElementById('archiveSiteFilter');
+  if (archiveSiteEl) {
+    archiveSiteEl.addEventListener('change', () => {
+      loadArchivedTasks();
+    });
+  }
+}
+
+/**
+ * สลับมุมมอง Kanban หรือ Table
+ */
+function switchView(view) {
+  state.currentView = view;
+  const kanbanSection = document.getElementById('kanbanViewSection');
+  const tableSection = document.getElementById('tableViewSection');
+  const btnKanban = document.getElementById('btnViewKanban');
+  const btnTable = document.getElementById('btnViewTable');
+
+  if (view === 'kanban') {
+    kanbanSection.classList.remove('hidden');
+    tableSection.classList.add('hidden');
+    btnKanban.classList.add('bg-blue-600', 'text-white');
+    btnKanban.classList.remove('bg-white', 'text-slate-700');
+    btnTable.classList.add('bg-white', 'text-slate-700');
+    btnTable.classList.remove('bg-blue-600', 'text-white');
+  } else {
+    kanbanSection.classList.add('hidden');
+    tableSection.classList.remove('hidden');
+    btnTable.classList.add('bg-blue-600', 'text-white');
+    btnTable.classList.remove('bg-white', 'text-slate-700');
+    btnKanban.classList.add('bg-white', 'text-slate-700');
+    btnKanban.classList.remove('bg-blue-600', 'text-white');
+  }
+  renderDashboard();
+}
+
+/**
+ * คำนวณและเรนเดอร์ทั้ง Dashboard (KPIs, Kanban, Table)
+ */
+function renderDashboard() {
+  const filtered = getFilteredTasks();
+
+  // อัปเดตตัวเลข KPI บนหัวการ์ด
+  updateKpiCards(filtered);
+
+  if (state.currentView === 'kanban') {
+    renderKanbanBoard(filtered);
+  } else {
+    renderTableView(filtered);
+  }
+}
+
+/**
+ * ดึงรายการงานที่ผ่านเงื่อนไขการค้นหาและฟิลเตอร์
+ */
+function getFilteredTasks() {
+  return state.tasks.filter(task => {
+    // 1. ฟิลเตอร์ไซต์งาน
+    if (state.filters.site !== 'ALL' && task.site !== state.filters.site) {
+      return false;
+    }
+
+    // 2. ฟิลเตอร์ผู้รับผิดชอบ
+    if (state.filters.assignee && state.filters.assignee !== 'ALL') {
+      const targetAssignee = state.filters.assignee;
+      if (targetAssignee === 'ไม่ระบุ') {
+        if (task.assignee && task.assignee !== 'ไม่ระบุ' && task.assignee.trim() !== '') {
+          return false;
+        }
+      } else if (task.assignee !== targetAssignee) {
+        return false;
+      }
+    }
+
+    // 3. ฟิลเตอร์ระดับความสำคัญ
+    if (state.filters.priority !== 'ALL' && task.priority !== state.filters.priority) {
+      return false;
+    }
+
+    // 4. ฟิลเตอร์ช่วงวันครบกำหนดส่ง (Due Date Range)
+    const hasDateFilter = state.filters.dueDateFrom || state.filters.dueDateTo;
+    if (hasDateFilter) {
+      const taskDue = task.dueDate ? String(task.dueDate).trim() : '';
+      if (!taskDue) {
+        // หากไม่มีวันครบกำหนด และไม่ได้เลือก "รวมงานไม่มีกำหนด" ให้กรองออก
+        if (!state.filters.includeNoDueDate) {
+          return false;
+        }
+      } else {
+        if (state.filters.dueDateFrom && taskDue < state.filters.dueDateFrom) {
+          return false;
+        }
+        if (state.filters.dueDateTo && taskDue > state.filters.dueDateTo) {
+          return false;
+        }
+      }
+    }
+
+    // 5. ฟิลเตอร์ค้นหาข้อความ
+    if (state.filters.search) {
+      const q = state.filters.search;
+      const matchTitle = (task.title || '').toLowerCase().includes(q);
+      const matchDesc = (task.description || '').toLowerCase().includes(q);
+      const matchAssignee = (task.assignee || '').toLowerCase().includes(q);
+      const matchSite = (task.site || '').toLowerCase().includes(q);
+      const matchId = (task.id || '').toLowerCase().includes(q);
+      if (!matchTitle && !matchDesc && !matchAssignee && !matchSite && !matchId) {
+        return false;
+      }
+    }
+
+    return true;
+  });
+}
+
+/**
+ * อัปเดตตัวเลขการ์ดสถิติต่างๆ
+ */
+function updateKpiCards(filteredTasks) {
+  const todayStr = getLocalDateString();
+
+  const total = filteredTasks.length;
+  const todo = filteredTasks.filter(t => t.status === 'รอดำเนินการ').length;
+  const inProgress = filteredTasks.filter(t => t.status === 'กำลังดำเนินการ').length;
+  const review = filteredTasks.filter(t => t.status === 'รอตรวจสอบ').length;
+  const done = filteredTasks.filter(t => t.status === 'เสร็จสิ้น').length;
+  const overdue = filteredTasks.filter(t => t.dueDate && t.dueDate < todayStr && t.status !== 'เสร็จสิ้น').length;
+
+  document.getElementById('statTotal').innerText = total;
+  document.getElementById('statTodo').innerText = todo;
+  document.getElementById('statInProgress').innerText = inProgress;
+  document.getElementById('statReview').innerText = review;
+  document.getElementById('statDone').innerText = done;
+  document.getElementById('statOverdue').innerText = overdue;
+}
+
+/**
+ * เรนเดอร์กระดาน Kanban
+ */
+function renderKanbanBoard(filteredTasks) {
+  state.statuses.forEach(status => {
+    const colContainer = document.getElementById(`col-tasks-${status}`);
+    const colCountBadge = document.getElementById(`count-${status}`);
+    if (!colContainer) return;
+
+    const tasksInStatus = filteredTasks.filter(t => t.status === status);
+    if (colCountBadge) colCountBadge.innerText = tasksInStatus.length;
+
+    if (tasksInStatus.length === 0) {
+      colContainer.innerHTML = `
+        <div class="h-32 flex flex-col items-center justify-center text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
+          <i class="fa-regular fa-folder-open text-2xl mb-1 opacity-50"></i>
+          <span class="text-xs">ไม่มีงานในสถานะนี้</span>
+        </div>
+      `;
+      return;
+    }
+
+    colContainer.innerHTML = tasksInStatus.map(task => renderTaskCardHtml(task)).join('');
+  });
+}
+
+/**
+ * สร้าง HTML สำหรับการ์ดงานใน Kanban
+ */
+function renderTaskCardHtml(task) {
+  const siteStyle = getSiteColorStyle(task.site);
+  const priorityStyle = getPriorityBadgeStyle(task.priority);
+  const todayStr = getLocalDateString();
+  const isOverdue = task.dueDate && task.dueDate < todayStr && task.status !== 'เสร็จสิ้น';
+
+  // ปุ่มเปลี่ยนสถานะก่อนหน้า/ถัดไป
+  const currentIndex = state.statuses.indexOf(task.status);
+  const prevStatus = currentIndex > 0 ? state.statuses[currentIndex - 1] : null;
+  const nextStatus = currentIndex < state.statuses.length - 1 ? state.statuses[currentIndex + 1] : null;
+  const isHighlighted = state.highlightTaskId === task.id;
+
+  return `
+    <div class="task-card bg-[#F7F4EA] p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs hover:shadow-md relative group ${isHighlighted ? 'task-card-bounce ring-2 ring-[#2491FA] ring-offset-2' : ''}"
+         data-task-id="${task.id}"
+         draggable="true"
+         ondragstart="onCardDragStart(event, '${task.id}')"
+         ondragend="onCardDragEnd(event)">
+      
+      <!-- Site & Priority Badges -->
+      <div class="flex items-center justify-between gap-2 mb-2">
+        <span class="badge-site ${siteStyle.bg} ${siteStyle.text} border ${siteStyle.border}">
+          <i class="fa-solid fa-location-dot text-[10px]"></i>
+          <span class="truncate max-w-[140px]">${escapeHtml(task.site)}</span>
+        </span>
+        <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${priorityStyle}">
+          ${escapeHtml(task.priority)}
+        </span>
+      </div>
+
+      <!-- Task Title & Attachments Badge -->
+      <div class="flex items-start justify-between gap-1.5 mb-1.5">
+        <h4 class="font-bold text-[#201E1C] text-sm leading-snug group-hover:text-[#2491FA] transition-colors">
+          ${escapeHtml(task.title)}
+        </h4>
+        ${task.attachments && task.attachments.length > 0 ? `
+          <span class="inline-flex items-center gap-1 text-[10px] font-bold text-[#2491FA] bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-200/60 flex-shrink-0" title="มีไฟล์แนบ ${task.attachments.length} ไฟล์">
+            <i class="fa-solid fa-paperclip text-[9px]"></i>
+            <span>${task.attachments.length}</span>
+          </span>
+        ` : ''}
+      </div>
+
+      <!-- Task Description (ถ้ามี) -->
+      ${task.description ? `
+        <p class="text-xs text-[#6E6862] mb-3 line-clamp-2 leading-relaxed">
+          ${escapeHtml(task.description)}
+        </p>
+      ` : ''}
+
+      <!-- Reporter & Report Date (ถ้ามี) -->
+      ${task.reporter || task.reportDate ? `
+        <div class="text-[11px] text-[#6E6862] mb-1.5 flex items-center justify-between gap-1">
+          ${task.reporter ? `
+            <div class="flex items-center gap-1.5 truncate" title="ผู้แจ้ง: ${escapeHtml(task.reporter)}">
+              <i class="fa-solid fa-bullhorn text-[10px] text-[#2491FA]"></i>
+              <span class="text-slate-500 text-[10px]">ผู้แจ้ง:</span>
+              <span class="font-medium text-[#201E1C] truncate max-w-[110px]">${escapeHtml(task.reporter)}</span>
+            </div>
+          ` : '<span></span>'}
+          ${task.reportDate ? `
+            <div class="text-[10px] text-[#6E6862] flex items-center gap-1 whitespace-nowrap" title="วันที่แจ้ง: ${formatDateDisplay(task.reportDate)}">
+              <i class="fa-regular fa-calendar-plus text-[9px] text-[#2491FA]"></i>
+              <span>${formatDateDisplay(task.reportDate)}</span>
+            </div>
+          ` : ''}
+        </div>
+      ` : ''}
+
+      <!-- Assignee & Due Date -->
+      <div class="flex items-center justify-between text-xs text-[#6E6862] border-t border-[#EFE9DC] pt-2.5 mt-2">
+        <div class="flex items-center gap-1.5 font-medium text-[#201E1C]">
+          <div class="w-6 h-6 rounded-full bg-[#EDE7DA] flex items-center justify-center text-[#201E1C] text-xs font-bold">
+            <i class="fa-regular fa-user text-[10px]"></i>
+          </div>
+          <span class="truncate max-w-[100px]">${escapeHtml(task.assignee)}</span>
+        </div>
+
+        <div class="flex items-center gap-1 ${isOverdue ? 'text-rose-600 font-semibold overdue-alert' : 'text-[#6E6862]'}">
+          <i class="fa-regular fa-calendar text-[11px]"></i>
+          <span>${formatDateDisplay(task.dueDate)}</span>
+        </div>
+      </div>
+
+      <!-- Card Actions (Quick status change & Edit/Delete) -->
+      <div class="flex items-center justify-between mt-3 pt-2 border-t border-[#EFE9DC]">
+        <div class="flex items-center gap-1">
+          ${prevStatus ? `
+            <button onclick="quickChangeStatus('${task.id}', '${prevStatus}')" 
+                    title="ย้ายกลับไป: ${prevStatus}"
+                    class="p-1 px-1.5 text-xs text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-lg transition-colors">
+              <i class="fa-solid fa-chevron-left text-[10px]"></i>
+            </button>
+          ` : '<span class="w-5"></span>'}
+
+          ${nextStatus ? `
+            <button onclick="quickChangeStatus('${task.id}', '${nextStatus}')" 
+                    title="ย้ายไป: ${nextStatus}"
+                    class="p-1 px-1.5 text-xs text-[#2491FA] hover:text-[#1A7CE0] hover:bg-blue-100/60 rounded-lg transition-colors font-bold flex items-center gap-1">
+              <span>ถัดไป</span>
+              <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            </button>
+          ` : '<span class="text-xs text-emerald-600 font-semibold"><i class="fa-solid fa-check"></i> เสร็จสิ้น</span>'}
+        </div>
+
+        <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+          ${task.status === 'เสร็จสิ้น' ? `
+            <button onclick="handleArchiveSingleTask('${task.id}', '${escapeJs(task.title)}')" 
+                    title="จัดเก็บงานนี้เข้าคลัง (Archive)"
+                    class="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-100/60 rounded-lg transition-colors">
+              <i class="fa-solid fa-box-archive text-xs"></i>
+            </button>
+          ` : ''}
+          <button onclick="openEditTaskModal('${task.id}')" 
+                  title="แก้ไขงาน"
+                  class="p-1 text-[#6E6862] hover:text-[#2491FA] hover:bg-blue-50 rounded-lg transition-colors">
+            <i class="fa-regular fa-pen-to-square text-xs"></i>
+          </button>
+          <button onclick="confirmDeleteTask('${task.id}', '${escapeJs(task.title)}')" 
+                  title="ลบงาน"
+                  class="p-1 text-[#6E6862] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+            <i class="fa-regular fa-trash-can text-xs"></i>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  `;
+}
+
+/**
+ * เรนเดอร์มุมมองตาราง (Table View)
+ */
+function renderTableView(filteredTasks) {
+  const tbody = document.getElementById('taskTableBody');
+  const countSpan = document.getElementById('tableRowCount');
+  if (countSpan) countSpan.innerText = filteredTasks.length;
+
+  if (filteredTasks.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="text-center py-12 text-slate-400">
+          <i class="fa-regular fa-folder-open text-3xl mb-2"></i>
+          <p class="text-sm">ไม่พบข้อมูลงานตามเงื่อนไขที่เลือก</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const todayStr = getLocalDateString();
+
+  tbody.innerHTML = filteredTasks.map((task, idx) => {
+    const siteStyle = getSiteColorStyle(task.site);
+    const priorityStyle = getPriorityBadgeStyle(task.priority);
+    const isOverdue = task.dueDate && task.dueDate < todayStr && task.status !== 'เสร็จสิ้น';
+    const isHighlighted = state.highlightTaskId === task.id;
+
+    return `
+      <tr class="hover:bg-[#FAF8F2] transition-colors border-b border-[#EFE9DC] ${isHighlighted ? 'bg-blue-50/80 ring-2 ring-[#2491FA]' : ''}" data-task-id="${task.id}">
+        <td class="px-4 py-3 text-xs font-mono text-[#6E6862]">${escapeHtml(task.id)}</td>
+        <td class="px-4 py-3">
+          <span class="badge-site ${siteStyle.bg} ${siteStyle.text} border ${siteStyle.border}">
+            <i class="fa-solid fa-location-dot text-[9px]"></i>
+            ${escapeHtml(task.site)}
+          </span>
+        </td>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-[#201E1C] text-sm leading-snug">${escapeHtml(task.title)}</span>
+            ${task.attachments && task.attachments.length > 0 ? `
+              <span class="inline-flex items-center gap-1 text-[10px] font-bold text-[#2491FA] bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/60" title="มีไฟล์แนบ ${task.attachments.length} ไฟล์">
+                <i class="fa-solid fa-paperclip text-[9px]"></i>
+                <span>${task.attachments.length}</span>
+              </span>
+            ` : ''}
+          </div>
+          ${task.description ? `<div class="text-xs text-[#6E6862] truncate max-w-xs mt-0.5">${escapeHtml(task.description)}</div>` : ''}
+        </td>
+        <td class="px-4 py-3 text-xs text-[#201E1C] font-medium">
+          <div class="flex items-center gap-1.5">
+            <div class="w-5 h-5 rounded-full bg-[#EDE7DA] flex items-center justify-center text-[10px] text-[#201E1C] font-bold">
+              <i class="fa-regular fa-user"></i>
+            </div>
+            ${escapeHtml(task.assignee)}
+          </div>
+          ${task.reporter ? `<div class="text-[10px] text-[#6E6862] mt-0.5 flex items-center gap-1"><i class="fa-solid fa-bullhorn text-[9px] text-[#2491FA]"></i> แจ้งโดย: ${escapeHtml(task.reporter)}</div>` : ''}
+          ${task.reportDate ? `<div class="text-[10px] text-[#6E6862] mt-0.5 flex items-center gap-1"><i class="fa-regular fa-calendar-plus text-[9px] text-[#2491FA]"></i> วันที่แจ้ง: ${formatDateDisplay(task.reportDate)}</div>` : ''}
+        </td>
+        <td class="px-4 py-3">
+          <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${priorityStyle}">
+            ${escapeHtml(task.priority)}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-xs ${isOverdue ? 'text-rose-600 font-semibold' : 'text-[#6E6862]'}">
+          ${formatDateDisplay(task.dueDate)}
+          ${isOverdue ? '<span class="text-[10px] bg-rose-100 text-rose-700 px-1 py-0.5 rounded ml-1">เกินกำหนด</span>' : ''}
+        </td>
+        <td class="px-4 py-3">
+          <select onchange="quickChangeStatus('${task.id}', this.value)" 
+                  class="text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] text-[#201E1C] rounded-lg px-2.5 py-1 focus:ring-2 focus:ring-[#2491FA] outline-none">
+            ${state.statuses.map(st => `
+              <option value="${st}" ${task.status === st ? 'selected' : ''}>${st}</option>
+            `).join('')}
+          </select>
+        </td>
+        <td class="px-4 py-3 text-right">
+          <div class="flex items-center justify-end gap-1.5">
+            ${task.status === 'เสร็จสิ้น' ? `
+              <button onclick="handleArchiveSingleTask('${task.id}', '${escapeJs(task.title)}')" 
+                      title="จัดเก็บงานนี้เข้าคลัง" 
+                      class="p-1.5 text-amber-700 hover:text-amber-900 hover:bg-amber-100/60 rounded-lg transition-colors">
+                <i class="fa-solid fa-box-archive text-xs"></i>
+              </button>
+            ` : ''}
+            <button onclick="openEditTaskModal('${task.id}')" 
+                    title="แก้ไข" 
+                    class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-blue-50 rounded-lg transition-colors">
+              <i class="fa-regular fa-pen-to-square"></i>
+            </button>
+            <button onclick="confirmDeleteTask('${task.id}', '${escapeJs(task.title)}')" 
+                    title="ลบ" 
+                    class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors">
+              <i class="fa-regular fa-trash-can"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+/**
+ * จัดการ Drag and Drop ในกระดาน Kanban
+ */
+function onCardDragStart(e, taskId) {
+  state.draggedTaskId = taskId;
+  e.target.classList.add('dragging');
+  e.dataTransfer.setData('text/plain', taskId);
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function onCardDragEnd(e) {
+  e.target.classList.remove('dragging');
+  state.draggedTaskId = null;
+}
+
+function handleDragOver(e) {
+  e.preventDefault();
+  e.currentTarget.classList.add('drag-over');
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function handleDragLeave(e) {
+  e.currentTarget.classList.remove('drag-over');
+}
+
+function handleDrop(e, targetStatus) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  const taskId = e.dataTransfer.getData('text/plain') || state.draggedTaskId;
+  if (!taskId) return;
+
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task || task.status === targetStatus) return;
+
+  // Optimistic UI Update ทันทีเพื่อให้ลื่นไหล
+  const oldStatus = task.status;
+  task.status = targetStatus;
+  state.lastOwnActionTime = Date.now();
+  state.lastOwnTaskId = taskId;
+  renderDashboard();
+
+  // ส่งบันทึกไปยังเซิร์ฟเวอร์
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        task.status = oldStatus;
+        renderDashboard();
+        Swal.fire({ icon: 'error', title: 'อัปเดตสถานะไม่สำเร็จ', text: res.message });
+      }
+    })
+    .withFailureHandler((err) => {
+      task.status = oldStatus;
+      renderDashboard();
+      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.message });
+    })
+    .updateTaskStatus(taskId, targetStatus);
+}
+
+/**
+ * เปลี่ยนสถานะงานด่วน (จากปุ่มลูกศรหรือ Dropdown)
+ */
+function quickChangeStatus(taskId, newStatus) {
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task || task.status === newStatus) return;
+
+  const oldStatus = task.status;
+  task.status = newStatus;
+  state.lastOwnActionTime = Date.now();
+  state.lastOwnTaskId = taskId;
+  renderDashboard();
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        task.status = oldStatus;
+        renderDashboard();
+        Swal.fire({ icon: 'error', title: 'เปลี่ยนสถานะไม่สำเร็จ', text: res.message });
+      }
+    })
+    .withFailureHandler((err) => {
+      task.status = oldStatus;
+      renderDashboard();
+      Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+    })
+    .updateTaskStatus(taskId, newStatus);
+}
+
+/**
+ * เปิด Modal สำหรับสร้างงานใหม่
+ */
+function openCreateTaskModal(defaultStatus = 'รอดำเนินการ') {
+  // ปิดปฏิทิน Flatpickr หากมีเปิดค้างอยู่
+  const rFp = document.getElementById('taskReportDate')?._flatpickr;
+  if (rFp) rFp.close();
+  const dFp = document.getElementById('taskDueDate')?._flatpickr;
+  if (dFp) dFp.close();
+
+  document.getElementById('taskModalTitle').innerText = 'สร้างงานใหม่';
+  document.getElementById('taskId').value = '';
+  document.getElementById('taskTitle').value = '';
+  document.getElementById('taskDesc').value = '';
+  document.getElementById('taskPriority').value = 'ปานกลาง';
+  document.getElementById('taskStatus').value = defaultStatus;
+  
+  // วันครบกำหนดตั้งเป็นค่าว่าง
+  setDateInputValue('taskDueDate', '');
+
+  // รีเซ็ตการเลือกไซต์งาน
+  renderSiteFormOptions();
+  document.getElementById('taskSiteSelect').value = state.sites[0] || '';
+  document.getElementById('customSiteWrapper').classList.add('hidden');
+  document.getElementById('taskSiteCustom').value = '';
+
+  // รีเซ็ตการเลือกผู้รับผิดชอบ
+  renderAssigneeFormOptions('');
+  const assigneeSelect = document.getElementById('taskAssigneeSelect');
+  if (assigneeSelect) assigneeSelect.value = '';
+  document.getElementById('customAssigneeWrapper').classList.add('hidden');
+  document.getElementById('taskAssigneeCustom').value = '';
+
+  // ตั้งค่าผู้แจ้ง เริ่มต้นเป็นผู้ใช้ที่เข้าสู่ระบบ
+  renderUserReportersList();
+  const reporterInput = document.getElementById('taskReporter');
+  if (reporterInput) {
+    const currentUserName = state.currentUser ? (state.currentUser.fullName || state.currentUser.username || '') : '';
+    reporterInput.value = currentUserName;
+  }
+
+  // ตั้งค่าวันที่แจ้ง เริ่มต้นเป็นวันปัจจุบัน (รูปแบบ DD/MM/YYYY)
+  setDateInputValue('taskReportDate', getLocalDateString());
+
+  // รีเซ็ตการจัดการไฟล์แนบ
+  state.taskFileQueue = [];
+  state.currentEditingAttachments = [];
+  const progressWrapper = document.getElementById('taskUploadProgressWrapper');
+  if (progressWrapper) progressWrapper.classList.add('hidden');
+  renderExistingAttachmentsList([], '');
+  renderSelectedFilesQueue();
+  updateAttachmentsBadge();
+  const fileInput = document.getElementById('taskFileInput');
+  if (fileInput) fileInput.value = '';
+
+  document.getElementById('taskModal').classList.remove('hidden');
+}
+
+/**
+ * เปิด Modal เพื่อแก้ไขงานเดิม
+ */
+function openEditTaskModal(taskId) {
+  const task = state.tasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  // ปิดปฏิทิน Flatpickr หากมีเปิดค้างอยู่
+  const rFp = document.getElementById('taskReportDate')?._flatpickr;
+  if (rFp) rFp.close();
+  const dFp = document.getElementById('taskDueDate')?._flatpickr;
+  if (dFp) dFp.close();
+
+  document.getElementById('taskModalTitle').innerText = `แก้ไขงาน (${task.id})`;
+  document.getElementById('taskId').value = task.id;
+  document.getElementById('taskTitle').value = task.title;
+  document.getElementById('taskDesc').value = task.description || '';
+  document.getElementById('taskPriority').value = task.priority;
+  document.getElementById('taskStatus').value = task.status;
+  setDateInputValue('taskDueDate', task.dueDate || '');
+
+  // จัดการตัวเลือกไซต์งาน
+  renderSiteFormOptions();
+  const siteSelect = document.getElementById('taskSiteSelect');
+  if (state.sites.includes(task.site)) {
+    siteSelect.value = task.site;
+    document.getElementById('customSiteWrapper').classList.add('hidden');
+  } else {
+    siteSelect.value = '__NEW__';
+    document.getElementById('customSiteWrapper').classList.remove('hidden');
+    document.getElementById('taskSiteCustom').value = task.site;
+  }
+
+  // จัดการตัวเลือกผู้รับผิดชอบ
+  renderAssigneeFormOptions(task.assignee);
+  const assigneeSelect = document.getElementById('taskAssigneeSelect');
+  const customAssigneeWrapper = document.getElementById('customAssigneeWrapper');
+  const customAssigneeInput = document.getElementById('taskAssigneeCustom');
+
+  let assigneeMatched = false;
+  if (assigneeSelect && task.assignee) {
+    for (let i = 0; i < assigneeSelect.options.length; i++) {
+      if (assigneeSelect.options[i].value === task.assignee) {
+        assigneeSelect.selectedIndex = i;
+        assigneeMatched = true;
+        break;
+      }
+    }
+  }
+
+  if (assigneeMatched) {
+    customAssigneeWrapper.classList.add('hidden');
+    customAssigneeInput.value = '';
+  } else if (task.assignee && task.assignee !== 'ไม่ระบุ') {
+    assigneeSelect.value = '__CUSTOM__';
+    customAssigneeWrapper.classList.remove('hidden');
+    customAssigneeInput.value = task.assignee;
+  } else {
+    assigneeSelect.value = '';
+    customAssigneeWrapper.classList.add('hidden');
+    customAssigneeInput.value = '';
+  }
+
+  // จัดการผู้แจ้ง
+  renderUserReportersList();
+  const reporterInput = document.getElementById('taskReporter');
+  if (reporterInput) {
+    reporterInput.value = task.reporter || '';
+  }
+
+  // จัดการวันที่แจ้ง (รูปแบบ DD/MM/YYYY)
+  setDateInputValue('taskReportDate', task.reportDate || getLocalDateString());
+
+  // จัดการไฟล์แนบเดิม และรีเซ็ตคิวไฟล์ใหม่
+  state.taskFileQueue = [];
+  state.currentEditingAttachments = Array.isArray(task.attachments) ? [...task.attachments] : [];
+  const progressWrapper = document.getElementById('taskUploadProgressWrapper');
+  if (progressWrapper) progressWrapper.classList.add('hidden');
+  renderExistingAttachmentsList(state.currentEditingAttachments, task.id);
+  renderSelectedFilesQueue();
+  updateAttachmentsBadge();
+  const fileInput = document.getElementById('taskFileInput');
+  if (fileInput) fileInput.value = '';
+
+  document.getElementById('taskModal').classList.remove('hidden');
+}
+
+function closeTaskModal() {
+  document.getElementById('taskModal').classList.add('hidden');
+  state.taskFileQueue = [];
+  state.currentEditingAttachments = [];
+  const fileInput = document.getElementById('taskFileInput');
+  if (fileInput) fileInput.value = '';
+
+  // ปิดปฏิทิน Flatpickr หากยังเปิดค้างอยู่
+  const rFp = document.getElementById('taskReportDate')?._flatpickr;
+  if (rFp) rFp.close();
+  const dFp = document.getElementById('taskDueDate')?._flatpickr;
+  if (dFp) dFp.close();
+}
+
+/**
+ * บันทึกฟอร์มงาน
+ */
+function handleTaskFormSubmit(e) {
+  e.preventDefault();
+
+  const siteSelectVal = document.getElementById('taskSiteSelect').value;
+  let finalSite = siteSelectVal;
+  if (siteSelectVal === '__NEW__') {
+    finalSite = document.getElementById('taskSiteCustom').value.trim();
+    if (!finalSite) {
+      Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณาระบุชื่อไซต์งาน' });
+      return;
+    }
+  }
+
+  const assigneeSelectVal = document.getElementById('taskAssigneeSelect').value;
+  let finalAssignee = assigneeSelectVal;
+  if (assigneeSelectVal === '__CUSTOM__') {
+    finalAssignee = document.getElementById('taskAssigneeCustom').value.trim();
+  }
+  if (!finalAssignee) finalAssignee = 'ไม่ระบุ';
+
+  const rawReportDate = document.getElementById('taskReportDate') ? document.getElementById('taskReportDate').value.trim() : '';
+  let finalReportDate = '';
+  if (rawReportDate) {
+    finalReportDate = parseDmyToIso(rawReportDate);
+    if (!finalReportDate) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'รูปแบบวันที่แจ้งไม่ถูกต้อง',
+        text: 'กรุณากรอกวันที่แจ้งในรูปแบบ วัน/เดือน/ปี เช่น 14/10/2026 หรือคลิกเลือกจากปฏิทิน'
+      });
+      return;
+    }
+  } else {
+    finalReportDate = getLocalDateString();
+  }
+
+  const rawDueDate = document.getElementById('taskDueDate') ? document.getElementById('taskDueDate').value.trim() : '';
+  let finalDueDate = '';
+  if (rawDueDate) {
+    finalDueDate = parseDmyToIso(rawDueDate);
+    if (!finalDueDate) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'รูปแบบวันครบกำหนดไม่ถูกต้อง',
+        text: 'กรุณากรอกวันครบกำหนดในรูปแบบ วัน/เดือน/ปี เช่น 25/10/2026 หรือคลิกเลือกจากปฏิทิน'
+      });
+      return;
+    }
+  }
+
+  const taskData = {
+    id: document.getElementById('taskId').value.trim(),
+    site: finalSite,
+    title: document.getElementById('taskTitle').value.trim(),
+    description: document.getElementById('taskDesc').value.trim(),
+    assignee: finalAssignee,
+    reporter: (document.getElementById('taskReporter') ? document.getElementById('taskReporter').value.trim() : ''),
+    reportDate: finalReportDate,
+    priority: document.getElementById('taskPriority').value,
+    status: document.getElementById('taskStatus').value,
+    dueDate: finalDueDate
+  };
+
+  if (!taskData.title) {
+    Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณาระบุชื่องาน' });
+    return;
+  }
+
+  const submitBtn = document.getElementById('btnSubmitTask');
+  submitBtn.disabled = true;
+  submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังบันทึก...';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกงาน';
+        Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: res.message });
+        return;
+      }
+
+      const savedTask = res.task;
+      const finalTaskId = savedTask ? savedTask.id : taskData.id;
+      const targetSite = savedTask ? savedTask.site : taskData.site;
+
+      // หากมีไฟล์แนบในคิว ให้อัปโหลดทีละไฟล์แบบ Sequential
+      if (state.taskFileQueue && state.taskFileQueue.length > 0) {
+        submitBtn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up fa-spin mr-1"></i> กำลังอัปโหลดไฟล์...';
+        uploadQueuedFilesSequential(finalTaskId, targetSite, res.isNew, submitBtn);
+      } else {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกงาน';
+
+        closeTaskModal();
+        Swal.fire({
+          toast: true,
+          position: 'top-end',
+          icon: 'success',
+          title: res.isNew ? 'เพิ่มงานใหม่เรียบร้อย' : 'บันทึกการแก้ไขเรียบร้อย',
+          showConfirmButton: false,
+          timer: 2000
+        });
+
+        // รีเฟรชข้อมูลใหม่ทั้งหมด
+        loadInitialData();
+      }
+    })
+    .withFailureHandler((err) => {
+      submitBtn.disabled = false;
+      submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกงาน';
+      Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+    })
+    .saveTask(taskData);
+}
+
+/**
+ * ยืนยันและลบงาน พร้อมลบโฟลเดอร์และไฟล์แนบใน Google Drive (Cascade Delete)
+ */
+function confirmDeleteTask(taskId, taskTitle) {
+  Swal.fire({
+    title: 'ยืนยันการลบงาน?',
+    html: `คุณต้องการลบงาน <b>${escapeHtml(taskTitle)}</b> [${taskId}] ใช่หรือไม่?<br><span class="text-xs text-rose-500 mt-2 block">⚠️ โฟลเดอร์และไฟล์แนบทั้งหมดใน Google Drive ของงานนี้จะถูกลบไปด้วย</span>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#e11d48',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'ใช่, ลบงานและไฟล์แนบ',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          showLoading(false);
+          if (res.success) {
+            Swal.fire({
+              toast: true,
+              position: 'top-end',
+              icon: 'success',
+              title: 'ลบงานและไฟล์แนบสำเร็จ',
+              showConfirmButton: false,
+              timer: 2000
+            });
+            // อัปเดต state งานในเครื่อง
+            state.tasks = state.tasks.filter(t => t.id !== taskId);
+            renderDashboard();
+            renderAssigneeFilterOptions();
+          } else {
+            Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: res.message });
+          }
+        })
+        .withFailureHandler((err) => {
+          showLoading(false);
+          Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+        })
+        .deleteTask(taskId);
+    }
+  });
+}
+
+/**
+ * =========================================================================
+ * การจัดการเอกสารและไฟล์แนบ (Task Attachments & Drive Integration)
+ * =========================================================================
+ */
+
+/**
+ * ตั้งค่าการลากและวางไฟล์ (Drag & Drop Zone)
+ */
+function setupTaskFileDropZone() {
+  const dropZone = document.getElementById('taskFileDropZone');
+  if (!dropZone) return;
+
+  ['dragenter', 'dragover'].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.add('border-[#2491FA]', 'bg-blue-50/50');
+      dropZone.classList.remove('border-[#EFE9DC]', 'bg-[#FAF8F2]');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    dropZone.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropZone.classList.remove('border-[#2491FA]', 'bg-blue-50/50');
+      dropZone.classList.add('border-[#EFE9DC]', 'bg-[#FAF8F2]');
+    }, false);
+  });
+
+  dropZone.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt ? dt.files : null;
+    if (files && files.length > 0) {
+      processSelectedFiles(files);
+    }
+  }, false);
+}
+
+/**
+ * จัดการเมื่อมีการเลือกไฟล์จาก File Input (<input type="file">)
+ */
+function handleFileSelect(e) {
+  const files = e.target.files;
+  if (files && files.length > 0) {
+    processSelectedFiles(files);
+  }
+  // รีเซ็ตเพื่อให้เลือกไฟล์ชื่อเดิมซ้ำได้ถ้าต้องการ
+  e.target.value = '';
+}
+
+/**
+ * ประมวลผลไฟล์ที่เลือก อ่านเป็น Base64 แล้วใส่เข้าคิว state.taskFileQueue
+ */
+async function processSelectedFiles(files) {
+  if (!files || files.length === 0) return;
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    try {
+      const base64Data = await readFileAsBase64_(file);
+      state.taskFileQueue.push({
+        name: file.name,
+        size: file.size,
+        type: file.type || 'application/octet-stream',
+        base64: base64Data
+      });
+    } catch (err) {
+      console.error('Error reading file: ' + file.name, err);
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'error',
+        title: `อ่านไฟล์ ${file.name} ไม่สำเร็จ: ` + err.message,
+        showConfirmButton: false,
+        timer: 3000
+      });
+    }
+  }
+
+  renderSelectedFilesQueue();
+  updateAttachmentsBadge();
+}
+
+/**
+ * Helper แปลงไฟล์เป็น Base64
+ */
+function readFileAsBase64_(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      const base64 = result.indexOf(',') !== -1 ? result.split(',')[1] : result;
+      resolve(base64);
+    };
+    reader.onerror = (error) => reject(error);
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * ลบไฟล์ออกจากคิวรออัปโหลด
+ */
+function removeFileFromQueue(index) {
+  if (index >= 0 && index < state.taskFileQueue.length) {
+    state.taskFileQueue.splice(index, 1);
+    renderSelectedFilesQueue();
+    updateAttachmentsBadge();
+  }
+}
+
+/**
+ * เรนเดอร์รายการไฟล์ในคิวรออัปโหลด (Queue)
+ */
+function renderSelectedFilesQueue() {
+  const container = document.getElementById('selectedFilesQueueContainer');
+  const listEl = document.getElementById('selectedFilesQueueList');
+  if (!container || !listEl) return;
+
+  if (!state.taskFileQueue || state.taskFileQueue.length === 0) {
+    container.classList.add('hidden');
+    listEl.innerHTML = '';
+    return;
+  }
+
+  container.classList.remove('hidden');
+  listEl.innerHTML = state.taskFileQueue.map((file, idx) => {
+    const iconHtml = getFileIconHtml(file.name, file.type);
+    const sizeStr = formatFileSize(file.size);
+    return `
+      <div class="flex items-center justify-between p-2 bg-white rounded-xl border border-blue-200/70 text-xs shadow-2xs hover:border-[#2491FA] transition-colors">
+        <div class="flex items-center gap-2 min-w-0 flex-1 pr-2">
+          <div class="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0 text-sm">
+            ${iconHtml}
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="font-bold text-[#201E1C] truncate" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</p>
+            <p class="text-[10px] text-[#6E6862] flex items-center gap-2">
+              <span>${sizeStr}</span>
+              <span class="text-amber-600 font-semibold">• รอการบันทึก</span>
+            </p>
+          </div>
+        </div>
+        <button type="button" onclick="removeFileFromQueue(${idx})" title="ลบไฟล์นี้ออกจากคิว"
+                class="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors flex-shrink-0 cursor-pointer">
+          <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * เรนเดอร์รายการไฟล์เดิมที่บันทึกไว้แล้วใน Google Drive (สำหรับโหมดแก้ไขงาน)
+ */
+function renderExistingAttachmentsList(attachments, taskId) {
+  const container = document.getElementById('existingFilesContainer');
+  const listEl = document.getElementById('existingFilesList');
+  if (!container || !listEl) return;
+
+  if (!attachments || attachments.length === 0) {
+    container.classList.add('hidden');
+    listEl.innerHTML = '';
+    return;
+  }
+
+  container.classList.remove('hidden');
+  listEl.innerHTML = attachments.map((file) => {
+    const iconHtml = getFileIconHtml(file.name, file.mimeType);
+    const sizeStr = formatFileSize(file.size);
+    const downloadUrl = file.url || (file.id ? `https://drive.google.com/file/d/${file.id}/view` : '#');
+    return `
+      <div class="flex items-center justify-between p-2 bg-white rounded-xl border border-[#EFE9DC] text-xs shadow-2xs hover:border-[#2491FA] transition-colors">
+        <div class="flex items-center gap-2 min-w-0 flex-1 pr-2">
+          <div class="w-7 h-7 rounded-lg bg-[#FAF8F2] flex items-center justify-center flex-shrink-0 text-sm">
+            ${iconHtml}
+          </div>
+          <div class="min-w-0 flex-1">
+            <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" 
+               class="font-bold text-[#2491FA] hover:underline truncate block" title="คลิกเพื่อเปิดดูใน Google Drive: ${escapeHtml(file.name)}">
+              ${escapeHtml(file.name)}
+              <i class="fa-solid fa-arrow-up-right-from-square text-[9px] ml-1 opacity-70"></i>
+            </a>
+            <p class="text-[10px] text-[#6E6862] flex items-center gap-2">
+              <span>${sizeStr}</span>
+              ${file.uploadedAt ? `<span>• ${file.uploadedAt}</span>` : ''}
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 flex-shrink-0">
+          <a href="${downloadUrl}" target="_blank" rel="noopener noreferrer" title="เปิดไฟล์"
+             class="w-6 h-6 flex items-center justify-center text-[#6E6862] hover:text-[#2491FA] hover:bg-blue-50 rounded-lg transition-colors">
+            <i class="fa-solid fa-arrow-up-right-from-square text-xs"></i>
+          </a>
+          <button type="button" onclick="confirmDeleteAttachment('${escapeJs(taskId)}', '${file.id}', '${escapeJs(file.name)}')" title="ลบไฟล์ออกจาก Drive"
+                  class="w-6 h-6 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-regular fa-trash-can text-xs"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * อัปเดตตัวเลข Badge แสดงจำนวนไฟล์แนบรวม
+ */
+function updateAttachmentsBadge() {
+  const badge = document.getElementById('attachedFilesCountBadge');
+  if (!badge) return;
+
+  const existingCount = (state.currentEditingAttachments || []).length;
+  const queuedCount = (state.taskFileQueue || []).length;
+  const total = existingCount + queuedCount;
+
+  badge.innerText = `${total} ไฟล์`;
+  if (total > 0) {
+    badge.className = 'text-[11px] font-bold text-[#2491FA] bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200/60';
+  } else {
+    badge.className = 'text-[11px] font-bold text-[#6E6862] bg-[#FAF8F2] px-2 py-0.5 rounded-full border border-[#EFE9DC]';
+  }
+}
+
+/**
+ * ยืนยันและลบไฟล์แนบเดี่ยวออกจาก Google Drive
+ */
+function confirmDeleteAttachment(taskId, fileId, fileName) {
+  if (!taskId || !fileId) return;
+
+  Swal.fire({
+    title: 'ยืนยันการลบไฟล์แนบ?',
+    html: `คุณต้องการลบไฟล์ <b>${escapeHtml(fileName)}</b> หรือไม่?<br><span class="text-xs text-rose-500 mt-1 block">ไฟล์นี้จะถูกย้ายลงถังขยะใน Google Drive ทันที</span>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#e11d48',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'ใช่, ลบไฟล์',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          showLoading(false);
+          if (res.success) {
+            Swal.fire({
+              toast: true,
+              position: 'top-end',
+              icon: 'success',
+              title: 'ลบไฟล์แนบสำเร็จ',
+              showConfirmButton: false,
+              timer: 2000
+            });
+
+            // อัปเดต state รายการไฟล์ปัจจุบัน
+            state.currentEditingAttachments = res.attachments || [];
+            
+            // อัปเดต task ใน state.tasks ด้วย
+            const task = state.tasks.find(t => t.id === taskId);
+            if (task) {
+              task.attachments = res.attachments || [];
+            }
+
+            renderExistingAttachmentsList(state.currentEditingAttachments, taskId);
+            updateAttachmentsBadge();
+            renderDashboard();
+          } else {
+            Swal.fire({ icon: 'error', title: 'ลบไฟล์ไม่สำเร็จ', text: res.message });
+          }
+        })
+        .withFailureHandler((err) => {
+          showLoading(false);
+          Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+        })
+        .deleteTaskAttachment(taskId, fileId);
+    }
+  });
+}
+
+/**
+ * แปลงขนาดไฟล์เป็นหน่วย Byte, KB, MB, GB ที่อ่านง่าย
+ */
+function formatFileSize(bytes) {
+  if (!bytes || isNaN(bytes) || bytes <= 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+/**
+ * ดึง HTML ของ FontAwesome Icon ตามประเภทและนามสกุลไฟล์
+ */
+function getFileIconHtml(fileName, mimeType) {
+  const ext = (fileName || '').split('.').pop().toLowerCase();
+  const mime = (mimeType || '').toLowerCase();
+
+  if (['pdf'].includes(ext) || mime.includes('pdf')) {
+    return '<i class="fa-solid fa-file-pdf text-rose-500"></i>';
+  }
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp'].includes(ext) || mime.startsWith('image/')) {
+    return '<i class="fa-solid fa-file-image text-emerald-500"></i>';
+  }
+  if (['doc', 'docx'].includes(ext) || mime.includes('word') || mime.includes('document')) {
+    return '<i class="fa-solid fa-file-word text-blue-600"></i>';
+  }
+  if (['xls', 'xlsx', 'csv'].includes(ext) || mime.includes('sheet') || mime.includes('excel') || mime.includes('csv')) {
+    return '<i class="fa-solid fa-file-excel text-emerald-600"></i>';
+  }
+  if (['ppt', 'pptx'].includes(ext) || mime.includes('presentation') || mime.includes('powerpoint')) {
+    return '<i class="fa-solid fa-file-powerpoint text-amber-600"></i>';
+  }
+  if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext) || mime.includes('zip') || mime.includes('compressed')) {
+    return '<i class="fa-solid fa-file-zipper text-purple-500"></i>';
+  }
+  if (['dwg', 'dxf', 'cad'].includes(ext)) {
+    return '<i class="fa-solid fa-compass-drafting text-indigo-500"></i>';
+  }
+  if (['txt', 'log', 'md'].includes(ext) || mime.includes('text/plain')) {
+    return '<i class="fa-solid fa-file-lines text-slate-500"></i>';
+  }
+  return '<i class="fa-solid fa-file text-[#6E6862]"></i>';
+}
+
+/**
+ * อัปโหลดไฟล์ในคิวทีละไฟล์แบบ Sequential
+ * รองรับไฟล์ขนาดใหญ่สูงสุด 50 MB ผ่าน fetch POST (doPost) และมี Fallback ผ่าน google.script.run
+ */
+async function uploadQueuedFilesSequential(taskId, site, isNew, submitBtn) {
+  const total = state.taskFileQueue.length;
+  const progressWrapper = document.getElementById('taskUploadProgressWrapper');
+  const progressText = document.getElementById('uploadProgressText');
+  const progressPercent = document.getElementById('uploadProgressPercent');
+  const progressBar = document.getElementById('uploadProgressBar');
+
+  if (progressWrapper) progressWrapper.classList.remove('hidden');
+
+  let successCount = 0;
+  let failCount = 0;
+  const failedErrors = [];
+
+  for (let i = 0; i < total; i++) {
+    const file = state.taskFileQueue[i];
+    const percent = Math.round(((i) / total) * 100);
+    
+    if (progressText) {
+      progressText.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังอัปโหลด (${i + 1}/${total}): ${escapeHtml(file.name)}`;
+    }
+    if (progressPercent) progressPercent.innerText = `${percent}%`;
+    if (progressBar) progressBar.style.width = `${percent}%`;
+
+    const filePayload = {
+      action: 'uploadAttachment',
+      taskId: taskId,
+      site: site,
+      fileName: file.name,
+      mimeType: file.type,
+      size: file.size,
+      base64: file.base64
+    };
+
+    try {
+      let uploadSuccess = false;
+      let lastErrMsg = '';
+
+      // วิธีที่ 1: หากมี Web App URL ให้ส่งผ่าน fetch POST (doPost) ซึ่งรองรับไฟล์ขนาดใหญ่สูงสุด 50 MB
+      if (state.webAppUrl) {
+        try {
+          const response = await fetch(state.webAppUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify(filePayload)
+          });
+
+          if (response.ok) {
+            const res = await response.json();
+            if (res && res.success) {
+              uploadSuccess = true;
+            } else {
+              lastErrMsg = res ? res.message : 'Upload failed via doPost';
+            }
+          } else {
+            lastErrMsg = `HTTP ${response.status}: ${response.statusText}`;
+          }
+        } catch (fetchErr) {
+          console.warn('doPost fetch warning, attempting google.script.run fallback:', fetchErr);
+          lastErrMsg = fetchErr.message;
+        }
+      }
+
+      // วิธีที่ 2: หาก fetch ไม่สำเร็จ หรือยังไม่มี webAppUrl ให้ใช้ google.script.run เป็น fallback
+      if (!uploadSuccess) {
+        await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler((res) => {
+              if (res && res.success) {
+                uploadSuccess = true;
+                resolve(res);
+              } else {
+                reject(new Error(res ? res.message : (lastErrMsg || 'ข้อผิดพลาดในการอัปโหลด')));
+              }
+            })
+            .withFailureHandler((err) => {
+              reject(new Error(err ? err.message : (lastErrMsg || 'google.script.run error')));
+            })
+            .uploadTaskAttachment(taskId, site, {
+              fileName: file.name,
+              mimeType: file.type,
+              size: file.size,
+              base64: file.base64
+            });
+        });
+      }
+
+      successCount++;
+    } catch (upErr) {
+      console.error(`Failed to upload ${file.name}:`, upErr);
+      failCount++;
+      failedErrors.push(`${file.name}: ${upErr.message || 'ข้อผิดพลาดไม่ทราบสาเหตุ'}`);
+    }
+  }
+
+  // จบการอัปโหลด
+  if (progressPercent) progressPercent.innerText = '100%';
+  if (progressBar) progressBar.style.width = '100%';
+
+  // รีเซ็ตสถานะปุ่ม
+  if (submitBtn) {
+    submitBtn.disabled = false;
+    submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i> บันทึกงาน';
+  }
+
+  closeTaskModal();
+
+  if (failCount === 0) {
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: isNew 
+        ? `สร้างงานใหม่และแนบไฟล์ ${successCount} ไฟล์เรียบร้อย` 
+        : `บันทึกงานและแนบไฟล์ ${successCount} ไฟล์เรียบร้อย`,
+      showConfirmButton: false,
+      timer: 3000
+    });
+  } else {
+    const isPermissionError = failedErrors.some(err => 
+      err.includes('DriveApp') || 
+      err.includes('สิทธิ์ที่จำเป็น') || 
+      err.includes('permission') || 
+      err.includes('authorization') ||
+      err.includes('ไม่ได้รับอนุญาต')
+    );
+
+    if (isPermissionError) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'ระบบต้องการการยืนยันสิทธิ์ Google Drive ครั้งแรก',
+        html: `
+          <div class="text-left text-xs text-[#201E1C] space-y-2.5">
+            <p>เนื่องจากเป็นครั้งแรกที่มีการใช้งาน Google Drive ในระบบ ทาง Google กำหนดให้เจ้าของระบบต้องกด <b>"อนุญาตสิทธิ์ (Authorize)"</b> ในหน้า Google Apps Script Editor 1 ครั้ง</p>
+            <div class="bg-blue-50 p-3 rounded-xl border border-blue-200 text-blue-900 space-y-1.5 text-[11px]">
+              <div class="font-bold mb-1 flex items-center gap-1 text-[#2491FA]">
+                <i class="fa-solid fa-list-check"></i> ขั้นตอนการยืนยันสิทธิ์ (ทำเพียงครั้งเดียว):
+              </div>
+              <div><b>1.</b> คลิกปุ่มสีน้ำเงินด้านล่างเพื่อเปิดหน้าต่าง Apps Script Editor</div>
+              <div><b>2.</b> เมนูด้านบน เลือกฟังก์ชัน <code>authorizeDriveApp</code> แล้วกดปุ่ม <b>▶️ เรียกใช้ (Run)</b></div>
+              <div><b>3.</b> กด <b>ตรวจสอบสิทธิ์ (Review permissions)</b> &gt; เลือกบัญชี &gt; กด <b>ขั้นสูง (Advanced)</b> &gt; กด <b>ไปที่... (ไม่ปลอดภัย)</b> &gt; กด <b>อนุญาต (Allow)</b></div>
+              <div><b>4.</b> กลับมาหน้านี้แล้วลองกดบันทึกงานใหม่ได้ทันทีครับ</div>
+            </div>
+            <div class="text-[10px] text-rose-500 font-mono bg-rose-50 p-2 rounded-lg border border-rose-200">
+              ${failedErrors.map(e => `<div>${escapeHtml(e)}</div>`).join('')}
+            </div>
+          </div>
+        `,
+        showCancelButton: true,
+        confirmButtonText: '<i class="fa-solid fa-arrow-up-right-from-square mr-1"></i> เปิด Apps Script เพื่อกดยืนยันสิทธิ์',
+        confirmButtonColor: '#2491FA',
+        cancelButtonText: 'ปิดหน้าต่าง',
+        cancelButtonColor: '#6E6862'
+      }).then((result) => {
+        if (result.isConfirmed) {
+          window.open('https://script.google.com/d/1cd4_bnt_nnuKTQzu3F6gDmMpwWoeBBcuNyqPCn3lDBsAfmguacW1aUBE/edit', '_blank');
+        }
+      });
+    } else {
+      Swal.fire({
+        icon: 'warning',
+        title: 'บันทึกงานเรียบร้อย แต่บางไฟล์อัปโหลดไม่สำเร็จ',
+        html: `
+          <p class="text-xs text-[#201E1C] mb-2 font-medium">อัปโหลดสำเร็จ <b>${successCount}</b> ไฟล์, ล้มเหลว <b>${failCount}</b> ไฟล์</p>
+          <div class="text-[11px] text-rose-600 font-mono bg-rose-50 p-2.5 rounded-xl border border-rose-200 text-left max-h-36 overflow-y-auto space-y-1">
+            ${failedErrors.map(e => `<div><i class="fa-solid fa-triangle-exclamation mr-1"></i> ${escapeHtml(e)}</div>`).join('')}
+          </div>
+        `
+      });
+    }
+  }
+
+  // รีเฟรชข้อมูลใหม่ทั้งหมด
+  loadInitialData();
+}
+
+/**
+ * จัดการหน้าต่างการตั้งค่า (Settings Modal)
+ */
+function openSettingsModal() {
+  // ตรวจสอบสิทธิ์: เฉพาะ Admin เท่านั้นที่สามารถเข้าถึงหน้าต่างการตั้งค่าระบบได้
+  if (state.currentUser && state.currentUser.role !== 'Admin') {
+    Swal.fire({
+      icon: 'warning',
+      title: 'ไม่มีสิทธิ์เข้าถึง',
+      text: 'เฉพาะผู้ดูแลระบบ (Admin) เท่านั้นที่สามารถเข้าถึงการตั้งค่าระบบได้'
+    });
+    return;
+  }
+
+  document.getElementById('settingTelegramToken').value = state.settings.hasTelegramBot ? '********' : '';
+  document.getElementById('settingTelegramChatId').value = state.settings.telegramChatId || '';
+  document.getElementById('settingNotifyCreate').checked = state.settings.notifyOnCreate !== false;
+  document.getElementById('settingNotifyStatus').checked = state.settings.notifyOnStatusChange !== false;
+  const notifyAssigneeEl = document.getElementById('settingNotifyAssignee');
+  if (notifyAssigneeEl) {
+    notifyAssigneeEl.checked = state.settings.notifyAssigneeOnCreate !== false;
+  }
+  const notifyMainGroupEl = document.getElementById('settingNotifyMainGroupAlways');
+  if (notifyMainGroupEl) {
+    notifyMainGroupEl.checked = state.settings.notifyMainGroupAlways === true;
+  }
+  state.tempSiteChatIds = { ...(state.settings.siteTelegramChatIds || {}) };
+
+  // เปิดที่แท็บ General (Telegram) เป็นค่าเริ่มต้น
+  switchSettingsTab('general');
+  document.getElementById('settingsModal').classList.remove('hidden');
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').classList.add('hidden');
+}
+
+function handleSettingsSubmit(e) {
+  e.preventDefault();
+
+  const tokenInput = document.getElementById('settingTelegramToken').value.trim();
+  const chatId = document.getElementById('settingTelegramChatId').value.trim();
+  const notifyCreate = document.getElementById('settingNotifyCreate').checked;
+  const notifyStatus = document.getElementById('settingNotifyStatus').checked;
+  const notifyAssigneeEl = document.getElementById('settingNotifyAssignee');
+  const notifyAssignee = notifyAssigneeEl ? notifyAssigneeEl.checked : true;
+  const notifyMainGroupEl = document.getElementById('settingNotifyMainGroupAlways');
+  const notifyMainGroupAlways = notifyMainGroupEl ? notifyMainGroupEl.checked : false;
+
+  const payload = {
+    TELEGRAM_CHAT_ID: chatId,
+    NOTIFY_ON_CREATE: notifyCreate,
+    NOTIFY_ON_STATUS_CHANGE: notifyStatus,
+    NOTIFY_ASSIGNEE_ON_CREATE: notifyAssignee,
+    NOTIFY_MAIN_GROUP_ALWAYS: notifyMainGroupAlways
+  };
+
+  // ถ้าไม่ได้เป็น mask (********) ให้บันทึก token ใหม่
+  if (tokenInput && !tokenInput.includes('****')) {
+    payload.TELEGRAM_BOT_TOKEN = tokenInput;
+  }
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler((res) => {
+      showLoading(false);
+      if (res.success) {
+        Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', text: 'บันทึกการตั้งค่า Telegram เรียบร้อยแล้ว' });
+        loadInitialData();
+      } else {
+        Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: res.message });
+      }
+    })
+    .withFailureHandler((err) => {
+      showLoading(false);
+      Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+    })
+    .saveSettings(payload);
+}
+
+/**
+ * ทดสอบส่งแจ้งเตือน Telegram (กลุ่มหลัก)
+ */
+function handleTestTelegram() {
+  let token = document.getElementById('settingTelegramToken').value.trim();
+  const chatId = document.getElementById('settingTelegramChatId').value.trim();
+
+  if (!chatId) {
+    Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณากรอก Chat ID สำหรับทดสอบ' });
+    return;
+  }
+
+  if (token.includes('****')) {
+    // ใช้ token เดิมที่อยู่ในระบบ
+    token = '';
+  }
+
+  const btn = document.getElementById('btnTestTelegram');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังส่ง...';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-brands fa-telegram mr-1"></i> ทดสอบส่งข้อความไปยัง Telegram (กลุ่มหลัก)';
+      if (res.success) {
+        Swal.fire({ icon: 'success', title: 'ทดสอบสำเร็จ!', text: res.message });
+      } else {
+        Swal.fire({ icon: 'error', title: 'ส่งข้อความไม่สำเร็จ', text: res.message });
+      }
+    })
+    .withFailureHandler((err) => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-brands fa-telegram mr-1"></i> ทดสอบส่งข้อความไปยัง Telegram (กลุ่มหลัก)';
+      Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+    })
+    .testTelegramConnection(token, chatId, '');
+}
+
+/**
+ * Utilities & Helper Functions
+ */
+function renderSiteFilterOptions() {
+  const select = document.getElementById('siteFilter');
+  const currentVal = state.filters.site;
+
+  let optionsHtml = '<option value="ALL">🏢 ทุกไซต์งานทั้งหมด</option>';
+  state.sites.forEach(site => {
+    optionsHtml += `<option value="${escapeHtml(site)}" ${site === currentVal ? 'selected' : ''}>${escapeHtml(site)}</option>`;
+  });
+
+  select.innerHTML = optionsHtml;
+}
+
+function renderAssigneeFilterOptions() {
+  const select = document.getElementById('assigneeFilter');
+  if (!select) return;
+
+  const currentVal = state.filters.assignee || 'ALL';
+  let optionsHtml = '<option value="ALL">👤 ผู้รับผิดชอบทั้งหมด</option>';
+
+  // รวบรวมรายชื่อผู้รับผิดชอบทั้งหมด (จาก Users และจากงานเดิมใน Tasks)
+  const names = [];
+
+  if (state.users && state.users.length > 0) {
+    state.users.forEach(u => {
+      const name = (u.fullName || u.username || '').trim();
+      if (name && !names.includes(name)) {
+        names.push(name);
+      }
+    });
+  }
+
+  if (state.tasks && state.tasks.length > 0) {
+    state.tasks.forEach(t => {
+      const name = (t.assignee || '').trim();
+      if (name && name !== 'ไม่ระบุ' && name !== '-' && !names.includes(name)) {
+        names.push(name);
+      }
+    });
+  }
+
+  // เรียงลำดับชื่อตามตัวอักษร ก-ฮ
+  names.sort((a, b) => a.localeCompare(b, 'th'));
+
+  names.forEach(name => {
+    optionsHtml += `<option value="${escapeHtml(name)}" ${name === currentVal ? 'selected' : ''}>👤 ${escapeHtml(name)}</option>`;
+  });
+
+  // ตรวจสอบว่ามีงานที่ยังไม่ได้ระบุผู้รับผิดชอบหรือไม่
+  const hasUnassigned = state.tasks && state.tasks.some(t => !t.assignee || t.assignee.trim() === '' || t.assignee === 'ไม่ระบุ');
+  if (hasUnassigned) {
+    optionsHtml += `<option value="ไม่ระบุ" ${currentVal === 'ไม่ระบุ' ? 'selected' : ''}>⚪ ไม่ระบุผู้รับผิดชอบ</option>`;
+  }
+
+  select.innerHTML = optionsHtml;
+}
+
+function renderSiteFormOptions() {
+  const select = document.getElementById('taskSiteSelect');
+  let optionsHtml = '';
+  state.sites.forEach(site => {
+    optionsHtml += `<option value="${escapeHtml(site)}">${escapeHtml(site)}</option>`;
+  });
+  // อนุญาตให้เพิ่มไซต์งานใหม่เฉพาะ Admin เท่านั้น
+  if (!state.currentUser || state.currentUser.role === 'Admin') {
+    optionsHtml += '<option value="__NEW__">➕ เพิ่มไซต์งานใหม่...</option>';
+  }
+  select.innerHTML = optionsHtml;
+}
+
+/**
+ * เรนเดอร์ตัวเลือกผู้รับผิดชอบจากรายชื่อผู้ใช้ (Users)
+ */
+function renderAssigneeFormOptions(selectedAssignee = '') {
+  const select = document.getElementById('taskAssigneeSelect');
+  if (!select) return;
+
+  let optionsHtml = '<option value="">-- เลือกผู้รับผิดชอบ --</option>';
+
+  const addedNames = [];
+  if (state.users && state.users.length > 0) {
+    state.users.forEach(u => {
+      const name = (u.fullName || u.username || '').trim();
+      if (name && !addedNames.includes(name)) {
+        addedNames.push(name);
+        const isSelected = selectedAssignee && selectedAssignee.trim() === name;
+        optionsHtml += `<option value="${escapeHtml(name)}" ${isSelected ? 'selected' : ''}>👤 ${escapeHtml(name)}</option>`;
+      }
+    });
+  }
+
+  // หากมีชื่อเดิมของงานแต่ไม่ได้อยู่ในรายชื่อ Users ปัจจุบัน ให้ใส่เป็นตัวเลือกพิเศษเพื่อไม่ให้ข้อมูลสูญหาย
+  if (selectedAssignee && selectedAssignee.trim() !== '' && selectedAssignee !== 'ไม่ระบุ' && selectedAssignee !== '__CUSTOM__' && !addedNames.includes(selectedAssignee.trim())) {
+    optionsHtml += `<option value="${escapeHtml(selectedAssignee.trim())}" selected>👤 ${escapeHtml(selectedAssignee.trim())} (ข้อมูลเดิม)</option>`;
+  }
+
+  optionsHtml += '<option value="__CUSTOM__">➕ ระบุชื่ออื่นเอง...</option>';
+  select.innerHTML = optionsHtml;
+}
+
+/**
+ * เรนเดอร์ตัวเลือกผู้แจ้งใน datalist จากรายชื่อผู้ใช้ (Users)
+ */
+function renderUserReportersList() {
+  const datalist = document.getElementById('userReportersList');
+  if (!datalist) return;
+
+  const addedNames = [];
+  let optionsHtml = '';
+
+  if (state.users && state.users.length > 0) {
+    state.users.forEach(u => {
+      const name = (u.fullName || u.username || '').trim();
+      if (name && !addedNames.includes(name)) {
+        addedNames.push(name);
+        optionsHtml += `<option value="${escapeHtml(name)}"></option>`;
+      }
+    });
+  }
+
+  datalist.innerHTML = optionsHtml;
+}
+
+/**
+ * คำนวณช่วงวันครบกำหนดของงานที่ยังไม่เสร็จ (สถานะ != 'เสร็จสิ้น' และมีระบุวัน)
+ * @returns {{ minDate: string, maxDate: string }}
+ */
+function getUnfinishedTasksDueRange() {
+  if (!state.tasks || state.tasks.length === 0) {
+    return { minDate: '', maxDate: '' };
+  }
+
+  // คัดกรองเฉพาะงานที่ยังไม่เสร็จ และมีระบุวันครบกำหนด
+  const unfinishedWithDueDate = state.tasks.filter(t => 
+    t.status !== 'เสร็จสิ้น' && 
+    t.dueDate && 
+    typeof t.dueDate === 'string' && 
+    t.dueDate.trim() !== ''
+  );
+
+  if (unfinishedWithDueDate.length === 0) {
+    return { minDate: '', maxDate: '' };
+  }
+
+  // เรียงลำดับวันที่ (รูปแบบ YYYY-MM-DD เรียงลำดับตัวอักษรได้ตรงตามลำดับเวลา)
+  const dueDates = unfinishedWithDueDate.map(t => t.dueDate.trim()).sort();
+  const minDate = dueDates[0];
+  const maxDate = dueDates[dueDates.length - 1];
+
+  return { minDate, maxDate };
+}
+
+/**
+ * กำหนดค่าเริ่มต้นตัวกรองช่วงวันครบกำหนด (ดีฟอลต์เป็นทั้งหมดทุกช่วงเวลา)
+ * @param {boolean} force - บังคับเขียนทับค่าปัจจุบัน (เช่น เมื่อผู้ใช้กดปุ่มงานค้าง)
+ */
+function initDueDateFilter(force = false) {
+  if (state.filters.dueDateInitialized && !force) {
+    return;
+  }
+
+  if (force) {
+    // เมื่อกดปุ่ม "งานค้าง" -> คำนวณช่วงวันของงานค้าง (น้อยสุด - มากสุด)
+    const { minDate, maxDate } = getUnfinishedTasksDueRange();
+    state.filters.dueDateFrom = minDate || '';
+    state.filters.dueDateTo = maxDate || '';
+    state.filters.dueDateInitialized = true;
+  } else {
+    // ค่าเริ่มต้นเมื่อโหลดระบบ -> ดีฟอลต์เป็น "ทั้งหมด" ทุกช่วงเวลา
+    state.filters.dueDateFrom = '';
+    state.filters.dueDateTo = '';
+    state.filters.includeNoDueDate = false;
+    state.filters.dueDateInitialized = true;
+  }
+
+  const fromInput = document.getElementById('dueDateFromFilter');
+  const toInput = document.getElementById('dueDateToFilter');
+  const noDueCheckbox = document.getElementById('includeNoDueDateFilter');
+
+  if (fromInput) setDateInputValue('dueDateFromFilter', state.filters.dueDateFrom);
+  if (toInput) setDateInputValue('dueDateToFilter', state.filters.dueDateTo);
+  if (noDueCheckbox && !force) noDueCheckbox.checked = false;
+}
+
+/**
+ * ล้างตัวกรองช่วงวันครบกำหนด (แสดงงานทั้งหมดทุกช่วงเวลา)
+ */
+function clearDueDateFilter() {
+  state.filters.dueDateFrom = '';
+  state.filters.dueDateTo = '';
+  state.filters.includeNoDueDate = false;
+
+  const fromInput = document.getElementById('dueDateFromFilter');
+  const toInput = document.getElementById('dueDateToFilter');
+  const noDueCheckbox = document.getElementById('includeNoDueDateFilter');
+
+  if (fromInput) setDateInputValue('dueDateFromFilter', '');
+  if (toInput) setDateInputValue('dueDateToFilter', '');
+  if (noDueCheckbox) noDueCheckbox.checked = false;
+
+  renderDashboard();
+}
+
+/**
+ * จัดการเมื่อเปลี่ยนตัวเลือกใน Dropdown ผู้รับผิดชอบ
+ */
+function handleAssigneeSelectChange() {
+  const select = document.getElementById('taskAssigneeSelect');
+  const wrapper = document.getElementById('customAssigneeWrapper');
+  const customInput = document.getElementById('taskAssigneeCustom');
+  if (!select || !wrapper) return;
+
+  if (select.value === '__CUSTOM__') {
+    wrapper.classList.remove('hidden');
+    if (customInput) customInput.focus();
+  } else {
+    wrapper.classList.add('hidden');
+    if (customInput) customInput.value = '';
+  }
+}
+
+function getSiteColorStyle(siteName) {
+  if (!siteName) return SITE_COLORS[0];
+  let hash = 0;
+  for (let i = 0; i < siteName.length; i++) {
+    hash = siteName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash) % SITE_COLORS.length;
+  return SITE_COLORS[index];
+}
+
+function getPriorityBadgeStyle(priority) {
+  switch (priority) {
+    case 'ด่วนมาก': return 'priority-urgent';
+    case 'สูง': return 'priority-high';
+    case 'ปานกลาง': return 'priority-medium';
+    default: return 'priority-normal';
+  }
+}
+
+function formatDateDisplay(dateStr) {
+  if (!dateStr) return 'ไม่ระบุ';
+  try {
+    const d = parseDateStringToDateObj(dateStr);
+    if (d) {
+      const day = d.getDate();
+      const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+      const month = months[d.getMonth()];
+      const year = d.getFullYear() + 543; // พ.ศ.
+      return `${day} ${month} ${year}`;
+    }
+    return String(dateStr);
+  } catch (e) {
+    return String(dateStr);
+  }
+}
+
+/**
+ * ดึงวันที่ปัจจุบันตามเวลาท้องถิ่นของเครื่อง (Local Time) รูปแบบ YYYY-MM-DD
+ */
+function getLocalDateString(d = new Date()) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * แปลงค่าวันที่ในรูปแบบต่างๆ (Date object, ISO YYYY-MM-DD, DD/MM/YYYY, พ.ศ.) ให้เป็น JavaScript Date object
+ * @param {any} val 
+ * @returns {Date|null}
+ */
+function parseDateStringToDateObj(val) {
+  if (!val) return null;
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? null : new Date(val.getTime());
+  }
+
+  const s = String(val).trim();
+  if (!s) return null;
+
+  // 1. ตรวจสอบรูปแบบ ISO: YYYY-MM-DD หรือ YYYY-MM-DDTHH:mm:ss
+  const isoMatch = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (isoMatch) {
+    const year = parseInt(isoMatch[1], 10);
+    const month = parseInt(isoMatch[2], 10);
+    const day = parseInt(isoMatch[3], 10);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      const d = new Date(year, month - 1, day);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  // 2. ตรวจสอบรูปแบบ DD/MM/YYYY หรือ DD-MM-YYYY หรือ DD.MM.YYYY
+  const dmyMatch = s.match(/^(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+  if (dmyMatch) {
+    const day = parseInt(dmyMatch[1], 10);
+    const month = parseInt(dmyMatch[2], 10);
+    let year = parseInt(dmyMatch[3], 10);
+
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      if (year < 100) {
+        year = year >= 50 ? (year + 2500) - 543 : 2000 + year;
+      } else if (year > 2400) {
+        year = year - 543;
+      }
+      const d = new Date(year, month - 1, day);
+      if (!isNaN(d.getTime())) return d;
+    }
+  }
+
+  // 3. Fallback แปลงด้วย native Date
+  const fallback = new Date(s);
+  if (!isNaN(fallback.getTime())) {
+    return new Date(fallback.getFullYear(), fallback.getMonth(), fallback.getDate());
+  }
+
+  return null;
+}
+
+/**
+ * แปลง JavaScript Date object เป็น DD/MM/YYYY
+ * @param {Date} dateObj 
+ * @returns {string} DD/MM/YYYY หรือ ''
+ */
+function formatDateObjToDmy(dateObj) {
+  if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) return '';
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const yyyy = dateObj.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+/**
+ * แปลง JavaScript Date object เป็น ISO YYYY-MM-DD
+ * @param {Date} dateObj 
+ * @returns {string} YYYY-MM-DD หรือ ''
+ */
+function formatDateObjToIso(dateObj) {
+  if (!dateObj || !(dateObj instanceof Date) || isNaN(dateObj.getTime())) return '';
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const yyyy = dateObj.getFullYear();
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * แปลงวันที่จาก ISO (YYYY-MM-DD) หรือรูปแบบอื่นเป็น DD/MM/YYYY สำหรับแสดงในช่อง Input
+ * @param {string|Date} isoStr 
+ * @returns {string} DD/MM/YYYY
+ */
+function isoToDmy(isoStr) {
+  if (!isoStr) return '';
+  const d = parseDateStringToDateObj(isoStr);
+  return d ? formatDateObjToDmy(d) : '';
+}
+
+/**
+ * แปลงวันที่จาก DD/MM/YYYY หรือ วว/ดด/ปปปป (รองรับทั้ง พ.ศ. และ ค.ศ.) เป็น ISO YYYY-MM-DD (ค.ศ.)
+ * @param {string|Date} dmyStr 
+ * @returns {string} YYYY-MM-DD หรือ ''
+ */
+function parseDmyToIso(dmyStr) {
+  if (!dmyStr) return '';
+  const d = parseDateStringToDateObj(dmyStr);
+  return d ? formatDateObjToIso(d) : '';
+}
+
+/**
+ * ผูก Auto-masking สำหรับช่องกรอกวันที่ ให้พิมพ์ตัวเลขแล้วแทรก / อัตโนมัติ (DD/MM/YYYY)
+ * @param {HTMLInputElement} inputEl 
+ */
+function attachDateInputMask(inputEl) {
+  if (!inputEl) return;
+  inputEl.addEventListener('input', (e) => {
+    // ข้ามเมื่อผู้ใช้กด Backspace หรือ Delete เพื่อให้ลบได้สะดวก
+    if (e.inputType === 'deleteContentBackward' || e.inputType === 'deleteContentForward') {
+      return;
+    }
+    let val = inputEl.value.replace(/\D/g, ''); // เอาเฉพาะตัวเลข
+    if (val.length > 8) val = val.substring(0, 8);
+    let formatted = '';
+    if (val.length > 4) {
+      formatted = `${val.substring(0, 2)}/${val.substring(2, 4)}/${val.substring(4)}`;
+    } else if (val.length > 2) {
+      formatted = `${val.substring(0, 2)}/${val.substring(2)}`;
+    } else {
+      formatted = val;
+    }
+    inputEl.value = formatted;
+  });
+
+  // เมื่อหลุดโฟกัส (blur) ตรวจสอบความถูกต้องและจัดรูปแบบให้เรียบร้อย
+  inputEl.addEventListener('blur', () => {
+    const raw = inputEl.value.trim();
+    if (!raw) {
+      if (inputEl._flatpickr) {
+        inputEl._flatpickr.clear();
+      }
+      return;
+    }
+    const dObj = parseDateStringToDateObj(raw);
+    if (dObj) {
+      inputEl.value = formatDateObjToDmy(dObj);
+      if (inputEl._flatpickr) {
+        inputEl._flatpickr.setDate(dObj, false);
+      }
+    }
+  });
+}
+
+/**
+ * เริ่มต้น Date Picker (Flatpickr) ร่วมกับ Auto-masking สำหรับช่อง Input วันที่
+ * @param {string} inputId ID ของ input element
+ * @param {string} [btnPickerId] ID ของปุ่มไอคอนปฏิทิน (ถ้ามี)
+ * @param {Object} [options] ตัวเลือกเพิ่มเติมสำหรับ Flatpickr
+ * @returns {Object|null} Flatpickr instance
+ */
+function initDatePickerInput(inputId, btnPickerId, options = {}) {
+  const inputEl = document.getElementById(inputId);
+  if (!inputEl) return null;
+
+  // ติดตั้ง Auto-masking ให้สามารถพิมพ์ได้โดยตรง
+  attachDateInputMask(inputEl);
+
+  let fp = null;
+  if (typeof flatpickr !== 'undefined') {
+    const config = {
+      dateFormat: 'd/m/Y',
+      allowInput: true,
+      locale: (typeof flatpickr.l10ns !== 'undefined' && flatpickr.l10ns.th) ? flatpickr.l10ns.th : 'default',
+      disableMobile: true,
+      parseDate: function(dateStr) {
+        return parseDateStringToDateObj(dateStr);
+      },
+      formatDate: function(dateObj) {
+        return formatDateObjToDmy(dateObj);
+      },
+      onChange: function(selectedDates, dateStr) {
+        inputEl.value = dateStr;
+        inputEl.dispatchEvent(new Event('change'));
+      },
+      ...options
+    };
+
+    fp = flatpickr(inputEl, config);
+
+    if (btnPickerId) {
+      const btnEl = document.getElementById(btnPickerId);
+      if (btnEl) {
+        btnEl.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          fp.open();
+        });
+      }
+    }
+  }
+
+  return fp;
+}
+
+/**
+ * กำหนดค่าวันที่ให้กับ Input (รองรับทั้งส่งมาเป็น YYYY-MM-DD หรือ DD/MM/YYYY หรือ Date object)
+ * @param {string} inputId 
+ * @param {string|Date} dateVal 
+ */
+function setDateInputValue(inputId, dateVal) {
+  const inputEl = document.getElementById(inputId);
+  if (!inputEl) return;
+  if (!dateVal) {
+    inputEl.value = '';
+    if (inputEl._flatpickr) inputEl._flatpickr.clear();
+    return;
+  }
+  const dObj = parseDateStringToDateObj(dateVal);
+  if (dObj) {
+    inputEl.value = formatDateObjToDmy(dObj);
+    if (inputEl._flatpickr) {
+      inputEl._flatpickr.setDate(dObj, false);
+    }
+  } else {
+    inputEl.value = String(dateVal);
+  }
+}
+
+/**
+ * ดึงค่าวันที่จาก Input ในรูปแบบมาตรฐาน ISO YYYY-MM-DD
+ * @param {string} inputId 
+ * @returns {string} YYYY-MM-DD หรือ ''
+ */
+function getDateInputValue(inputId) {
+  const inputEl = document.getElementById(inputId);
+  if (!inputEl) return '';
+  return parseDmyToIso(inputEl.value.trim());
+}
+
+function showLoading(show) {
+  const loader = document.getElementById('globalLoader');
+  if (loader) {
+    if (show) loader.classList.remove('hidden');
+    else loader.classList.add('hidden');
+  }
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function escapeJs(text) {
+  if (!text) return '';
+  return String(text).replace(/'/g, "\\'").replace(/"/g, '\\"');
+}
+
+/**
+ * =========================================================================
+ * REAL-TIME PRESENCE & ONLINE USERS (ระบบตรวจจับและแสดงผู้ใช้งานออนไลน์)
+ * =========================================================================
+ */
+
+/**
+ * อัปเดตการแสดงผลจำนวนผู้ใช้ออนไลน์บน Navbar และใน Modal
+ */
+function updateOnlineUsersDisplay(count, users) {
+  if (typeof count === 'number') {
+    state.onlineCount = count;
+  } else if (Array.isArray(users)) {
+    state.onlineCount = users.length;
+  }
+  if (Array.isArray(users)) {
+    state.onlineUsers = users;
+  }
+
+  // อัปเดตตัวเลขบน Navbar
+  const countEl = document.getElementById('onlineUsersCount');
+  if (countEl) {
+    countEl.innerText = state.onlineCount || (state.onlineUsers ? state.onlineUsers.length : 1);
+  }
+
+  // หากหน้าต่าง Modal เปิดอยู่ ให้รีเรนเดอร์รายชื่อด้วย
+  const modal = document.getElementById('onlineUsersModal');
+  if (modal && !modal.classList.contains('hidden')) {
+    renderOnlineUsersList();
+  }
+}
+
+/**
+ * ส่งสัญญาณ Heartbeat ไปยังเซิร์ฟเวอร์
+ */
+function sendHeartbeat() {
+  if (!state.currentUser || !state.currentUser.username) return;
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (res && res.success) {
+        updateOnlineUsersDisplay(res.count, res.users);
+      }
+    })
+    .withFailureHandler((err) => {
+      console.warn('Heartbeat warning: ' + err.message);
+    })
+    .pingOnlineUser({
+      username: state.currentUser.username,
+      fullName: state.currentUser.fullName || state.currentUser.username,
+      role: state.currentUser.role || 'Member'
+    });
+}
+
+/**
+ * เริ่มต้นระบบ Heartbeat ส่งสัญญาณทุกๆ 45 วินาที
+ */
+function startHeartbeat() {
+  stopHeartbeat();
+  sendHeartbeat();
+  state.heartbeatInterval = setInterval(sendHeartbeat, 45000);
+}
+
+/**
+ * หยุดระบบ Heartbeat
+ */
+function stopHeartbeat() {
+  if (state.heartbeatInterval) {
+    clearInterval(state.heartbeatInterval);
+    state.heartbeatInterval = null;
+  }
+}
+
+/**
+ * เปิดหน้าต่างดูรายชื่อผู้ใช้งานออนไลน์
+ */
+function openOnlineUsersModal() {
+  renderOnlineUsersList();
+  document.getElementById('onlineUsersModal').classList.remove('hidden');
+  sendHeartbeat(); // ดึงข้อมูลสดใหม่ทันทีที่เปิด
+}
+
+/**
+ * ปิดหน้าต่างดูรายชื่อผู้ใช้งานออนไลน์
+ */
+function closeOnlineUsersModal() {
+  document.getElementById('onlineUsersModal').classList.add('hidden');
+}
+
+/**
+ * รีเฟรชรายชื่อผู้ใช้งานออนไลน์จากปุ่มใน Modal
+ */
+function refreshOnlineUsers() {
+  const btn = document.getElementById('btnRefreshOnlineUsers');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin text-xs"></i> <span>กำลังโหลด...</span>';
+  }
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-xs"></i> <span>รีเฟรช</span>';
+      }
+      if (res && res.success) {
+        updateOnlineUsersDisplay(res.count, res.users);
+        renderOnlineUsersList();
+      }
+    })
+    .withFailureHandler((err) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-arrows-rotate text-xs"></i> <span>รีเฟรช</span>';
+      }
+      Swal.fire({ icon: 'error', title: 'ไม่สามารถโหลดรายชื่อได้', text: err.message });
+    })
+    .getOnlineUsers();
+}
+
+/**
+ * เรนเดอร์การ์ดรายชื่อผู้ใช้งานออนไลน์ใน Modal
+ */
+function renderOnlineUsersList() {
+  const container = document.getElementById('onlineUsersListContainer');
+  const modalBadge = document.getElementById('onlineUsersModalBadge');
+  if (!container) return;
+
+  const users = state.onlineUsers || [];
+  if (modalBadge) modalBadge.innerText = `${users.length} คน`;
+
+  if (users.length === 0) {
+    container.innerHTML = `
+      <div class="py-8 text-center text-[#6E6862]">
+        <i class="fa-solid fa-users-slash text-3xl mb-2 text-[#6E6862]/40"></i>
+        <p class="text-xs font-semibold">ยังไม่มีผู้ใช้งานออนไลน์ในขณะนี้</p>
+      </div>
+    `;
+    return;
+  }
+
+  const currentUsername = state.currentUser ? String(state.currentUser.username).toLowerCase() : '';
+  const now = Date.now();
+
+  container.innerHTML = users.map(u => {
+    const isMe = currentUsername && (String(u.username).toLowerCase() === currentUsername);
+    const roleClass = u.role === 'Admin'
+      ? 'bg-purple-100 text-purple-700 border-purple-200'
+      : 'bg-[#EDE7DA] text-[#6E6862] border-black/5';
+
+    let timeAgoText = 'กำลังใช้งานอยู่';
+    if (u.lastActive) {
+      const diffSec = Math.floor((now - u.lastActive) / 1000);
+      if (diffSec > 60) {
+        timeAgoText = `ใช้งานเมื่อ ${Math.floor(diffSec / 60)} นาทีที่แล้ว`;
+      } else if (diffSec > 10) {
+        timeAgoText = `ใช้งานเมื่อ ${diffSec} วินาทีที่แล้ว`;
+      }
+    }
+
+    const initial = (u.fullName || u.username || '?').charAt(0).toUpperCase();
+
+    return `
+      <div class="flex items-center justify-between p-3 rounded-xl border ${isMe ? 'bg-blue-50/60 border-blue-200 ring-1 ring-[#2491FA]/20' : 'bg-[#FAF8F2] border-[#EFE9DC]'} transition-all">
+        <div class="flex items-center gap-3 min-w-0 pr-2">
+          <div class="relative flex-shrink-0">
+            <div class="w-9 h-9 rounded-full ${isMe ? 'bg-[#2491FA] text-white' : 'bg-[#EDE7DA] text-[#201E1C]'} flex items-center justify-center font-bold text-xs shadow-2xs">
+              ${initial}
+            </div>
+            <span class="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span class="text-xs font-bold text-[#201E1C] truncate">${escapeHtml(u.fullName || u.username)}</span>
+              ${isMe ? '<span class="text-[10px] bg-[#2491FA] text-white px-1.5 py-0.2 rounded-md font-bold">คุณ</span>' : ''}
+              <span class="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded-md border ${roleClass}">
+                ${escapeHtml(u.role || 'Member')}
+              </span>
+            </div>
+            <div class="flex items-center gap-2 text-[11px] text-[#6E6862] mt-0.5">
+              <span class="font-mono text-[10px] text-[#2491FA]/80">@${escapeHtml(u.username)}</span>
+              <span>•</span>
+              <span class="text-[10px] text-emerald-700 font-medium flex items-center gap-1">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                <span>${timeAgoText}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * =========================================================================
+ * REAL-TIME AUTO-SYNC CONTROLLER
+ * ตรวจสอบและดึงข้อมูลอัปเดตแบบเรียลไทม์อัตโนมัติ (Zero-Quota Background Polling)
+ * =========================================================================
+ */
+
+/**
+ * เริ่มต้น Loop ตรวจสอบอัปเดตข้อมูลแบบ Real-time
+ */
+function startRealtimeSync() {
+  stopRealtimeSync();
+  updateLiveSyncBadge('active');
+  // ตรวจสอบทุกๆ 4.5 วินาที
+  state.realtimeSyncInterval = setInterval(checkRealtimeUpdates, 4500);
+}
+
+/**
+ * หยุด Loop ตรวจสอบอัปเดตข้อมูล Real-time
+ */
+function stopRealtimeSync() {
+  if (state.realtimeSyncInterval) {
+    clearInterval(state.realtimeSyncInterval);
+    state.realtimeSyncInterval = null;
+  }
+  updateLiveSyncBadge('paused');
+}
+
+/**
+ * ตรวจสอบการอัปเดตข้อมูลจากฝั่งเซิร์ฟเวอร์
+ */
+function checkRealtimeUpdates() {
+  // หากไม่มีผู้ใช้ล็อกอิน หรือกำลังดึงข้อมูลอยู่ หรือหน้าต่างถูกซ่อนไว้ หรือกำลังลากการ์ดอยู่ -> ข้ามรอบนี้
+  if (!state.currentUser || state.isSyncing) return;
+  if (document.visibilityState === 'hidden') return;
+  if (state.draggedTaskId) return;
+
+  state.isSyncing = true;
+  updateLiveSyncBadge('syncing');
+
+  const username = state.currentUser ? state.currentUser.username : '';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      state.isSyncing = false;
+      updateLiveSyncBadge('active');
+      handleRealtimeSyncResponse(res);
+    })
+    .withFailureHandler((err) => {
+      state.isSyncing = false;
+      console.warn('Real-time sync error (will retry next tick):', err);
+      updateLiveSyncBadge('warning');
+    })
+    .checkTasksUpdate(state.tasksVersion, username);
+}
+
+/**
+ * จัดการผลลัพธ์ที่ได้รับจากการตรวจสอบ Real-time
+ */
+function handleRealtimeSyncResponse(res) {
+  if (!res || !res.hasUpdate) return;
+
+  const oldVersion = state.tasksVersion;
+  state.tasksVersion = String(res.version || Date.now());
+
+  if (res.data && res.data.success) {
+    const data = res.data;
+    state.tasks = data.tasks || [];
+    state.sites = data.sites || [];
+    state.allSites = data.allSites || state.allSites;
+    state.users = data.users || state.users;
+    state.statuses = data.statuses || state.statuses;
+    state.priorities = data.priorities || state.priorities;
+    state.stats = data.stats || state.stats;
+
+    // อัปเดตออนไลน์ด้วยถ้ามีส่งมา
+    if (data.onlineUsers !== undefined) {
+      updateOnlineUsersDisplay(data.onlineCount, data.onlineUsers);
+    }
+
+    // ตรวจสอบว่าเป็นการกระทำของตนเองหรือไม่ (หากเพิ่งทำใน 5 วินาทีที่แล้ว ไม่ต้องเด้ง Toast แจ้งเตือนตัวเอง)
+    const isSelfAction = (res.meta && res.meta.taskId && res.meta.taskId === state.lastOwnTaskId && (Date.now() - state.lastOwnActionTime) < 5000);
+
+    let changedTaskId = null;
+    if (res.meta) {
+      changedTaskId = res.meta.taskId;
+
+      // ถ้าไม่ใช่การกระทำของตนเอง ให้แสดง SweetAlert Toast และเอฟเฟกต์การ์ดเด้ง
+      if (!isSelfAction) {
+        if (res.meta.type === 'STATUS_CHANGE') {
+          showLiveSyncToast(`งาน <strong>${escapeHtml(res.meta.title || '')}</strong> เปลี่ยนเป็นสถานะ <span class="text-[#2491FA] font-bold">"${escapeHtml(res.meta.newStatus || '')}"</span>`);
+        } else if (res.meta.type === 'TASK_SAVED') {
+          showLiveSyncToast(res.meta.isNew ? `มีงานใหม่เพิ่มเข้ามา: <strong>${escapeHtml(res.meta.title || '')}</strong>` : `อัปเดตข้อมูลงาน: <strong>${escapeHtml(res.meta.title || '')}</strong>`);
+        } else if (res.meta.type === 'TASK_DELETED') {
+          showLiveSyncToast(`งาน <strong>${escapeHtml(res.meta.title || '')}</strong> ถูกลบออก`);
+        } else if (res.meta.type === 'SHEET_EDIT') {
+          showLiveSyncToast('มีการแก้ไขข้อมูลจาก Google Sheets');
+        }
+      }
+    }
+
+    // กำหนด Highlight ให้การ์ดที่เปลี่ยนสถานะหรืออัปเดต เพื่อให้มีคลาสเด้ง (task-card-bounce)
+    if (changedTaskId) {
+      state.highlightTaskId = changedTaskId;
+    }
+
+    // เรนเดอร์แดชบอร์ดใหม่ โดยไม่รีเซ็ตฟิลเตอร์ที่ผู้ใช้กำลังดูอยู่
+    renderDashboard();
+
+    // ล้างสถานะ highlight หลังแอนิเมชันเด้งจบ (2.5 วินาที)
+    if (state.highlightTaskId) {
+      setTimeout(() => {
+        state.highlightTaskId = null;
+        const cardEl = document.querySelector(`[data-task-id="${changedTaskId}"]`);
+        if (cardEl) {
+          cardEl.classList.remove('task-card-bounce', 'ring-2', 'ring-[#2491FA]', 'ring-offset-2');
+        }
+      }, 2500);
+    }
+  }
+}
+
+/**
+ * แสดง Toast แจ้งเตือนการอัปเดตแบบเรียลไทม์ (มุมขวาบน ไม่รบกวนการทำงาน)
+ */
+function showLiveSyncToast(htmlMessage) {
+  if (typeof Swal !== 'undefined' && Swal.mixin) {
+    const Toast = Swal.mixin({
+      toast: true,
+      position: 'top-end',
+      showConfirmButton: false,
+      timer: 3500,
+      timerProgressBar: true,
+      didOpen: (toast) => {
+        toast.addEventListener('mouseenter', Swal.stopTimer);
+        toast.addEventListener('mouseleave', Swal.resumeTimer);
+      }
+    });
+    Toast.fire({
+      icon: 'info',
+      title: `<span class="text-xs">${htmlMessage}</span>`
+    });
+  }
+}
+
+/**
+ * อัปเดตสถานะป้าย Live Sync บน Navbar
+ * @param {'active'|'syncing'|'warning'|'paused'} mode
+ */
+function updateLiveSyncBadge(mode) {
+  const container = document.getElementById('liveSyncStatus');
+  const dot = document.getElementById('liveSyncDot');
+  const pulse = document.getElementById('liveSyncPulse');
+  const text = document.getElementById('liveSyncText');
+  if (!container || !dot || !pulse) return;
+
+  if (mode === 'active') {
+    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+    pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+    if (text) text.innerText = 'Live Sync';
+    container.title = 'ระบบ Real-time กำลังทำงานปกติ';
+  } else if (mode === 'syncing') {
+    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 text-[#2491FA] border border-blue-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-[#2491FA]';
+    pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75';
+    if (text) text.innerText = 'Syncing...';
+    container.title = 'กำลังตรวจสอบการเปลี่ยนแปลง...';
+  } else if (mode === 'warning') {
+    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+    pulse.className = 'hidden';
+    if (text) text.innerText = 'Sync Warning';
+    container.title = 'การเชื่อมต่อขัดข้อง กำลังลองใหม่รอบถัดไป';
+  } else if (mode === 'paused') {
+    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-[#EDE7DA] text-[#6E6862] border border-[#EFE9DC] rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-[#6E6862]';
+    pulse.className = 'hidden';
+    if (text) text.innerText = 'Sync Paused';
+    container.title = 'ระบบ Real-time พักการทำงานชั่วคราว';
+  }
+}
+
+// ส่ง Heartbeat และตรวจ Real-time เมื่อผู้ใช้สลับกลับมาที่แท็บเว็บ
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.currentUser) {
+    sendHeartbeat();
+    checkRealtimeUpdates();
+  }
+});
+
+/**
+ * =========================================================================
+ * AUTHENTICATION & LOGIN FLOW (TELEGRAM OTP / PIN)
+ * =========================================================================
+ */
+
+function checkAuthSession() {
+  const sessionStr = sessionStorage.getItem('work_tracker_session');
+  if (sessionStr) {
+    try {
+      const user = JSON.parse(sessionStr);
+      if (user && user.username) {
+        state.currentUser = user;
+        updateNavbarUser();
+        startHeartbeat();
+        document.getElementById('loginScreen').classList.add('hidden');
+        loadInitialData();
+        return;
+      }
+    } catch (e) {
+      sessionStorage.removeItem('work_tracker_session');
+    }
+  }
+
+  // ยังไม่ได้เข้าสู่ระบบ
+  showLoading(false);
+  const btnOnline = document.getElementById('btnOnlineUsers');
+  if (btnOnline) btnOnline.classList.add('hidden');
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginStep1').classList.remove('hidden');
+  document.getElementById('loginStep2').classList.add('hidden');
+  setTimeout(() => {
+    const input = document.getElementById('loginUsername');
+    if (input) input.focus();
+  }, 300);
+}
+
+function updateNavbarUser() {
+  if (!state.currentUser) return;
+  const badge = document.getElementById('userProfileBadge');
+  const nameSpan = document.getElementById('navUserFullName');
+  const roleSpan = document.getElementById('navUserRole');
+  const btnOnline = document.getElementById('btnOnlineUsers');
+
+  if (nameSpan) nameSpan.innerText = state.currentUser.fullName || state.currentUser.username;
+  if (roleSpan) roleSpan.innerText = state.currentUser.role || 'Member';
+  if (badge) badge.classList.remove('hidden');
+  if (btnOnline) btnOnline.classList.remove('hidden');
+}
+
+/**
+ * ขอรหัส PIN 6 หลักผ่าน Telegram
+ */
+function handleRequestPin() {
+  const usernameInput = document.getElementById('loginUsername');
+  const username = (state.loginUsername || usernameInput.value).trim().toLowerCase();
+
+  if (!username) {
+    Swal.fire({ icon: 'warning', title: 'กรุณากรอกชื่อผู้ใช้', text: 'กรุณาระบุชื่อผู้ใช้ (Username) ของคุณ' });
+    if (usernameInput) usernameInput.focus();
+    return;
+  }
+
+  state.loginUsername = username;
+
+  const btn = document.getElementById('btnRequestPin');
+  const btnResend = document.getElementById('btnResendPin');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังส่ง PIN เข้า Telegram...';
+  }
+  if (btnResend) {
+    btnResend.disabled = true;
+    btnResend.innerText = 'กำลังส่งรหัส...';
+  }
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-brands fa-telegram text-base"></i> <span>ขอรหัส PIN ทาง Telegram</span>';
+      }
+      if (btnResend) {
+        btnResend.disabled = false;
+        btnResend.innerHTML = 'ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>';
+      }
+
+      if (!res.success) {
+        Swal.fire({ icon: 'error', title: 'ขอรหัสไม่สำเร็จ', text: res.message });
+        return;
+      }
+
+      // สลับไปขั้นตอนที่ 2
+      document.getElementById('loginStep1').classList.add('hidden');
+      document.getElementById('loginStep2').classList.remove('hidden');
+      document.getElementById('loginUserDisplay').innerText = res.fullName || res.username;
+      document.getElementById('loginUsernameDisplay').innerText = '@' + res.username;
+
+      // ล้างช่อง PIN ทั้งหมดและโฟกัสช่องแรก
+      clearPinInputs();
+
+      // เริ่มนับถอยหลัง 5 นาที (300 วินาที)
+      startPinCountdown(res.expiresIn || 300);
+
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'info',
+        title: res.message,
+        showConfirmButton: false,
+        timer: 4000
+      });
+    })
+    .withFailureHandler((err) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-brands fa-telegram text-base"></i> <span>ขอรหัส PIN ทาง Telegram</span>';
+      }
+      if (btnResend) {
+        btnResend.disabled = false;
+        btnResend.innerHTML = 'ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>';
+      }
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+    })
+    .requestLoginPin(username);
+}
+
+function backToStep1() {
+  if (state.countdownInterval) clearInterval(state.countdownInterval);
+  document.getElementById('loginStep2').classList.add('hidden');
+  document.getElementById('loginStep1').classList.remove('hidden');
+  clearPinInputs();
+  setTimeout(() => {
+    document.getElementById('loginUsername').focus();
+  }, 200);
+}
+
+function startPinCountdown(seconds) {
+  if (state.countdownInterval) clearInterval(state.countdownInterval);
+  let remaining = seconds;
+  const timerDisplay = document.getElementById('countdownTimerText');
+
+  const updateDisplay = () => {
+    const mins = Math.floor(remaining / 60);
+    const secs = remaining % 60;
+    if (timerDisplay) {
+      timerDisplay.innerText = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    if (remaining <= 0) {
+      clearInterval(state.countdownInterval);
+      if (timerDisplay) timerDisplay.innerText = '00:00 (หมดอายุ)';
+    }
+    remaining--;
+  };
+
+  updateDisplay();
+  state.countdownInterval = setInterval(updateDisplay, 1000);
+}
+
+function clearPinInputs() {
+  for (let i = 0; i < 6; i++) {
+    const el = document.getElementById('pin-' + i);
+    if (el) el.value = '';
+  }
+  const first = document.getElementById('pin-0');
+  if (first) first.focus();
+}
+
+/**
+ * ตั้งค่าการพิมพ์และควบคุมช่อง PIN 6 หลัก
+ */
+function setupPinInputHandlers() {
+  const container = document.getElementById('pinInputsContainer');
+  if (!container) return;
+
+  for (let i = 0; i < 6; i++) {
+    const input = document.getElementById('pin-' + i);
+    if (!input) continue;
+
+    input.addEventListener('input', (e) => {
+      const val = e.target.value.replace(/\D/g, '');
+      e.target.value = val ? val[0] : '';
+      if (val && i < 5) {
+        const next = document.getElementById('pin-' + (i + 1));
+        if (next) next.focus();
+      }
+      // หากกรอกครบ 6 ตัว ให้ล็อกอินอัตโนมัติ
+      checkAndAutoSubmitPin();
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Backspace' && !e.target.value && i > 0) {
+        const prev = document.getElementById('pin-' + (i - 1));
+        if (prev) {
+          prev.focus();
+          prev.value = '';
+        }
+      } else if (e.key === 'Enter') {
+        handleVerifyPin();
+      }
+    });
+
+    input.addEventListener('paste', (e) => {
+      e.preventDefault();
+      const pastedData = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+      if (pastedData) {
+        for (let j = 0; j < 6 && j < pastedData.length; j++) {
+          const pinBox = document.getElementById('pin-' + j);
+          if (pinBox) pinBox.value = pastedData[j];
+        }
+        if (pastedData.length >= 6) {
+          const last = document.getElementById('pin-5');
+          if (last) last.focus();
+          handleVerifyPin();
+        } else {
+          const target = document.getElementById('pin-' + Math.min(pastedData.length, 5));
+          if (target) target.focus();
+        }
+      }
+    });
+  }
+
+  // กด Enter ที่ช่อง Username
+  const uInput = document.getElementById('loginUsername');
+  if (uInput) {
+    uInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleRequestPin();
+    });
+  }
+}
+
+function checkAndAutoSubmitPin() {
+  let pin = '';
+  for (let i = 0; i < 6; i++) {
+    const val = document.getElementById('pin-' + i).value;
+    if (!val) return;
+    pin += val;
+  }
+  if (pin.length === 6) {
+    handleVerifyPin();
+  }
+}
+
+/**
+ * ยืนยันรหัส PIN 6 หลักเพื่อเข้าสู่ระบบ
+ */
+function handleVerifyPin() {
+  let pin = '';
+  for (let i = 0; i < 6; i++) {
+    const val = document.getElementById('pin-' + i).value;
+    pin += val;
+  }
+
+  if (pin.length !== 6) {
+    Swal.fire({ icon: 'warning', title: 'กรุณากรอกรหัส PIN ให้ครบ 6 หลัก' });
+    return;
+  }
+
+  const btn = document.getElementById('btnVerifyPin');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบรหัส...';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs mr-1"></i> เข้าสู่ระบบ';
+
+      if (!res.success) {
+        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: res.message });
+        clearPinInputs();
+        return;
+      }
+
+      // บันทึก Session
+      if (state.countdownInterval) clearInterval(state.countdownInterval);
+      state.currentUser = res.user;
+      sessionStorage.setItem('work_tracker_session', JSON.stringify(res.user));
+
+      updateNavbarUser();
+      startHeartbeat();
+      document.getElementById('loginScreen').classList.add('hidden');
+
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: `ยินดีต้อนรับ ${res.user.fullName || res.user.username}`,
+        showConfirmButton: false,
+        timer: 2500
+      });
+
+      // โหลดข้อมูล Dashboard
+      loadInitialData();
+    })
+    .withFailureHandler((err) => {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs mr-1"></i> เข้าสู่ระบบ';
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+    })
+    .verifyLoginPin(state.loginUsername, pin);
+}
+
+/**
+ * ออกจากระบบ (Logout)
+ */
+function handleLogout() {
+  Swal.fire({
+    title: 'ออกจากระบบ?',
+    text: 'คุณต้องการออกจากระบบหรือไม่?',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonColor: '#2563eb',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'ออกจากระบบ',
+    cancelButtonText: 'ยกเลิก'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      const oldUsername = state.currentUser ? state.currentUser.username : '';
+      stopHeartbeat();
+      stopRealtimeSync();
+      if (oldUsername) {
+        google.script.run.logoutOnlineUser(oldUsername);
+      }
+
+      sessionStorage.removeItem('work_tracker_session');
+      state.currentUser = null;
+      state.loginUsername = '';
+      state.filters.dueDateInitialized = false;
+      state.filters.dueDateFrom = '';
+      state.filters.dueDateTo = '';
+      state.filters.includeNoDueDate = false;
+      if (state.countdownInterval) clearInterval(state.countdownInterval);
+
+      // รีเซ็ตหน้าจอ Login
+      document.getElementById('loginUsername').value = '';
+      clearPinInputs();
+      document.getElementById('loginStep2').classList.add('hidden');
+      document.getElementById('loginStep1').classList.remove('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+      document.getElementById('userProfileBadge').classList.add('hidden');
+      const btnOnline = document.getElementById('btnOnlineUsers');
+      if (btnOnline) btnOnline.classList.add('hidden');
+    }
+  });
+}
+
+/**
+ * =========================================================================
+ * SETTINGS TABS & USER MANAGEMENT
+ * =========================================================================
+ */
+
+function setTabBtnState(btn, isActive) {
+  if (!btn) return;
+  if (isActive) {
+    btn.classList.add('border-[#2491FA]', 'text-[#2491FA]', 'font-bold');
+    btn.classList.remove('border-transparent', 'text-[#6E6862]', 'font-semibold');
+  } else {
+    btn.classList.remove('border-[#2491FA]', 'text-[#2491FA]', 'font-bold');
+    btn.classList.add('border-transparent', 'text-[#6E6862]', 'font-semibold');
+  }
+}
+
+function switchSettingsTab(tabName) {
+  const tabGeneral = document.getElementById('settingsTabGeneral');
+  const tabSites = document.getElementById('settingsTabSites');
+  const tabUsers = document.getElementById('settingsTabUsers');
+  const btnGeneral = document.getElementById('btnTabGeneral');
+  const btnSites = document.getElementById('btnTabSites');
+  const btnUsers = document.getElementById('btnTabUsers');
+
+  if (tabGeneral) tabGeneral.classList.toggle('hidden', tabName !== 'general');
+  if (tabSites) tabSites.classList.toggle('hidden', tabName !== 'sites');
+  if (tabUsers) tabUsers.classList.toggle('hidden', tabName !== 'users');
+
+  setTabBtnState(btnGeneral, tabName === 'general');
+  setTabBtnState(btnSites, tabName === 'sites');
+  setTabBtnState(btnUsers, tabName === 'users');
+
+  if (tabName === 'sites') {
+    loadSitesTab();
+  } else if (tabName === 'users') {
+    loadUsersList();
+  }
+}
+
+function loadUsersList() {
+  const tbody = document.getElementById('usersTableBody');
+  if (tbody) tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-1"></i> กำลังโหลดรายชื่อผู้ใช้...</td></tr>';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res.success) {
+        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-rose-500">${res.message}</td></tr>`;
+        return;
+      }
+      state.users = res.users || [];
+      renderUsersTable(state.users);
+      renderAssigneeFormOptions();
+      renderAssigneeFilterOptions();
+      renderUserReportersList();
+    })
+    .withFailureHandler((err) => {
+      tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-rose-500">${err.message}</td></tr>`;
+    })
+    .getUsersList();
+}
+
+function renderUsersTable(users) {
+  const tbody = document.getElementById('usersTableBody');
+  if (!tbody) return;
+
+  if (users.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-slate-400">ยังไม่มีข้อมูลผู้ใช้ในระบบ</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = users.map(u => {
+    const isCurrentUser = state.currentUser && state.currentUser.username.toLowerCase() === u.username.toLowerCase();
+    const isAllSites = !u.allowedSites || u.allowedSites === 'ALL' || u.role === 'Admin';
+    let sitesBadge = '';
+    if (isAllSites) {
+      sitesBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ทุกไซต์งาน</span>';
+    } else if (Array.isArray(u.allowedSites)) {
+      const count = u.allowedSites.length;
+      const titleTooltip = escapeHtml(u.allowedSites.join(', '));
+      sitesBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 cursor-help" title="${titleTooltip}">เฉพาะ ${count} ไซต์</span>`;
+    } else {
+      sitesBadge = '<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-700">ทุกไซต์งาน</span>';
+    }
+
+    return `
+      <tr class="hover:bg-slate-50/80 transition-colors">
+        <td class="px-3 py-2.5 font-mono font-semibold text-slate-800">
+          ${escapeHtml(u.username)}
+          ${isCurrentUser ? '<span class="ml-1 text-[10px] bg-blue-100 text-blue-700 px-1 rounded">คุณ</span>' : ''}
+        </td>
+        <td class="px-3 py-2.5 text-slate-700">${escapeHtml(u.fullName)}</td>
+        <td class="px-3 py-2.5 font-mono text-slate-500">${u.telegramChatId ? escapeHtml(u.telegramChatId) : '<span class="text-rose-500 italic">ยังไม่ระบุ</span>'}</td>
+        <td class="px-3 py-2.5">
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-bold ${u.role === 'Admin' ? 'bg-purple-100 text-purple-700' : 'bg-slate-100 text-slate-600'}">
+            ${escapeHtml(u.role)}
+          </span>
+        </td>
+        <td class="px-3 py-2.5">
+          ${sitesBadge}
+        </td>
+        <td class="px-3 py-2.5 text-right">
+          <div class="flex items-center justify-end gap-1">
+            <button onclick='editUser(${JSON.stringify(u)})' class="p-1 text-slate-400 hover:text-blue-600 rounded cursor-pointer" title="แก้ไข">
+              <i class="fa-regular fa-pen-to-square"></i>
+            </button>
+            ${u.username !== 'admin' ? `
+              <button onclick="confirmDeleteUser('${u.username}')" class="p-1 text-slate-400 hover:text-rose-600 rounded cursor-pointer" title="ลบ">
+                <i class="fa-regular fa-trash-can"></i>
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function handleSiteAccessTypeChange() {
+  const selectedRadio = document.querySelector('input[name="siteAccessType"]:checked');
+  const container = document.getElementById('userSpecificSitesContainer');
+  if (!selectedRadio || !container) return;
+
+  if (selectedRadio.value === 'CUSTOM') {
+    container.classList.remove('hidden');
+    renderUserSitesCheckboxes();
+  } else {
+    container.classList.add('hidden');
+  }
+}
+
+function renderUserSitesCheckboxes(selectedSites = []) {
+  const container = document.getElementById('userSitesCheckboxList');
+  if (!container) return;
+
+  const sitesToRender = state.allSites && state.allSites.length > 0 ? state.allSites : (state.sites || []);
+  if (sitesToRender.length === 0) {
+    container.innerHTML = '<p class="text-slate-400 text-xs col-span-2 py-2">ยังไม่มีไซต์งานในระบบ</p>';
+    return;
+  }
+
+  container.innerHTML = sitesToRender.map(siteName => {
+    const isChecked = selectedSites.includes(siteName);
+    return `
+      <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 border border-slate-100 cursor-pointer text-xs transition-colors">
+        <input type="checkbox" name="userSiteCheckbox" value="${escapeHtml(siteName)}" ${isChecked ? 'checked' : ''}
+               class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+        <span class="text-slate-700 truncate" title="${escapeHtml(siteName)}">${escapeHtml(siteName)}</span>
+      </label>
+    `;
+  }).join('');
+}
+
+function selectAllUserSites(selectAll) {
+  const checkboxes = document.querySelectorAll('input[name="userSiteCheckbox"]');
+  checkboxes.forEach(cb => { cb.checked = selectAll; });
+}
+
+function openAddUserForm() {
+  document.getElementById('userFormTitle').innerText = 'เพิ่มผู้ใช้ใหม่';
+  document.getElementById('inputUserUsername').value = '';
+  document.getElementById('inputUserUsername').readOnly = false;
+  document.getElementById('inputUserFullName').value = '';
+  document.getElementById('inputUserChatId').value = '';
+  document.getElementById('inputUserRole').value = 'Member';
+
+  const radioAll = document.querySelector('input[name="siteAccessType"][value="ALL"]');
+  if (radioAll) radioAll.checked = true;
+  const container = document.getElementById('userSpecificSitesContainer');
+  if (container) container.classList.add('hidden');
+  selectAllUserSites(false);
+
+  document.getElementById('userFormContainer').classList.remove('hidden');
+}
+
+function cancelUserForm() {
+  document.getElementById('userFormContainer').classList.add('hidden');
+}
+
+function editUser(user) {
+  document.getElementById('userFormTitle').innerText = `แก้ไขข้อมูลผู้ใช้ (@${user.username})`;
+  const uInput = document.getElementById('inputUserUsername');
+  uInput.value = user.username;
+  uInput.readOnly = true; // ไม่ให้แก้ username
+  document.getElementById('inputUserFullName').value = user.fullName;
+  document.getElementById('inputUserChatId').value = user.telegramChatId || '';
+  document.getElementById('inputUserRole').value = user.role || 'Member';
+
+  const isAll = !user.allowedSites || user.allowedSites === 'ALL';
+  const radioAll = document.querySelector('input[name="siteAccessType"][value="ALL"]');
+  const radioCustom = document.querySelector('input[name="siteAccessType"][value="CUSTOM"]');
+  const container = document.getElementById('userSpecificSitesContainer');
+
+  if (isAll) {
+    if (radioAll) radioAll.checked = true;
+    if (container) container.classList.add('hidden');
+    selectAllUserSites(false);
+  } else {
+    if (radioCustom) radioCustom.checked = true;
+    if (container) container.classList.remove('hidden');
+    const selected = Array.isArray(user.allowedSites) ? user.allowedSites : [];
+    renderUserSitesCheckboxes(selected);
+  }
+
+  document.getElementById('userFormContainer').classList.remove('hidden');
+}
+
+function submitUserForm() {
+  const username = document.getElementById('inputUserUsername').value.trim();
+  const fullName = document.getElementById('inputUserFullName').value.trim();
+  const chatId = document.getElementById('inputUserChatId').value.trim();
+  const role = document.getElementById('inputUserRole').value;
+
+  if (!username || !fullName) {
+    Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณากรอก Username และชื่อ-นามสกุล' });
+    return;
+  }
+
+  const selectedRadio = document.querySelector('input[name="siteAccessType"]:checked');
+  let allowedSites = 'ALL';
+
+  if (selectedRadio && selectedRadio.value === 'CUSTOM') {
+    const checkedBoxes = document.querySelectorAll('input[name="userSiteCheckbox"]:checked');
+    if (checkedBoxes.length === 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'ยังไม่ได้เลือกไซต์งาน',
+        text: 'กรุณาเลือกไซต์งานที่อนุญาตอย่างน้อย 1 ไซต์งาน หรือเลือก "เข้าถึงได้ทุกไซต์งาน"'
+      });
+      return;
+    }
+    allowedSites = Array.from(checkedBoxes).map(cb => cb.value);
+  }
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler((res) => {
+      showLoading(false);
+      if (res.success) {
+        Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: res.message, showConfirmButton: false, timer: 2000 });
+        cancelUserForm();
+        loadUsersList();
+        if (state.currentUser && state.currentUser.username.toLowerCase() === username.toLowerCase()) {
+          loadInitialData();
+        }
+      } else {
+        Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: res.message });
+      }
+    })
+    .withFailureHandler((err) => {
+      showLoading(false);
+      Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.message });
+    })
+    .saveUser({ username, fullName, telegramChatId: chatId, role, allowedSites, status: 'Active' });
+}
+
+function confirmDeleteUser(username) {
+  Swal.fire({
+    title: 'ยืนยันการลบผู้ใช้?',
+    text: `ต้องการลบผู้ใช้ @${username} หรือไม่?`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#e11d48',
+    cancelButtonColor: '#64748b',
+    confirmButtonText: 'ใช่, ลบผู้ใช้',
+    cancelButtonText: 'ยกเลิก'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler((result) => {
+          showLoading(false);
+          if (result.success) {
+            Swal.fire({ toast: true, position: 'top-end', icon: 'success', title: result.message, showConfirmButton: false, timer: 2000 });
+            loadUsersList();
+          } else {
+            Swal.fire({ icon: 'error', title: 'ลบไม่สำเร็จ', text: result.message });
+          }
+        })
+        .withFailureHandler((err) => {
+          showLoading(false);
+          Swal.fire({ icon: 'error', title: 'ผิดพลาด', text: err.message });
+        })
+        .deleteUser(username);
+    }
+  });
+}
+
+/**
+ * =========================================================================
+ * SITES MANAGEMENT (จัดการไซต์งาน)
+ * =========================================================================
+ */
+
+function loadSitesTab() {
+  state.tempSites = Array.isArray(state.sites) ? [...state.sites] : [];
+  state.tempSiteChatIds = { ...(state.settings.siteTelegramChatIds || {}) };
+  renderSitesListTable();
+}
+
+function renderSitesListTable() {
+  const container = document.getElementById('sitesListContainer');
+  const countBadge = document.getElementById('sitesCountBadge');
+  if (!container) return;
+
+  if (countBadge) {
+    countBadge.innerText = state.tempSites.length;
+  }
+
+  if (state.tempSites.length === 0) {
+    container.innerHTML = `
+      <div class="py-8 text-center text-[#6E6862]">
+        <i class="fa-solid fa-folder-open text-2xl mb-2 text-[#6E6862]/50"></i>
+        <p class="text-xs">ยังไม่มีรายการไซต์งานในระบบ</p>
+        <p class="text-[11px] text-[#6E6862]/80 mt-0.5">พิมพ์ชื่อด้านบนเพื่อเพิ่มไซต์งานใหม่</p>
+      </div>
+    `;
+    return;
+  }
+
+  // คำนวณจำนวนงานที่ผูกกับแต่ละไซต์
+  const taskCounts = {};
+  (state.tasks || []).forEach(t => {
+    if (t.site) {
+      taskCounts[t.site] = (taskCounts[t.site] || 0) + 1;
+    }
+  });
+
+  container.innerHTML = state.tempSites.map((siteName, index) => {
+    const count = taskCounts[siteName] || 0;
+    const siteChatId = (state.tempSiteChatIds && state.tempSiteChatIds[siteName]) || '';
+    return `
+      <div class="flex items-center justify-between px-4 py-2.5 hover:bg-[#FAF8F2] transition-colors">
+        <div class="flex items-center gap-2.5 min-w-0 pr-2">
+          <span class="w-6 h-6 rounded-lg bg-[#EDE7DA] text-[#6E6862] text-[11px] font-bold flex items-center justify-center flex-shrink-0">
+            ${index + 1}
+          </span>
+          <div class="min-w-0">
+            <span class="text-xs font-semibold text-[#201E1C] truncate block" title="${escapeHtml(siteName)}">
+              ${escapeHtml(siteName)}
+            </span>
+            <div class="mt-0.5">
+              ${siteChatId ? `
+                <button type="button" onclick="openSiteTelegramModalByIndex(${index})"
+                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-[#2491FA] border border-blue-200/80 hover:bg-blue-100 transition-colors cursor-pointer"
+                        title="คลิกเพื่อแก้ไข Chat ID หรือทดสอบส่งเข้ากลุ่มนี้">
+                  <i class="fa-brands fa-telegram"></i> กลุ่ม: ${escapeHtml(siteChatId)}
+                </button>
+              ` : `
+                <button type="button" onclick="openSiteTelegramModalByIndex(${index})"
+                        class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#EDE7DA]/80 text-[#6E6862] hover:bg-[#E2DACB] transition-colors cursor-pointer"
+                        title="คลิกเพื่อกำหนด Chat ID กลุ่มเฉพาะของไซต์นี้">
+                  <i class="fa-brands fa-telegram text-slate-400"></i> ใช้กลุ่มหลัก (Default)
+                </button>
+              `}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1.5 flex-shrink-0">
+          <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold ${count > 0 ? 'bg-blue-100 text-blue-700' : 'bg-[#EDE7DA] text-[#6E6862]'}">
+            ${count} งาน
+          </span>
+          <button type="button" onclick="openSiteTelegramModalByIndex(${index})" title="ตั้งค่า Telegram กลุ่มไซต์นี้"
+                  class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-brands fa-telegram text-sm"></i>
+          </button>
+          <button type="button" onclick="editSiteName(${index})" title="แก้ไขชื่อไซต์"
+                  class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-[#EDE7DA] rounded-lg transition-colors cursor-pointer">
+            <i class="fa-regular fa-pen-to-square text-xs"></i>
+          </button>
+          <button type="button" onclick="deleteSite(${index})" title="ลบไซต์งาน"
+                  class="p-1.5 text-[#6E6862] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-regular fa-trash-can text-xs"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function openSiteTelegramModalByIndex(index) {
+  const siteName = state.tempSites[index];
+  if (!siteName) return;
+
+  const currentChatId = (state.tempSiteChatIds && state.tempSiteChatIds[siteName]) || '';
+
+  Swal.fire({
+    title: `<div class="flex items-center gap-2 text-base text-[#201E1C] font-bold"><i class="fa-brands fa-telegram text-[#2491FA] text-xl"></i><span>ตั้งค่า Telegram กลุ่มไซต์งาน</span></div>`,
+    html: `
+      <div class="text-left space-y-3 pt-1">
+        <div class="bg-[#FAF8F2] p-2.5 rounded-xl border border-[#EFE9DC]">
+          <span class="text-[11px] text-[#6E6862] block">ไซต์งาน:</span>
+          <span class="text-xs font-bold text-[#201E1C] flex items-center gap-1.5 mt-0.5">
+            <i class="fa-solid fa-location-dot text-[#2491FA]"></i> ${escapeHtml(siteName)}
+          </span>
+        </div>
+
+        <div>
+          <label class="block text-xs font-medium text-[#201E1C] mb-1">Telegram Group Chat ID ประจำไซต์งาน</label>
+          <input type="text" id="swalSiteChatId" value="${escapeHtml(currentChatId)}" placeholder="เช่น -1001234567890 (หรือเว้นว่างเพื่อใช้กลุ่มหลัก)"
+                 class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C]">
+          <p class="text-[11px] text-[#6E6862] mt-1">
+            💡 นำบอทเข้ากลุ่ม และใช้ Chat ID ของกลุ่มนั้น (กลุ่ม Telegram มักขึ้นต้นด้วย <code>-100...</code>)<br>
+            * หากเว้นว่างไว้ ระบบจะส่งแจ้งเตือนเข้า <b>กลุ่มหลัก (Default)</b>
+          </p>
+        </div>
+
+        <div class="pt-1">
+          <button type="button" id="swalBtnTestSiteTelegram"
+                  class="w-full py-1.5 text-xs font-bold text-[#2491FA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer">
+            <i class="fa-brands fa-telegram"></i>
+            <span>ทดสอบส่งข้อความเข้ากลุ่มไซต์นี้</span>
+          </button>
+        </div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonColor: '#2491FA',
+    cancelButtonColor: '#6E6862',
+    confirmButtonText: '<i class="fa-solid fa-check mr-1"></i> ตกลง',
+    cancelButtonText: 'ยกเลิก',
+    didOpen: () => {
+      const testBtn = document.getElementById('swalBtnTestSiteTelegram');
+      if (testBtn) {
+        testBtn.addEventListener('click', () => {
+          const inputEl = document.getElementById('swalSiteChatId');
+          const testChatId = inputEl ? inputEl.value.trim() : '';
+          if (!testChatId) {
+            Swal.showValidationMessage('กรุณากรอก Chat ID ก่อนกดทดสอบส่ง');
+            return;
+          }
+          testBtn.disabled = true;
+          testBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังส่ง...';
+
+          google.script.run
+            .withSuccessHandler((res) => {
+              testBtn.disabled = false;
+              testBtn.innerHTML = '<i class="fa-brands fa-telegram mr-1"></i> ทดสอบส่งข้อความเข้ากลุ่มไซต์นี้';
+              if (res.success) {
+                Swal.showValidationMessage('');
+                Swal.fire({
+                  toast: true,
+                  position: 'top-end',
+                  icon: 'success',
+                  title: res.message || 'ส่งข้อความทดสอบสำเร็จ!',
+                  showConfirmButton: false,
+                  timer: 3000
+                });
+              } else {
+                Swal.showValidationMessage('ส่งไม่สำเร็จ: ' + res.message);
+              }
+            })
+            .withFailureHandler((err) => {
+              testBtn.disabled = false;
+              testBtn.innerHTML = '<i class="fa-brands fa-telegram mr-1"></i> ทดสอบส่งข้อความเข้ากลุ่มไซต์นี้';
+              Swal.showValidationMessage('เกิดข้อผิดพลาด: ' + err.message);
+            })
+            .testTelegramConnection('', testChatId, siteName);
+        });
+      }
+    },
+    preConfirm: () => {
+      const inputEl = document.getElementById('swalSiteChatId');
+      return inputEl ? inputEl.value.trim() : '';
+    }
+  }).then((res) => {
+    if (res.isConfirmed) {
+      if (!state.tempSiteChatIds) state.tempSiteChatIds = {};
+      const newChatId = res.value || '';
+      if (newChatId) {
+        state.tempSiteChatIds[siteName] = newChatId;
+      } else {
+        delete state.tempSiteChatIds[siteName];
+      }
+      renderSitesListTable();
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: `ตั้งค่า Telegram กลุ่ม "${siteName}" เรียบร้อย (อย่าลืมกดบันทึก)`,
+        showConfirmButton: false,
+        timer: 2500
+      });
+    }
+  });
+}
+
+function addNewSiteFromSettings() {
+  const input = document.getElementById('inputNewSiteName');
+  if (!input) return;
+  const val = input.value.trim();
+
+  if (!val) {
+    Swal.fire({ icon: 'warning', title: 'กรุณากรอกชื่อไซต์งาน', text: 'พิมพ์ชื่อไซต์งานที่ต้องการเพิ่ม' });
+    return;
+  }
+
+  if (state.tempSites.some(s => s.toLowerCase() === val.toLowerCase())) {
+    Swal.fire({ icon: 'info', title: 'ไซต์งานนี้มีอยู่แล้ว', text: `มีไซต์ "${val}" ในรายการแล้ว` });
+    return;
+  }
+
+  state.tempSites.push(val);
+  input.value = '';
+  renderSitesListTable();
+  input.focus();
+}
+
+function editSiteName(index) {
+  const currentName = state.tempSites[index];
+  if (!currentName) return;
+
+  Swal.fire({
+    title: 'แก้ไขชื่อไซต์งาน',
+    input: 'text',
+    inputValue: currentName,
+    inputPlaceholder: 'กรอกชื่อไซต์งานใหม่...',
+    showCancelButton: true,
+    confirmButtonColor: '#2491FA',
+    cancelButtonColor: '#6E6862',
+    confirmButtonText: 'บันทึกการแก้ไข',
+    cancelButtonText: 'ยกเลิก',
+    inputValidator: (val) => {
+      if (!val || !val.trim()) {
+        return 'กรุณากรอกชื่อไซต์งาน';
+      }
+      const trimmed = val.trim();
+      const duplicate = state.tempSites.some((s, idx) => idx !== index && s.toLowerCase() === trimmed.toLowerCase());
+      if (duplicate) {
+        return 'มีชื่อไซต์งานนี้ในรายการแล้ว';
+      }
+      return null;
+    }
+  }).then((res) => {
+    if (res.isConfirmed && res.value) {
+      const oldName = currentName;
+      const newName = res.value.trim();
+      state.tempSites[index] = newName;
+      if (state.tempSiteChatIds && state.tempSiteChatIds[oldName] !== undefined) {
+        state.tempSiteChatIds[newName] = state.tempSiteChatIds[oldName];
+        if (newName !== oldName) {
+          delete state.tempSiteChatIds[oldName];
+        }
+      }
+      renderSitesListTable();
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'แก้ไขชื่อไซต์เรียบร้อย (อย่าลืมกดบันทึก)',
+        showConfirmButton: false,
+        timer: 2000
+      });
+    }
+  });
+}
+
+function deleteSite(index) {
+  const siteName = state.tempSites[index];
+  if (!siteName) return;
+
+  const usedCount = (state.tasks || []).filter(t => t.site === siteName).length;
+  let warnHtml = `ต้องการลบไซต์งาน <b>${escapeHtml(siteName)}</b> หรือไม่?`;
+  if (usedCount > 0) {
+    warnHtml += `<br><span class="text-xs text-amber-600 font-normal">⚠️ มีงานที่ผูกกับไซต์นี้อยู่ <b>${usedCount}</b> งาน<br>(งานในระบบจะไม่ถูกลบ แต่ไซต์นี้จะถูกนำออกจากตัวเลือก)</span>`;
+  }
+
+  Swal.fire({
+    title: 'ยืนยันการลบไซต์งาน?',
+    html: warnHtml,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#e11d48',
+    cancelButtonColor: '#6E6862',
+    confirmButtonText: 'ใช่, ลบไซต์นี้',
+    cancelButtonText: 'ยกเลิก'
+  }).then((res) => {
+    if (res.isConfirmed) {
+      const delName = state.tempSites[index];
+      state.tempSites.splice(index, 1);
+      if (state.tempSiteChatIds && delName) {
+        delete state.tempSiteChatIds[delName];
+      }
+      renderSitesListTable();
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: 'นำไซต์งานออกจากรายการแล้ว (อย่าลืมกดบันทึก)',
+        showConfirmButton: false,
+        timer: 2000
+      });
+    }
+  });
+}
+
+function toggleBulkSitesMode() {
+  const wrapper = document.getElementById('bulkSitesWrapper');
+  const toggleText = document.getElementById('bulkSitesToggleText');
+  const textarea = document.getElementById('bulkSitesTextarea');
+  if (!wrapper || !toggleText) return;
+
+  const isHidden = wrapper.classList.contains('hidden');
+  if (isHidden) {
+    wrapper.classList.remove('hidden');
+    toggleText.innerText = 'ปิดโหมดพิมพ์หลายบรรทัด';
+    if (textarea) {
+      textarea.value = state.tempSites.join('\n');
+      textarea.focus();
+    }
+  } else {
+    wrapper.classList.add('hidden');
+    toggleText.innerText = 'โหมดพิมพ์หลายบรรทัด';
+  }
+}
+
+function applyBulkSites() {
+  const textarea = document.getElementById('bulkSitesTextarea');
+  if (!textarea) return;
+
+  const lines = textarea.value.split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+
+  const uniqueSites = [];
+  const lowerSet = new Set();
+  lines.forEach(item => {
+    const low = item.toLowerCase();
+    if (!lowerSet.has(low)) {
+      lowerSet.add(low);
+      uniqueSites.push(item);
+    }
+  });
+
+  state.tempSites = uniqueSites;
+  renderSitesListTable();
+  toggleBulkSitesMode();
+
+  Swal.fire({
+    toast: true,
+    position: 'top-end',
+    icon: 'success',
+    title: `นำเข้า ${uniqueSites.length} ไซต์งานเรียบร้อย (อย่าลืมกดบันทึก)`,
+    showConfirmButton: false,
+    timer: 2500
+  });
+}
+
+function saveSitesChanges() {
+  const btn = document.getElementById('btnSaveSites');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังบันทึก...';
+  }
+
+  showLoading(true);
+  google.script.run
+    .withSuccessHandler((res) => {
+      showLoading(false);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> บันทึกรายชื่อไซต์งาน';
+      }
+
+      if (res.success) {
+        state.sites = res.sites || state.tempSites;
+        if (res.siteTelegramChatIds) {
+          state.settings.siteTelegramChatIds = res.siteTelegramChatIds;
+          state.tempSiteChatIds = { ...res.siteTelegramChatIds };
+        }
+        renderSiteFilterOptions();
+        renderSiteFormOptions();
+        Swal.fire({
+          icon: 'success',
+          title: 'บันทึกสำเร็จ',
+          text: `บันทึกรายชื่อไซต์งานทั้งหมด ${state.sites.length} รายการ และการตั้งค่า Telegram กลุ่มเรียบร้อยแล้ว`
+        });
+      } else {
+        Swal.fire({ icon: 'error', title: 'บันทึกไม่สำเร็จ', text: res.message });
+      }
+    })
+    .withFailureHandler((err) => {
+      showLoading(false);
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-check mr-1"></i> บันทึกรายชื่อไซต์งาน';
+      }
+      Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+    })
+    .saveSitesList(state.tempSites, state.tempSiteChatIds || {});
+}
+
+/**
+ * =========================================================================
+ * ARCHIVE SYSTEM CONTROLLER (ระบบคลังจัดเก็บงานถาวร)
+ * =========================================================================
+ */
+
+function openArchiveModal() {
+  const modal = document.getElementById('archiveModal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+
+  // อัปเดตตัวเลือกไซต์งานใน Archive Modal
+  const siteSelect = document.getElementById('archiveSiteFilter');
+  if (siteSelect) {
+    let html = '<option value="ALL">🏢 ทุกไซต์งานทั้งหมด</option>';
+    const allSites = state.allSites || state.sites || [];
+    allSites.forEach(s => {
+      html += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+    });
+    siteSelect.innerHTML = html;
+  }
+
+  loadArchivedTasks();
+}
+
+function closeArchiveModal() {
+  const modal = document.getElementById('archiveModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function loadArchivedTasks() {
+  const tbody = document.getElementById('archiveTableBody');
+  const countBadge = document.getElementById('archiveTasksCount');
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-10 text-center text-[#6E6862]">
+          <div class="inline-block w-6 h-6 border-2 border-[#2491FA] border-t-transparent rounded-full animate-spin mb-2"></div>
+          <div>กำลังค้นหาและโหลดข้อมูลในคลัง...</div>
+        </td>
+      </tr>
+    `;
+  }
+
+  const query = (document.getElementById('archiveSearchInput')?.value || '').trim();
+  const site = document.getElementById('archiveSiteFilter')?.value || 'ALL';
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (!res || !res.success) {
+        if (tbody) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="7" class="py-8 text-center text-rose-600">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i> ${res ? res.message : 'เกิดข้อผิดพลาดในการโหลดคลังงาน'}
+              </td>
+            </tr>
+          `;
+        }
+        return;
+      }
+
+      state.archivedTasks = res.tasks || [];
+      if (countBadge) countBadge.innerText = res.totalCount || state.archivedTasks.length;
+      renderArchivedTasks(state.archivedTasks);
+    })
+    .withFailureHandler((err) => {
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="py-8 text-center text-rose-600">
+              <i class="fa-solid fa-triangle-exclamation mr-1"></i> ${err.message}
+            </td>
+          </tr>
+        `;
+      }
+    })
+    .getArchivedTasks({ query, site, limit: 300 });
+}
+
+function renderArchivedTasks(tasks) {
+  const tbody = document.getElementById('archiveTableBody');
+  if (!tbody) return;
+
+  if (!tasks || tasks.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="py-12 text-center text-[#6E6862]">
+          <i class="fa-solid fa-box-open text-3xl opacity-40 mb-2"></i>
+          <p class="font-medium">ไม่พบรายการงานในคลังที่ตรงกับเงื่อนไข</p>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = tasks.map(task => {
+    const siteStyle = getSiteColorStyle(task.site);
+    const hasAttachments = task.attachments && task.attachments.length > 0;
+
+    return `
+      <tr class="hover:bg-[#FAF8F2] transition-colors border-b border-[#EFE9DC]/60">
+        <td class="px-3.5 py-3 font-mono text-xs font-semibold text-[#6E6862] whitespace-nowrap">${escapeHtml(task.id)}</td>
+        <td class="px-3.5 py-3 whitespace-nowrap">
+          <span class="badge-site ${siteStyle.bg} ${siteStyle.text} border ${siteStyle.border}">
+            <i class="fa-solid fa-location-dot text-[9px]"></i>
+            ${escapeHtml(task.site)}
+          </span>
+        </td>
+        <td class="px-3.5 py-3 max-w-xs">
+          <div class="flex items-center gap-1.5 font-bold text-[#201E1C]">
+            <span>${escapeHtml(task.title)}</span>
+            ${hasAttachments ? `
+              <span class="inline-flex items-center gap-1 text-[10px] font-bold text-[#2491FA] bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/60" title="มีไฟล์แนบ ${task.attachments.length} ไฟล์">
+                <i class="fa-solid fa-paperclip text-[9px]"></i>
+                <span>${task.attachments.length}</span>
+              </span>
+            ` : ''}
+          </div>
+          ${task.description ? `<div class="text-[11px] text-[#6E6862] truncate mt-0.5">${escapeHtml(task.description)}</div>` : ''}
+        </td>
+        <td class="px-3.5 py-3 text-xs text-[#201E1C] whitespace-nowrap">
+          <div class="flex items-center gap-1">
+            <i class="fa-regular fa-user text-[#6E6862] text-[10px]"></i>
+            <span>${escapeHtml(task.assignee)}</span>
+          </div>
+          ${task.reporter ? `<div class="text-[10px] text-[#6E6862] mt-0.5 flex items-center gap-1"><i class="fa-solid fa-bullhorn text-[9px] text-[#2491FA]"></i> แจ้งโดย: ${escapeHtml(task.reporter)}</div>` : ''}
+          ${task.reportDate ? `<div class="text-[10px] text-[#6E6862] mt-0.5 flex items-center gap-1"><i class="fa-regular fa-calendar-plus text-[9px] text-[#2491FA]"></i> วันที่แจ้ง: ${formatDateDisplay(task.reportDate)}</div>` : ''}
+        </td>
+        <td class="px-3.5 py-3 text-xs text-[#6E6862] whitespace-nowrap">
+          ${formatDateDisplay(task.dueDate)}
+        </td>
+        <td class="px-3.5 py-3 text-xs text-[#6E6862] whitespace-nowrap font-mono text-[11px]">
+          ${escapeHtml(task.archivedAt || '-')}
+        </td>
+        <td class="px-3.5 py-3 text-right whitespace-nowrap">
+          <div class="flex items-center justify-end gap-1.5">
+            <button onclick="openViewArchivedTaskModal('${task.id}')"
+                    title="ดูรายละเอียดและไฟล์แนบ"
+                    class="px-2 py-1 text-xs font-medium text-[#2491FA] hover:bg-blue-50 rounded-lg transition-colors flex items-center gap-1 cursor-pointer">
+              <i class="fa-regular fa-eye"></i>
+              <span>ดู</span>
+            </button>
+            <button onclick="handleRestoreArchivedTask('${task.id}', '${escapeJs(task.title)}')"
+                    title="กู้คืนงานกลับสู่ระบบหลัก"
+                    class="px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors flex items-center gap-1 cursor-pointer">
+              <i class="fa-solid fa-rotate-left"></i>
+              <span>กู้คืน</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function openViewArchivedTaskModal(taskId) {
+  const task = state.archivedTasks.find(t => t.id === taskId);
+  if (!task) return;
+
+  const modal = document.getElementById('viewArchivedTaskModal');
+  if (!modal) return;
+
+  document.getElementById('viewArchivedTaskId').innerText = task.id;
+  document.getElementById('viewArchivedTaskTitle').innerText = task.title;
+  document.getElementById('viewArchivedTaskDesc').innerText = task.description || '(ไม่มีรายละเอียดเพิ่มเติม)';
+  document.getElementById('viewArchivedTaskSite').innerText = task.site;
+  document.getElementById('viewArchivedTaskAssignee').innerHTML = `<i class="fa-regular fa-user mr-1"></i> ${escapeHtml(task.assignee)}`;
+
+  const reporterBadge = document.getElementById('viewArchivedTaskReporter');
+  if (reporterBadge) {
+    if (task.reporter) {
+      reporterBadge.innerHTML = `<i class="fa-solid fa-bullhorn mr-1 text-[#2491FA]"></i> ผู้แจ้ง: ${escapeHtml(task.reporter)}`;
+      reporterBadge.classList.remove('hidden');
+    } else {
+      reporterBadge.classList.add('hidden');
+    }
+  }
+
+  const prioBadge = document.getElementById('viewArchivedTaskPriority');
+  prioBadge.className = `text-xs font-semibold px-2 py-0.5 rounded-full ${getPriorityBadgeStyle(task.priority)}`;
+  prioBadge.innerText = task.priority;
+
+  const reportDateEl = document.getElementById('viewArchivedTaskReportDate');
+  if (reportDateEl) {
+    reportDateEl.innerText = formatDateDisplay(task.reportDate) || '-';
+  }
+  document.getElementById('viewArchivedTaskDueDate').innerText = formatDateDisplay(task.dueDate);
+  document.getElementById('viewArchivedTaskCreatedAt').innerText = task.createdAt || '-';
+  document.getElementById('viewArchivedTaskArchivedAt').innerText = task.archivedAt || '-';
+
+  // Render attachments
+  const attachList = document.getElementById('viewArchivedAttachmentsList');
+  const attachCount = document.getElementById('viewArchivedAttachmentsCount');
+  const attachments = task.attachments || [];
+  attachCount.innerText = attachments.length;
+
+  if (attachments.length === 0) {
+    attachList.innerHTML = `<div class="text-xs text-[#6E6862] italic py-1">ไม่มีไฟล์แนบในงานนี้</div>`;
+  } else {
+    attachList.innerHTML = attachments.map(att => `
+      <div class="flex items-center justify-between p-2 rounded-xl bg-white border border-[#EFE9DC]">
+        <div class="flex items-center gap-2 min-w-0 pr-2">
+          <i class="fa-solid fa-file-lines text-[#2491FA]"></i>
+          <span class="text-xs font-medium text-[#201E1C] truncate">${escapeHtml(att.name || 'ไฟล์แนบ')}</span>
+          ${att.size ? `<span class="text-[10px] text-[#6E6862]">(${formatFileSize(att.size)})</span>` : ''}
+        </div>
+        ${att.url ? `
+          <a href="${att.url}" target="_blank"
+             class="px-2.5 py-1 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-lg transition-colors flex items-center gap-1 shadow-2xs whitespace-nowrap">
+            <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+            <span>เปิดไฟล์</span>
+          </a>
+        ` : ''}
+      </div>
+    `).join('');
+  }
+
+  // Restore button in modal
+  const btnRestore = document.getElementById('btnRestoreFromViewModal');
+  if (btnRestore) {
+    btnRestore.onclick = () => {
+      handleRestoreArchivedTask(task.id, task.title);
+    };
+  }
+
+  modal.classList.remove('hidden');
+}
+
+function closeViewArchivedTaskModal() {
+  const modal = document.getElementById('viewArchivedTaskModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function handleArchiveCompletedPrompt() {
+  const doneTasks = state.tasks.filter(t => t.status === 'เสร็จสิ้น');
+  if (doneTasks.length === 0) {
+    Swal.fire({
+      icon: 'info',
+      title: 'ไม่พบงานที่เสร็จสิ้น',
+      text: 'ไม่มีงานสถานะ "เสร็จสิ้น" บนกระดานที่ต้องจัดเก็บในขณะนี้',
+      confirmButtonColor: '#2491FA'
+    });
+    return;
+  }
+
+  Swal.fire({
+    title: '📦 จัดเก็บงานเสร็จสิ้นเข้าคลัง',
+    html: `
+      <p class="text-sm text-[#6E6862] mb-3">พบงานที่เสร็จสิ้นบนกระดานทั้งหมด <b>${doneTasks.length}</b> รายการ กรุณาเลือกเงื่อนไขในการจัดเก็บเข้าคลังถาวร:</p>
+      <div class="text-left space-y-2 text-xs bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC]">
+        <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer">
+          <input type="radio" name="archiveOption" value="ALL" checked class="text-[#2491FA] focus:ring-0">
+          <div>
+            <div class="font-bold text-[#201E1C]">จัดเก็บงานเสร็จสิ้นทั้งหมด (${doneTasks.length} รายการ)</div>
+            <div class="text-[#6E6862] text-[11px]">ย้ายงานเสร็จสิ้นทั้งหมดเข้าคลังถาวรทันที</div>
+          </div>
+        </label>
+        <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer">
+          <input type="radio" name="archiveOption" value="7" class="text-[#2491FA] focus:ring-0">
+          <div>
+            <div class="font-bold text-[#201E1C]">เฉพาะงานที่เสร็จสิ้นเกิน 7 วัน</div>
+            <div class="text-[#6E6862] text-[11px]">คงเหลืองานที่เพิ่งเสร็จใน 7 วันล่าสุดไว้บนกระดาน</div>
+          </div>
+        </label>
+        <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer">
+          <input type="radio" name="archiveOption" value="30" class="text-[#2491FA] focus:ring-0">
+          <div>
+            <div class="font-bold text-[#201E1C]">เฉพาะงานที่เสร็จสิ้นเกิน 30 วัน</div>
+            <div class="text-[#6E6862] text-[11px]">จัดเก็บเฉพาะงานเก่าที่จบไปแล้วเกิน 1 เดือน</div>
+          </div>
+        </label>
+      </div>
+      <p class="text-[11px] text-emerald-700 mt-2"><i class="fa-solid fa-circle-info mr-1"></i> ข้อมูลและไฟล์แนบจะไม่สูญหาย และสามารถค้นหาหรือกู้คืนได้ตลอดเวลา</p>
+    `,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'ยืนยันการจัดเก็บ',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#d97706',
+    cancelButtonColor: '#6E6862'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      const selected = document.querySelector('input[name="archiveOption"]:checked');
+      const val = selected ? selected.value : 'ALL';
+
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          showLoading(false);
+          if (!res || !res.success) {
+            Swal.fire({
+              icon: 'error',
+              title: 'จัดเก็บไม่สำเร็จ',
+              text: res ? res.message : 'เกิดข้อผิดพลาดในการติดต่อเซิร์ฟเวอร์'
+            });
+            return;
+          }
+
+          Swal.fire({
+            icon: 'success',
+            title: 'จัดเก็บเข้าคลังสำเร็จ!',
+            text: `ได้ย้ายงานที่เสร็จสิ้นจำนวน ${res.archivedCount} รายการเข้าสู่คลังถาวรเรียบร้อยแล้ว`,
+            confirmButtonColor: '#2491FA'
+          });
+
+          loadInitialData();
+        })
+        .withFailureHandler((err) => {
+          showLoading(false);
+          Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+        })
+        .archiveCompletedTasks(val);
+    }
+  });
+}
+
+function handleArchiveSingleTask(taskId, taskTitle) {
+  Swal.fire({
+    title: '📦 จัดเก็บงานนี้เข้าคลัง?',
+    text: `ต้องการย้ายงาน "${taskTitle || taskId}" เข้าสู่คลังงานถาวรหรือไม่?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'จัดเก็บเข้าคลัง',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#d97706',
+    cancelButtonColor: '#6E6862'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          showLoading(false);
+          if (!res || !res.success) {
+            Swal.fire({ icon: 'error', title: 'จัดเก็บไม่สำเร็จ', text: res.message });
+            return;
+          }
+
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `จัดเก็บงาน ${taskId} เข้าคลังแล้ว`,
+            showConfirmButton: false,
+            timer: 2000
+          });
+
+          loadInitialData();
+        })
+        .withFailureHandler((err) => {
+          showLoading(false);
+          Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+        })
+        .archiveSingleTask(taskId);
+    }
+  });
+}
+
+function handleRestoreArchivedTask(taskId, taskTitle) {
+  Swal.fire({
+    title: '↩️ กู้คืนงานกลับสู่ระบบหลัก?',
+    text: `ต้องการกู้คืนงาน "${taskTitle || taskId}" กลับมายังกระดานหลักหรือไม่?`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: 'กู้คืนงาน',
+    cancelButtonText: 'ยกเลิก',
+    confirmButtonColor: '#2491FA',
+    cancelButtonColor: '#6E6862'
+  }).then((result) => {
+    if (result.isConfirmed) {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler((res) => {
+          showLoading(false);
+          if (!res || !res.success) {
+            Swal.fire({ icon: 'error', title: 'กู้คืนไม่สำเร็จ', text: res.message });
+            return;
+          }
+
+          closeViewArchivedTaskModal();
+
+          Swal.fire({
+            toast: true,
+            position: 'top-end',
+            icon: 'success',
+            title: `กู้คืนงาน ${taskId} สำเร็จแล้ว`,
+            showConfirmButton: false,
+            timer: 2500
+          });
+
+          loadInitialData();
+          loadArchivedTasks();
+        })
+        .withFailureHandler((err) => {
+          showLoading(false);
+          Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
+        })
+        .restoreArchivedTask(taskId);
+    }
+  });
+}
+</script>

@@ -1,0 +1,185 @@
+<style>
+  /* ฟอนต์ภาษาไทย Prompt & Clubhouse Color Variables */
+  :root {
+    --ch-bg: #FFFFFF;
+    --ch-card: #F7F4EA;
+    --ch-card-subtle: #EDE7DA;
+    --ch-border: #EFE9DC;
+    --ch-col-bg: #FAF8F2;
+    --ch-text-main: #201E1C;
+    --ch-text-muted: #6E6862;
+    --ch-blue: #2491FA;
+    --ch-blue-hover: #1A7CE0;
+  }
+
+  body {
+    font-family: 'Prompt', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--ch-bg);
+    color: var(--ch-text-main);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ปรับแต่ง Scrollbar สไตล์เรียบหรู คลีน */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #EDE7DA;
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #D9D1C3;
+  }
+
+  /* Kanban Column Styles */
+  .kanban-col {
+    min-height: calc(100vh - 280px);
+    transition: background-color 0.2s ease;
+  }
+  .kanban-col.drag-over {
+    background-color: #EDE7DA !important;
+    border: 2px dashed var(--ch-blue) !important;
+  }
+
+  /* Task Card Hover & Animation (Clubhouse Soft Cream) */
+  .task-card {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: grab;
+    background-color: var(--ch-card);
+    border: 1px solid var(--ch-border);
+    border-radius: 1rem;
+  }
+  .task-card:active {
+    cursor: grabbing;
+  }
+  .task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px -3px rgba(32, 30, 28, 0.08), 0 4px 6px -2px rgba(32, 30, 28, 0.04);
+  }
+  .task-card.dragging {
+    opacity: 0.4;
+    transform: scale(0.98);
+  }
+
+  /* Real-time Card Bounce & Highlight Animation */
+  @keyframes taskCardBounce {
+    0% { transform: scale(0.92) translateY(-8px); opacity: 0.6; }
+    50% { transform: scale(1.04) translateY(2px); }
+    70% { transform: scale(0.98); }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  .task-card-bounce {
+    animation: taskCardBounce 0.65s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 0 0 3px rgba(36, 145, 250, 0.55), 0 12px 24px -4px rgba(36, 145, 250, 0.25) !important;
+    background-color: #F0F7FF !important;
+  }
+
+  /* Site Badges with dynamic vibrant colors */
+  .badge-site {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 9999px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  /* Priority Indicator Badges */
+  .priority-urgent {
+    background-color: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fca5a5;
+  }
+  .priority-high {
+    background-color: #ffedd5;
+    color: #c2410c;
+    border: 1px solid #fdba74;
+  }
+  .priority-medium {
+    background-color: #fef9c3;
+    color: #a16207;
+    border: 1px solid #fde047;
+  }
+  .priority-normal {
+    background-color: #EDE7DA;
+    color: #5C554E;
+    border: 1px solid #E2DACB;
+  }
+
+  /* Modal Backdrop Animation */
+  .modal-backdrop {
+    backdrop-filter: blur(4px);
+    background-color: rgba(32, 30, 28, 0.5);
+    transition: opacity 0.25s ease;
+  }
+
+  /* Pulse animation for Overdue tasks */
+  @keyframes subtlePulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.75; }
+  }
+  .overdue-alert {
+    animation: subtlePulse 2s infinite ease-in-out;
+  }
+
+  /* 6-Digit PIN Inputs */
+  .pin-digit {
+    width: 2.75rem;
+    height: 3.5rem;
+    text-align: center;
+    font-size: 1.5rem;
+    font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    border-radius: 0.75rem;
+    border: 2px solid var(--ch-border);
+    background-color: var(--ch-col-bg);
+    transition: all 0.15s ease;
+    color: var(--ch-text-main);
+  }
+  .pin-digit:focus {
+    border-color: var(--ch-blue);
+    background-color: #ffffff;
+    box-shadow: 0 0 0 3px rgba(36, 145, 250, 0.2);
+    outline: none;
+    transform: scale(1.05);
+  }
+
+  /* Flatpickr Custom Theme (Clubhouse & Prompt font) */
+  .flatpickr-calendar {
+    font-family: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    border-radius: 1.25rem !important;
+    box-shadow: 0 20px 25px -5px rgba(32, 30, 28, 0.15), 0 10px 10px -5px rgba(32, 30, 28, 0.08) !important;
+    border: 1px solid #EFE9DC !important;
+    background: #FFFFFF !important;
+    z-index: 99999 !important;
+  }
+  .flatpickr-calendar .flatpickr-day.selected,
+  .flatpickr-calendar .flatpickr-day.startRange,
+  .flatpickr-calendar .flatpickr-day.endRange {
+    background: #2491FA !important;
+    border-color: #2491FA !important;
+    font-weight: 700 !important;
+    border-radius: 0.75rem !important;
+  }
+  .flatpickr-calendar .flatpickr-day:hover {
+    background: #EFF6FF !important;
+    border-radius: 0.75rem !important;
+  }
+  .flatpickr-calendar .flatpickr-day.today {
+    border-color: #2491FA !important;
+    border-radius: 0.75rem !important;
+  }
+  .flatpickr-months .flatpickr-month {
+    background: #FAF8F2 !important;
+    border-top-left-radius: 1.25rem;
+    border-top-right-radius: 1.25rem;
+  }
+  .flatpickr-current-month .flatpickr-monthDropdown-months {
+    font-weight: 700 !important;
+  }
+</style>
