@@ -3,6 +3,10 @@
 
 เว็บแอปพลิเคชันสำหรับบริหารจัดการและติดตามสถานะงานแยกตามไซต์งาน ออกแบบให้ทีมงานทุกคนสามารถเข้าถึง ดูภาพรวม และอัปเดตสถานะงานร่วมกันได้อย่างสะดวกรวดเร็ว ทั้งบนคอมพิวเตอร์ แท็บเล็ต และสมาร์ตโฟน
 
+- 🌐 **GitHub Pages (Frontend):** [https://clangu89.github.io/work-tracker/](https://clangu89.github.io/work-tracker/)
+- ☁️ **Google Apps Script Web App (Backend API):** [https://script.google.com/macros/s/AKfycbyox_uV2XJjgn96jK-XMKlr4vgucWG9FD1WqJR6Rhvu-L82El1nNhq7LyNvtwEBSjlrkg/exec](https://script.google.com/macros/s/AKfycbyox_uV2XJjgn96jK-XMKlr4vgucWG9FD1WqJR6Rhvu-L82El1nNhq7LyNvtwEBSjlrkg/exec)
+- 🐙 **GitHub Repository:** [https://github.com/clangu89/work-tracker](https://github.com/clangu89/work-tracker)
+
 ---
 
 ## 🌟 ฟีเจอร์เด่นของระบบ
