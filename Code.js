@@ -214,7 +214,8 @@ function setupDatabase() {
       'Attachments',
       'FolderId',
       'Reporter',
-      'ReportDate'
+      'ReportDate',
+      'Checklist'
     ];
 
     // กำหนดหัวตาราง
@@ -250,7 +251,12 @@ function setupDatabase() {
         '[]',
         '',
         'สมชาย ช่างไฟ',
-        todayDate
+        todayDate,
+        JSON.stringify([
+          { id: 'chk_sample_1', text: 'ตรวจเช็กความร้อนตู้ MDB', done: true },
+          { id: 'chk_sample_2', text: 'วัดแรงดันไฟ 3 เฟส', done: false },
+          { id: 'chk_sample_3', text: 'ส่งใบรายงานผลการตรวจ', done: false }
+        ])
       ],
       [
         'TSK-1002',
@@ -266,7 +272,8 @@ function setupDatabase() {
         '[]',
         '',
         'วิชัย โฟร์แมน',
-        todayDate
+        todayDate,
+        '[]'
       ],
       [
         'TSK-1003',
@@ -282,7 +289,8 @@ function setupDatabase() {
         '[]',
         '',
         'กิตติ วิศวกร',
-        todayDate
+        todayDate,
+        '[]'
       ]
     ];
 
@@ -293,7 +301,7 @@ function setupDatabase() {
       taskSheet.autoResizeColumn(c);
     }
   } else {
-    // หากตารางมีอยู่แล้วแต่ยังไม่มีคอลัมน์ Attachments, FolderId, Reporter หรือ ReportDate ให้เพิ่มหัวตาราง
+    // หากตารางมีอยู่แล้วแต่ยังไม่มีคอลัมน์ Attachments, FolderId, Reporter, ReportDate หรือ Checklist ให้เพิ่มหัวตาราง
     const lastCol = taskSheet.getLastColumn();
     if (lastCol < 11) {
       taskSheet.getRange(1, 11).setValue('Attachments');
@@ -318,6 +326,15 @@ function setupDatabase() {
                .setHorizontalAlignment('center')
                .setVerticalAlignment('middle');
       taskSheet.autoResizeColumn(14);
+    }
+    if (lastCol < 15) {
+      taskSheet.getRange(1, 15).setValue('Checklist')
+               .setBackground('#1e293b')
+               .setFontColor('#ffffff')
+               .setFontWeight('bold')
+               .setHorizontalAlignment('center')
+               .setVerticalAlignment('middle');
+      taskSheet.autoResizeColumn(15);
     }
   }
 
@@ -662,6 +679,14 @@ function getInitialData(requestUsername) {
         reportDateFormatted = normalizeDateToIso_(row[8]);
       }
 
+      let checklist = [];
+      if (row[14]) {
+        try {
+          const parsed = JSON.parse(row[14]);
+          if (Array.isArray(parsed)) checklist = parsed;
+        } catch (e) {}
+      }
+
       tasks.push({
         id: String(row[0]),
         site: taskSite,
@@ -676,7 +701,8 @@ function getInitialData(requestUsername) {
         attachments: attachments,
         folderId: row[11] ? String(row[11]) : '',
         reporter: String(row[12] || ''),
-        reportDate: reportDateFormatted
+        reportDate: reportDateFormatted,
+        checklist: checklist
       });
     }
 
@@ -913,6 +939,8 @@ function saveTask(taskData) {
       }
       finalTaskId = 'TSK-' + (maxNum + 1);
 
+      const checklistJson = JSON.stringify(Array.isArray(taskData.checklist) ? taskData.checklist : []);
+
       const newRow = [
         finalTaskId,
         taskData.site || 'ไม่ระบุไซต์งาน',
@@ -927,7 +955,8 @@ function saveTask(taskData) {
         '[]',
         '',
         taskData.reporter || '',
-        normalizedReportDate
+        normalizedReportDate,
+        checklistJson
       ];
 
       sheet.appendRow(newRow);
@@ -949,6 +978,9 @@ function saveTask(taskData) {
       }
       if (taskData.reportDate !== undefined) {
         sheet.getRange(rowIndex, 14).setValue(normalizedReportDate);
+      }
+      if (taskData.checklist !== undefined) {
+        sheet.getRange(rowIndex, 15).setValue(JSON.stringify(Array.isArray(taskData.checklist) ? taskData.checklist : []));
       }
       SpreadsheetApp.flush();
 
@@ -986,7 +1018,8 @@ function saveTask(taskData) {
       dueDate: normalizedDueDate,
       updatedAt: nowStr,
       attachments: currentAttachments,
-      folderId: currentFolderId
+      folderId: currentFolderId,
+      checklist: Array.isArray(taskData.checklist) ? taskData.checklist : []
     };
 
     // ส่งการแจ้งเตือน Telegram
@@ -1171,6 +1204,7 @@ function getArchiveSheet_(ss) {
       'FolderId',
       'Reporter',
       'ReportDate',
+      'Checklist',
       'ArchivedAt'
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1186,7 +1220,7 @@ function getArchiveSheet_(ss) {
       sheet.autoResizeColumn(c);
     }
   } else {
-    // หากตาราง Archive เดิมยังไม่มีคอลัมน์ Reporter หรือ ReportDate ให้เพิ่ม
+    // หากตาราง Archive เดิมยังไม่มีคอลัมน์ Reporter, ReportDate หรือ Checklist ให้เพิ่ม
     let lastCol = sheet.getLastColumn();
     let currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     if (!currentHeaders.includes('Reporter')) {
@@ -1208,6 +1242,20 @@ function getArchiveSheet_(ss) {
       const insertAt = archivedAtCol > 0 ? archivedAtCol : lastCol;
       sheet.insertColumnBefore(insertAt);
       sheet.getRange(1, insertAt).setValue('ReportDate')
+           .setBackground('#334155')
+           .setFontColor('#ffffff')
+           .setFontWeight('bold')
+           .setHorizontalAlignment('center')
+           .setVerticalAlignment('middle');
+      sheet.autoResizeColumn(insertAt);
+    }
+    lastCol = sheet.getLastColumn();
+    currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    if (!currentHeaders.includes('Checklist')) {
+      const archivedAtCol = currentHeaders.indexOf('ArchivedAt') + 1;
+      const insertAt = archivedAtCol > 0 ? archivedAtCol : lastCol;
+      sheet.insertColumnBefore(insertAt);
+      sheet.getRange(1, insertAt).setValue('Checklist')
            .setBackground('#334155')
            .setFontColor('#ffffff')
            .setFontWeight('bold')
@@ -1267,11 +1315,12 @@ function archiveCompletedTasks(daysThreshold) {
         }
 
         if (shouldArchive) {
-          // แถวที่จะย้ายไป Archive: 14 คอลัมน์เดิม + ArchivedAt = 15 คอลัมน์
+          // แถวที่จะย้ายไป Archive: 15 คอลัมน์เดิม + ArchivedAt = 16 คอลัมน์
           const archiveRow = [
             row[0], row[1], row[2], row[3], row[4],
             row[5], row[6], row[7], row[8], row[9],
-            row[10], row[11], row[12] || '', row[13] || '', archivedAtStr
+            row[10], row[11], row[12] || '', row[13] || '',
+            row[14] || '[]', archivedAtStr
           ];
           rowsToArchive.push(archiveRow);
           rowIndicesToDelete.push(i + 1); // 1-based index
@@ -1285,7 +1334,7 @@ function archiveCompletedTasks(daysThreshold) {
 
     // เขียนลงในแผ่นงาน Tasks_Archive (กลับลำดับเพื่อให้เรียงจากเก่าไปใหม่ตามปกติ)
     rowsToArchive.reverse();
-    archiveSheet.getRange(archiveSheet.getLastRow() + 1, 1, rowsToArchive.length, 15).setValues(rowsToArchive);
+    archiveSheet.getRange(archiveSheet.getLastRow() + 1, 1, rowsToArchive.length, 16).setValues(rowsToArchive);
 
     // ลบแถวออกจาก Tasks
     for (let r = 0; r < rowIndicesToDelete.length; r++) {
@@ -1334,7 +1383,8 @@ function archiveSingleTask(taskId) {
     const archiveRow = [
       targetRow[0], targetRow[1], targetRow[2], targetRow[3], targetRow[4],
       targetRow[5], targetRow[6], targetRow[7], targetRow[8], targetRow[9],
-      targetRow[10], targetRow[11], targetRow[12] || '', targetRow[13] || '', archivedAtStr
+      targetRow[10], targetRow[11], targetRow[12] || '', targetRow[13] || '',
+      targetRow[14] || '[]', archivedAtStr
     ];
 
     archiveSheet.appendRow(archiveRow);
@@ -1391,8 +1441,21 @@ function getArchivedTasks(params) {
 
       let taskReporter = '';
       let taskReportDate = '';
+      let taskChecklist = [];
       let archivedAtStr = '';
-      if (row.length >= 15) {
+      if (row.length >= 16) {
+        taskReporter = String(row[12] || '');
+        if (row[13]) {
+          taskReportDate = normalizeDateToIso_(row[13]);
+        }
+        if (row[14]) {
+          try {
+            const p = JSON.parse(row[14]);
+            if (Array.isArray(p)) taskChecklist = p;
+          } catch (e) {}
+        }
+        archivedAtStr = row[15] ? String(row[15]) : '';
+      } else if (row.length === 15) {
         taskReporter = String(row[12] || '');
         if (row[13]) {
           taskReportDate = normalizeDateToIso_(row[13]);
@@ -1446,6 +1509,7 @@ function getArchivedTasks(params) {
         updatedAt: row[9] ? String(row[9]) : '',
         attachments: attachments,
         folderId: row[11] ? String(row[11]) : '',
+        checklist: taskChecklist,
         archivedAt: archivedAtStr
       });
     }
@@ -1487,16 +1551,18 @@ function restoreArchivedTask(taskId) {
       return { success: false, message: 'ไม่พบงานในคลัง ' + taskId };
     }
 
-    // แถวสำหรับชีต Tasks (14 คอลัมน์ ตัด ArchivedAt ออก)
+    // แถวสำหรับชีต Tasks (15 คอลัมน์ ตัด ArchivedAt ออก)
     const taskReporter = (targetRow.length >= 14) ? String(targetRow[12] || '') : '';
     let taskReportDate = '';
     if (targetRow.length >= 15 && targetRow[13]) {
       taskReportDate = normalizeDateToIso_(targetRow[13]);
     }
+    const taskChecklistJson = (targetRow.length >= 16 && targetRow[14]) ? String(targetRow[14]) : '[]';
+
     const taskRow = [
       targetRow[0], targetRow[1], targetRow[2], targetRow[3], targetRow[4],
       targetRow[5], targetRow[6], targetRow[7], targetRow[8], targetRow[9],
-      targetRow[10], targetRow[11], taskReporter, taskReportDate
+      targetRow[10], targetRow[11], taskReporter, taskReportDate, taskChecklistJson
     ];
 
     taskSheet.appendRow(taskRow);
@@ -1516,6 +1582,11 @@ function restoreArchivedTask(taskId) {
       dueDateFormatted = normalizeDateToIso_(targetRow[7]);
     }
 
+    let restoredChecklist = [];
+    try {
+      restoredChecklist = JSON.parse(taskChecklistJson) || [];
+    } catch (e) {}
+
     const restoredTask = {
       id: String(targetRow[0]),
       site: String(targetRow[1] || 'ไม่ระบุไซต์งาน').trim(),
@@ -1530,7 +1601,8 @@ function restoreArchivedTask(taskId) {
       createdAt: targetRow[8] ? String(targetRow[8]) : '',
       updatedAt: targetRow[9] ? String(targetRow[9]) : '',
       attachments: attachments,
-      folderId: targetRow[11] ? String(targetRow[11]) : ''
+      folderId: targetRow[11] ? String(targetRow[11]) : '',
+      checklist: restoredChecklist
     };
 
     notifyDataChanged_({
@@ -1558,6 +1630,14 @@ function buildTelegramMessage_(type, task, oldStatus) {
 
   const priorityLabel = priorityIcons[task.priority] || task.priority;
 
+  let checklistInfo = '';
+  if (Array.isArray(task.checklist) && task.checklist.length > 0) {
+    const total = task.checklist.length;
+    const done = task.checklist.filter(c => c.done).length;
+    const totalFormatted = String(total).padStart(2, '0');
+    checklistInfo = `☑️ <b>รายการย่อย:</b> เสร็จแล้ว ${done}/${totalFormatted} ข้อ\n`;
+  }
+
   if (type === 'CREATE') {
     return (
       `📌 <b>มีงานใหม่เพิ่มเข้ามาในระบบ</b>\n` +
@@ -1569,6 +1649,7 @@ function buildTelegramMessage_(type, task, oldStatus) {
       `👤 <b>ผู้รับผิดชอบ:</b> ${escapeHtml_(task.assignee)}\n` +
       `🎯 <b>ความสำคัญ:</b> ${priorityLabel}\n` +
       `📅 <b>กำหนดส่ง:</b> ${task.dueDate || 'ไม่ระบุ'}\n` +
+      checklistInfo +
       (task.description ? `📝 <b>รายละเอียด:</b> ${escapeHtml_(task.description)}\n` : '') +
       `🆔 <code>${task.id}</code>`
     );
@@ -1582,6 +1663,7 @@ function buildTelegramMessage_(type, task, oldStatus) {
       (task.reportDate ? `🗓️ <b>วันที่แจ้ง:</b> ${task.reportDate}\n` : '') +
       `👤 <b>ผู้รับผิดชอบ:</b> ${escapeHtml_(task.assignee)}\n` +
       `📊 <b>สถานะ:</b> ${oldStatus || 'เดิม'} ➡️ <b>${task.status}</b>\n` +
+      checklistInfo +
       `🆔 <code>${task.id}</code>`
     );
   }

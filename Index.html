@@ -612,6 +612,49 @@
                           class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C]"></textarea>
               </div>
 
+              <!-- รายการงานย่อยที่ต้องทำ (Checklist / To-Do items) -->
+              <div class="space-y-2 pt-2 border-t border-[#EFE9DC]">
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-bold text-[#201E1C] flex items-center gap-1.5">
+                    <i class="fa-solid fa-list-check text-[#2491FA]"></i>
+                    <span>รายการงานที่ต้องทำ (Checklist)</span>
+                  </label>
+                  <div class="flex items-center gap-1.5">
+                    <span id="taskChecklistProgressBadge" class="text-[11px] font-bold text-[#6E6862] bg-[#FAF8F2] px-2 py-0.5 rounded-full border border-[#EFE9DC]">
+                      0/00
+                    </span>
+                  </div>
+                </div>
+
+                <!-- Input เพิ่มรายการงานย่อยใหม่ -->
+                <div class="flex items-center gap-1.5">
+                  <div class="relative flex-1">
+                    <input type="text" id="newChecklistItemInput"
+                           placeholder="พิมพ์งานที่ต้องทำ แล้วกด Enter หรือคลิกเพิ่ม..."
+                           onkeydown="handleChecklistInputKeyDown(event)"
+                           class="w-full pl-8 pr-3 py-1.5 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] placeholder-[#9E9890]">
+                    <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#9E9890]">
+                      <i class="fa-solid fa-plus text-xs"></i>
+                    </div>
+                  </div>
+                  <button type="button" onclick="handleAddChecklistFromInput()"
+                          class="px-3 py-1.5 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl transition-all shadow-2xs flex items-center gap-1 cursor-pointer shrink-0">
+                    <i class="fa-solid fa-plus text-xs"></i>
+                    <span>เพิ่ม</span>
+                  </button>
+                </div>
+
+                <!-- Progress Bar เส้นเล็กสำหรับ Checklist -->
+                <div id="taskChecklistProgressBarContainer" class="hidden w-full bg-[#EDE7DA] rounded-full h-1.5 overflow-hidden">
+                  <div id="taskChecklistProgressBar" class="bg-[#2491FA] h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+
+                <!-- รายการ Checklist Container (Scrollable) -->
+                <div id="taskChecklistContainer" class="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+                  <!-- Rendered dynamically via JS -->
+                </div>
+              </div>
+
               <!-- เอกสารและไฟล์แนบที่เกี่ยวข้อง (ไม่จำกัดจำนวนและประเภทไฟล์) -->
               <div class="space-y-2 pt-2 border-t border-[#EFE9DC]">
                 <div class="flex items-center justify-between">
@@ -1298,6 +1341,22 @@
           <div class="bg-white p-3.5 rounded-2xl border border-[#EFE9DC]">
             <div class="text-xs font-semibold text-[#6E6862] mb-1">รายละเอียดงาน:</div>
             <div id="viewArchivedTaskDesc" class="text-xs text-[#201E1C] whitespace-pre-wrap leading-relaxed"></div>
+          </div>
+
+          <!-- Archived Task Checklist (Read-Only) -->
+          <div id="viewArchivedChecklistSection" class="hidden">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-semibold text-[#6E6862] flex items-center gap-1.5">
+                <i class="fa-solid fa-list-check text-[#2491FA]"></i>
+                <span>รายการงานย่อย</span>
+              </span>
+              <span id="viewArchivedChecklistBadge" class="text-[11px] font-bold text-[#6E6862] bg-white px-2 py-0.5 rounded-full border border-[#EFE9DC]">
+                0/00
+              </span>
+            </div>
+            <div id="viewArchivedChecklistList" class="space-y-1 bg-white p-2.5 rounded-2xl border border-[#EFE9DC] max-h-40 overflow-y-auto">
+              <!-- Rendered dynamically -->
+            </div>
           </div>
 
           <!-- Attachments List -->

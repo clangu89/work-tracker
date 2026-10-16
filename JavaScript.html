@@ -26,6 +26,7 @@ const state = {
   lastOwnTaskId: null,
   taskFileQueue: [],
   currentEditingAttachments: [],
+  currentEditingChecklist: [],
   sheetUrl: '',
   webAppUrl: '',
   filters: {
@@ -486,25 +487,57 @@ function renderTaskCardHtml(task) {
         </span>
       </div>
 
-      <!-- Task Title & Attachments Badge -->
+      <!-- Task Title & Badges -->
       <div class="flex items-start justify-between gap-1.5 mb-1.5">
         <h4 class="font-bold text-[#201E1C] text-sm leading-snug group-hover:text-[#2491FA] transition-colors">
           ${escapeHtml(task.title)}
         </h4>
-        ${task.attachments && task.attachments.length > 0 ? `
-          <span class="inline-flex items-center gap-1 text-[10px] font-bold text-[#2491FA] bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-200/60 flex-shrink-0" title="มีไฟล์แนบ ${task.attachments.length} ไฟล์">
-            <i class="fa-solid fa-paperclip text-[9px]"></i>
-            <span>${task.attachments.length}</span>
-          </span>
-        ` : ''}
+        <div class="flex items-center gap-1 shrink-0">
+          ${task.checklist && task.checklist.length > 0 ? (() => {
+            const clStats = getChecklistStats(task.checklist);
+            return `
+              <span class="inline-flex items-center gap-1 text-[10px] font-bold ${clStats.isAllDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-[#6E6862] bg-[#FAF8F2] border-[#EFE9DC]'} px-1.5 py-0.5 rounded-md border" title="รายการย่อยที่เสร็จ: ${clStats.text}">
+                <i class="fa-solid fa-list-check text-[9px] ${clStats.isAllDone ? 'text-emerald-600' : 'text-[#2491FA]'}"></i>
+                <span>${clStats.text}</span>
+              </span>
+            `;
+          })() : ''}
+          ${task.attachments && task.attachments.length > 0 ? `
+            <span class="inline-flex items-center gap-1 text-[10px] font-bold text-[#2491FA] bg-blue-50 px-1.5 py-0.5 rounded-md border border-blue-200/60 flex-shrink-0" title="มีไฟล์แนบ ${task.attachments.length} ไฟล์">
+              <i class="fa-solid fa-paperclip text-[9px]"></i>
+              <span>${task.attachments.length}</span>
+            </span>
+          ` : ''}
+        </div>
       </div>
 
       <!-- Task Description (ถ้ามี) -->
       ${task.description ? `
-        <p class="text-xs text-[#6E6862] mb-3 line-clamp-2 leading-relaxed">
+        <p class="text-xs text-[#6E6862] mb-2.5 line-clamp-2 leading-relaxed">
           ${escapeHtml(task.description)}
         </p>
       ` : ''}
+
+      <!-- Subtasks Checklist Progress Bar (ถ้ามี) -->
+      ${task.checklist && task.checklist.length > 0 ? (() => {
+        const clStats = getChecklistStats(task.checklist);
+        return `
+          <div class="mb-2.5 p-1.5 px-2 bg-[#FAF8F2] rounded-xl border border-[#EFE9DC]/80">
+            <div class="flex items-center justify-between text-[11px] mb-1">
+              <span class="text-[#6E6862] flex items-center gap-1 font-medium">
+                <i class="fa-solid fa-list-check text-[10px] text-[#2491FA]"></i>
+                <span>งานย่อย</span>
+              </span>
+              <span class="font-bold text-[11px] ${clStats.isAllDone ? 'text-emerald-600' : 'text-[#201E1C]'}">
+                ${clStats.text} (${clStats.percent}%)
+              </span>
+            </div>
+            <div class="w-full bg-[#EDE7DA] rounded-full h-1.5 overflow-hidden">
+              <div class="${clStats.isAllDone ? 'bg-emerald-500' : 'bg-[#2491FA]'} h-1.5 rounded-full transition-all" style="width: ${clStats.percent}%"></div>
+            </div>
+          </div>
+        `;
+      })() : ''}
 
       <!-- Reporter & Report Date (ถ้ามี) -->
       ${task.reporter || task.reportDate ? `
@@ -626,6 +659,15 @@ function renderTableView(filteredTasks) {
         <td class="px-4 py-3">
           <div class="flex items-center gap-2">
             <span class="font-bold text-[#201E1C] text-sm leading-snug">${escapeHtml(task.title)}</span>
+            ${task.checklist && task.checklist.length > 0 ? (() => {
+              const clStats = getChecklistStats(task.checklist);
+              return `
+                <span class="inline-flex items-center gap-1 text-[10px] font-bold ${clStats.isAllDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-[#6E6862] bg-[#FAF8F2] border-[#EFE9DC]'} px-1.5 py-0.5 rounded border" title="รายการย่อยที่เสร็จ: ${clStats.text}">
+                  <i class="fa-solid fa-list-check text-[9px] ${clStats.isAllDone ? 'text-emerald-600' : 'text-[#2491FA]'}"></i>
+                  <span>${clStats.text}</span>
+                </span>
+              `;
+            })() : ''}
             ${task.attachments && task.attachments.length > 0 ? `
               <span class="inline-flex items-center gap-1 text-[10px] font-bold text-[#2491FA] bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200/60" title="มีไฟล์แนบ ${task.attachments.length} ไฟล์">
                 <i class="fa-solid fa-paperclip text-[9px]"></i>
@@ -776,6 +818,224 @@ function quickChangeStatus(taskId, newStatus) {
 }
 
 /**
+ * คำนวณสถิติของรายการ Checklist
+ * @param {Array} checklist รายการ [{id, text, done}]
+ * @returns {Object} { total, done, percent, text, isAllDone }
+ */
+function getChecklistStats(checklist) {
+  if (!Array.isArray(checklist) || checklist.length === 0) {
+    return {
+      total: 0,
+      done: 0,
+      percent: 0,
+      text: '0/00',
+      isAllDone: false
+    };
+  }
+
+  const total = checklist.length;
+  const done = checklist.filter(item => Boolean(item && item.done)).length;
+  const totalFormatted = String(total).padStart(2, '0');
+  const percent = total > 0 ? Math.round((done / total) * 100) : 0;
+  const isAllDone = total > 0 && done === total;
+
+  return {
+    total,
+    done,
+    percent,
+    text: `${done}/${totalFormatted}`,
+    isAllDone
+  };
+}
+
+/**
+ * อัปเดต UI Progress Badge และ Progress Bar ของ Checklist ใน Modal
+ */
+function updateTaskChecklistProgressUi() {
+  const badge = document.getElementById('taskChecklistProgressBadge');
+  const barContainer = document.getElementById('taskChecklistProgressBarContainer');
+  const bar = document.getElementById('taskChecklistProgressBar');
+  const stats = getChecklistStats(state.currentEditingChecklist);
+
+  if (badge) {
+    badge.innerText = stats.text;
+    if (stats.total > 0 && stats.isAllDone) {
+      badge.className = 'text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-300';
+    } else {
+      badge.className = 'text-[11px] font-bold text-[#6E6862] bg-[#FAF8F2] px-2 py-0.5 rounded-full border border-[#EFE9DC]';
+    }
+  }
+
+  if (barContainer && bar) {
+    if (stats.total > 0) {
+      barContainer.classList.remove('hidden');
+      bar.style.width = `${stats.percent}%`;
+      if (stats.isAllDone) {
+        bar.className = 'bg-emerald-500 h-1.5 rounded-full transition-all duration-300';
+      } else {
+        bar.className = 'bg-[#2491FA] h-1.5 rounded-full transition-all duration-300';
+      }
+    } else {
+      barContainer.classList.add('hidden');
+      bar.style.width = '0%';
+    }
+  }
+}
+
+/**
+ * เรนเดอร์แถวรายการ Checklist ใน Modal
+ */
+function renderTaskChecklist() {
+  const container = document.getElementById('taskChecklistContainer');
+  if (!container) return;
+
+  const items = state.currentEditingChecklist || [];
+  if (items.length === 0) {
+    container.innerHTML = `
+      <div class="text-[11px] text-[#9E9890] italic py-2 text-center bg-[#FAF8F2]/60 rounded-xl border border-dashed border-[#EFE9DC]">
+        ยังไม่มีรายการงานย่อย (พิมพ์ด้านบนแล้วกด Enter เพื่อเพิ่มได้ไม่จำกัด)
+      </div>
+    `;
+    updateTaskChecklistProgressUi();
+    return;
+  }
+
+  container.innerHTML = items.map((item) => {
+    const isDone = Boolean(item.done);
+    return `
+      <div id="checklistItemRow_${item.id}"
+           class="group flex items-center gap-2 p-1.5 px-2 rounded-xl border transition-all ${isDone ? 'bg-emerald-50/40 border-emerald-200/70' : 'bg-[#FAF8F2] hover:bg-white border-[#EFE9DC]'}">
+        <!-- Checkbox ติ๊กเสร็จ -->
+        <label class="cursor-pointer flex items-center shrink-0">
+          <input type="checkbox"
+                 id="checklistItemCb_${item.id}"
+                 ${isDone ? 'checked' : ''}
+                 onchange="toggleChecklistItem('${item.id}', this.checked)"
+                 class="w-4 h-4 text-[#2491FA] rounded-md border-slate-300 focus:ring-[#2491FA] cursor-pointer">
+        </label>
+
+        <!-- ข้อความรายการ (แก้ไขได้) -->
+        <input type="text"
+               id="checklistItemText_${item.id}"
+               value="${escapeHtml(item.text || '')}"
+               placeholder="ระบุชื่องานย่อย..."
+               onchange="updateChecklistItemText('${item.id}', this.value)"
+               class="flex-1 bg-transparent border-0 p-0 text-xs outline-none focus:ring-0 ${isDone ? 'line-through text-[#6E6862]' : 'text-[#201E1C]'}">
+
+        <!-- ปุ่มลบรายการ -->
+        <button type="button"
+                onclick="removeChecklistItem('${item.id}')"
+                title="ลบรายการนี้"
+                class="opacity-40 group-hover:opacity-100 text-[#6E6862] hover:text-rose-600 p-1 rounded-lg transition-colors cursor-pointer shrink-0">
+          <i class="fa-regular fa-trash-can text-xs"></i>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  updateTaskChecklistProgressUi();
+}
+
+/**
+ * เพิ่มรายการ Checklist ใหม่
+ */
+function addChecklistItem(text) {
+  const trimmed = (text || '').trim();
+  if (!trimmed) return;
+
+  if (!Array.isArray(state.currentEditingChecklist)) {
+    state.currentEditingChecklist = [];
+  }
+
+  const newItem = {
+    id: 'cl_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+    text: trimmed,
+    done: false
+  };
+
+  state.currentEditingChecklist.push(newItem);
+  renderTaskChecklist();
+
+  // Scroll to bottom
+  const container = document.getElementById('taskChecklistContainer');
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+  }
+}
+
+/**
+ * สลับสถานะ เสร็จ/ไม่เสร็จ ของรายการ Checklist (In-place update เพื่อไม่ให้สูญเสีย Focus)
+ */
+function toggleChecklistItem(itemId, isChecked) {
+  const item = (state.currentEditingChecklist || []).find(it => it.id === itemId);
+  if (!item) return;
+
+  item.done = Boolean(isChecked);
+
+  // ปรับแต่ง UI แถวนี้โดยตรง
+  const row = document.getElementById(`checklistItemRow_${itemId}`);
+  const textInput = document.getElementById(`checklistItemText_${itemId}`);
+
+  if (row) {
+    if (item.done) {
+      row.className = 'group flex items-center gap-2 p-1.5 px-2 rounded-xl border transition-all bg-emerald-50/40 border-emerald-200/70';
+    } else {
+      row.className = 'group flex items-center gap-2 p-1.5 px-2 rounded-xl border transition-all bg-[#FAF8F2] hover:bg-white border-[#EFE9DC]';
+    }
+  }
+
+  if (textInput) {
+    if (item.done) {
+      textInput.className = 'flex-1 bg-transparent border-0 p-0 text-xs outline-none focus:ring-0 line-through text-[#6E6862]';
+    } else {
+      textInput.className = 'flex-1 bg-transparent border-0 p-0 text-xs outline-none focus:ring-0 text-[#201E1C]';
+    }
+  }
+
+  updateTaskChecklistProgressUi();
+}
+
+/**
+ * อัปเดตข้อความรายการ Checklist เมื่อผู้ใช้พิมพ์แก้ไขในแถว
+ */
+function updateChecklistItemText(itemId, newText) {
+  const item = (state.currentEditingChecklist || []).find(it => it.id === itemId);
+  if (!item) return;
+  item.text = (newText || '').trim();
+}
+
+/**
+ * ลบรายการ Checklist
+ */
+function removeChecklistItem(itemId) {
+  state.currentEditingChecklist = (state.currentEditingChecklist || []).filter(it => it.id !== itemId);
+  renderTaskChecklist();
+}
+
+/**
+ * รับเหตุการณ์กดปุ่มบน Input เพิ่มรายการ Checklist
+ */
+function handleChecklistInputKeyDown(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    handleAddChecklistFromInput();
+  }
+}
+
+/**
+ * ดึงค่าจาก Input เพื่อเพิ่มรายการ Checklist
+ */
+function handleAddChecklistFromInput() {
+  const input = document.getElementById('newChecklistItemInput');
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) return;
+  addChecklistItem(val);
+  input.value = '';
+  input.focus();
+}
+
+/**
  * เปิด Modal สำหรับสร้างงานใหม่
  */
 function openCreateTaskModal(defaultStatus = 'รอดำเนินการ') {
@@ -829,6 +1089,12 @@ function openCreateTaskModal(defaultStatus = 'รอดำเนินการ'
   updateAttachmentsBadge();
   const fileInput = document.getElementById('taskFileInput');
   if (fileInput) fileInput.value = '';
+
+  // รีเซ็ตรายการ Checklist
+  state.currentEditingChecklist = [];
+  const checklistInput = document.getElementById('newChecklistItemInput');
+  if (checklistInput) checklistInput.value = '';
+  renderTaskChecklist();
 
   document.getElementById('taskModal').classList.remove('hidden');
 }
@@ -917,6 +1183,12 @@ function openEditTaskModal(taskId) {
   const fileInput = document.getElementById('taskFileInput');
   if (fileInput) fileInput.value = '';
 
+  // จัดการรายการ Checklist
+  state.currentEditingChecklist = Array.isArray(task.checklist) ? JSON.parse(JSON.stringify(task.checklist)) : [];
+  const checklistInput = document.getElementById('newChecklistItemInput');
+  if (checklistInput) checklistInput.value = '';
+  renderTaskChecklist();
+
   document.getElementById('taskModal').classList.remove('hidden');
 }
 
@@ -924,6 +1196,9 @@ function closeTaskModal() {
   document.getElementById('taskModal').classList.add('hidden');
   state.taskFileQueue = [];
   state.currentEditingAttachments = [];
+  state.currentEditingChecklist = [];
+  const checklistInput = document.getElementById('newChecklistItemInput');
+  if (checklistInput) checklistInput.value = '';
   const fileInput = document.getElementById('taskFileInput');
   if (fileInput) fileInput.value = '';
 
@@ -997,7 +1272,8 @@ function handleTaskFormSubmit(e) {
     reportDate: finalReportDate,
     priority: document.getElementById('taskPriority').value,
     status: document.getElementById('taskStatus').value,
-    dueDate: finalDueDate
+    dueDate: finalDueDate,
+    checklist: state.currentEditingChecklist || []
   };
 
   if (!taskData.title) {
@@ -3856,6 +4132,28 @@ function openViewArchivedTaskModal(taskId) {
   document.getElementById('viewArchivedTaskDueDate').innerText = formatDateDisplay(task.dueDate);
   document.getElementById('viewArchivedTaskCreatedAt').innerText = task.createdAt || '-';
   document.getElementById('viewArchivedTaskArchivedAt').innerText = task.archivedAt || '-';
+
+  // Render checklist
+  const clSection = document.getElementById('viewArchivedChecklistSection');
+  const clBadge = document.getElementById('viewArchivedChecklistBadge');
+  const clList = document.getElementById('viewArchivedChecklistList');
+  const checklist = Array.isArray(task.checklist) ? task.checklist : [];
+  if (clSection && clBadge && clList) {
+    if (checklist.length === 0) {
+      clSection.classList.add('hidden');
+    } else {
+      clSection.classList.remove('hidden');
+      const stats = getChecklistStats(checklist);
+      clBadge.innerText = stats.text;
+      clBadge.className = `text-[11px] font-bold px-2 py-0.5 rounded-full border ${stats.isAllDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-[#6E6862] bg-white border-[#EFE9DC]'}`;
+      clList.innerHTML = checklist.map(item => `
+        <div class="flex items-center gap-2 p-1.5 rounded-lg ${item.done ? 'bg-emerald-50/50' : 'bg-transparent'}">
+          <i class="${item.done ? 'fa-solid fa-circle-check text-emerald-600' : 'fa-regular fa-circle text-[#9E9890]'} text-xs"></i>
+          <span class="text-xs ${item.done ? 'line-through text-[#6E6862]' : 'text-[#201E1C]'}">${escapeHtml(item.text)}</span>
+        </div>
+      `).join('');
+    }
+  }
 
   // Render attachments
   const attachList = document.getElementById('viewArchivedAttachmentsList');
