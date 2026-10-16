@@ -111,64 +111,38 @@ function doPost(e) {
     }
 
     // 2. Universal API Router สำหรับเชื่อมต่อกับ Frontend (เช่น GitHub Pages)
-    const args = Array.isArray(payload.args) ? payload.args : [];
-    let result = null;
+    const PUBLIC_API_ACTIONS = {
+      saveSettings: saveSettings,
+      saveSitesList: saveSitesList,
+      getInitialData: getInitialData,
+      checkTasksUpdate: checkTasksUpdate,
+      saveTask: saveTask,
+      updateTaskStatus: updateTaskStatus,
+      deleteTask: deleteTask,
+      archiveCompletedTasks: archiveCompletedTasks,
+      archiveSingleTask: archiveSingleTask,
+      getArchivedTasks: getArchivedTasks,
+      restoreArchivedTask: restoreArchivedTask,
+      testTelegramConnection: testTelegramConnection,
+      requestLoginPin: requestLoginPin,
+      verifyLoginPin: verifyLoginPin,
+      getUsersList: getUsersList,
+      saveUser: saveUser,
+      deleteUser: deleteUser,
+      pingOnlineUser: pingOnlineUser,
+      getOnlineUsers: getOnlineUsers,
+      logoutOnlineUser: logoutOnlineUser,
+      uploadTaskAttachment: uploadTaskAttachment,
+      deleteTaskAttachment: deleteTaskAttachment
+    };
 
-    switch (payload.action) {
-      case 'getInitialData':
-        result = getInitialData(args[0]);
-        break;
-      case 'checkTasksUpdate':
-        result = checkTasksUpdate(args[0], args[1]);
-        break;
-      case 'saveTask':
-        result = saveTask(args[0]);
-        break;
-      case 'updateTaskStatus':
-        result = updateTaskStatus(args[0], args[1]);
-        break;
-      case 'deleteTask':
-        result = deleteTask(args[0]);
-        break;
-      case 'archiveSingleTask':
-        result = archiveSingleTask(args[0]);
-        break;
-      case 'archiveTasksBatch':
-        result = archiveTasksBatch(args[0]);
-        break;
-      case 'unarchiveTask':
-        result = unarchiveTask(args[0]);
-        break;
-      case 'loadArchivedTasks':
-        result = loadArchivedTasks(args[0], args[1]);
-        break;
-      case 'saveSettings':
-        result = saveSettings(args[0]);
-        break;
-      case 'testTelegramNotification':
-        result = testTelegramNotification(args[0], args[1], args[2]);
-        break;
-      case 'requestLoginOtp':
-        result = requestLoginOtp(args[0]);
-        break;
-      case 'verifyLoginPin':
-        result = verifyLoginPin(args[0], args[1]);
-        break;
-      case 'sendHeartbeat':
-        result = sendHeartbeat(args[0]);
-        break;
-      case 'getOnlineUsers':
-        result = getOnlineUsers();
-        break;
-      case 'logoutOnlineUser':
-        result = logoutOnlineUser(args[0]);
-        break;
-      case 'uploadTaskAttachment':
-        result = uploadTaskAttachment(args[0], args[1], args[2]);
-        break;
-      default:
-        throw new Error('Invalid or unsupported action: ' + payload.action);
+    const targetFn = PUBLIC_API_ACTIONS[payload.action];
+    if (typeof targetFn !== 'function') {
+      throw new Error('Invalid or unsupported action: ' + payload.action);
     }
+
+    const args = Array.isArray(payload.args) ? payload.args : [];
+    const result = targetFn.apply(null, args);
 
     return ContentService.createTextOutput(JSON.stringify(result))
       .setMimeType(ContentService.MimeType.JSON);
