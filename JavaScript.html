@@ -892,14 +892,14 @@ function renderTaskChecklist() {
     const isDone = Boolean(item.done);
     return `
       <div id="checklistItemRow_${item.id}"
-           class="group flex items-center gap-2 p-1.5 px-2 rounded-xl border transition-all ${isDone ? 'bg-emerald-50/40 border-emerald-200/70' : 'bg-[#FAF8F2] hover:bg-white border-[#EFE9DC]'}">
+           class="group flex items-center gap-2 py-1 px-2.5 rounded-lg border transition-all ${isDone ? 'bg-emerald-50/40 border-emerald-200/70' : 'bg-[#FAF8F2] hover:bg-white border-[#EFE9DC]'}">
         <!-- Checkbox ติ๊กเสร็จ -->
         <label class="cursor-pointer flex items-center shrink-0">
           <input type="checkbox"
                  id="checklistItemCb_${item.id}"
                  ${isDone ? 'checked' : ''}
                  onchange="toggleChecklistItem('${item.id}', this.checked)"
-                 class="w-4 h-4 text-[#2491FA] rounded-md border-slate-300 focus:ring-[#2491FA] cursor-pointer">
+                 class="w-3.5 h-3.5 text-[#2491FA] rounded border-slate-300 focus:ring-[#2491FA] cursor-pointer">
         </label>
 
         <!-- ข้อความรายการ (แก้ไขได้) -->
@@ -914,7 +914,7 @@ function renderTaskChecklist() {
         <button type="button"
                 onclick="removeChecklistItem('${item.id}')"
                 title="ลบรายการนี้"
-                class="opacity-40 group-hover:opacity-100 text-[#6E6862] hover:text-rose-600 p-1 rounded-lg transition-colors cursor-pointer shrink-0">
+                class="opacity-30 group-hover:opacity-100 text-[#6E6862] hover:text-rose-600 p-0.5 rounded transition-colors cursor-pointer shrink-0">
           <i class="fa-regular fa-trash-can text-xs"></i>
         </button>
       </div>
@@ -966,9 +966,9 @@ function toggleChecklistItem(itemId, isChecked) {
 
   if (row) {
     if (item.done) {
-      row.className = 'group flex items-center gap-2 p-1.5 px-2 rounded-xl border transition-all bg-emerald-50/40 border-emerald-200/70';
+      row.className = 'group flex items-center gap-2 py-1 px-2.5 rounded-lg border transition-all bg-emerald-50/40 border-emerald-200/70';
     } else {
-      row.className = 'group flex items-center gap-2 p-1.5 px-2 rounded-xl border transition-all bg-[#FAF8F2] hover:bg-white border-[#EFE9DC]';
+      row.className = 'group flex items-center gap-2 py-1 px-2.5 rounded-lg border transition-all bg-[#FAF8F2] hover:bg-white border-[#EFE9DC]';
     }
   }
 

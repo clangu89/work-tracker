@@ -650,73 +650,11 @@
                 </div>
 
                 <!-- รายการ Checklist Container (Scrollable) -->
-                <div id="taskChecklistContainer" class="space-y-1.5 max-h-48 overflow-y-auto pr-0.5">
+                <div id="taskChecklistContainer" class="space-y-1 max-h-80 sm:max-h-96 overflow-y-auto pr-0.5">
                   <!-- Rendered dynamically via JS -->
                 </div>
               </div>
 
-              <!-- เอกสารและไฟล์แนบที่เกี่ยวข้อง (ไม่จำกัดจำนวนและประเภทไฟล์) -->
-              <div class="space-y-2 pt-2 border-t border-[#EFE9DC]">
-                <div class="flex items-center justify-between">
-                  <label class="block text-xs font-bold text-[#201E1C] flex items-center gap-1.5">
-                    <i class="fa-solid fa-paperclip text-[#2491FA]"></i>
-                    <span>เอกสารและไฟล์แนบที่เกี่ยวข้อง</span>
-                  </label>
-                  <span id="attachedFilesCountBadge" class="text-[11px] font-bold text-[#6E6862] bg-[#FAF8F2] px-2 py-0.5 rounded-full border border-[#EFE9DC]">
-                    0 ไฟล์
-                  </span>
-                </div>
-
-                <!-- Drag & Drop Zone -->
-                <div id="taskFileDropZone"
-                     onclick="document.getElementById('taskFileInput').click()"
-                     class="border-2 border-dashed border-[#EFE9DC] hover:border-[#2491FA] bg-[#FAF8F2] hover:bg-[#F3EFE6] rounded-2xl p-3.5 text-center cursor-pointer transition-all group">
-                  <input type="file" id="taskFileInput" multiple class="hidden" onchange="handleFileSelect(event)">
-                  <div class="flex flex-col items-center justify-center gap-1.5 pointer-events-none">
-                    <div class="w-9 h-9 rounded-xl bg-blue-50 text-[#2491FA] group-hover:scale-110 flex items-center justify-center text-base shadow-2xs transition-transform">
-                      <i class="fa-solid fa-cloud-arrow-up"></i>
-                    </div>
-                    <p class="text-xs font-bold text-[#201E1C]">
-                      ลากไฟล์มาวางที่นี่ หรือ <span class="text-[#2491FA] underline">คลิกเลือกไฟล์</span>
-                    </p>
-                    <p class="text-[10px] text-[#6E6862]">
-                      ไม่จำกัดจำนวนและประเภทไฟล์ (PDF, Word, Excel, รูปภาพ, DWG, ZIP ฯลฯ)
-                    </p>
-                  </div>
-                </div>
-
-                <!-- Upload Progress Bar (แสดงขณะบันทึกและอัปโหลด) -->
-                <div id="taskUploadProgressWrapper" class="hidden bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC] space-y-1.5">
-                  <div class="flex items-center justify-between text-xs">
-                    <span id="uploadProgressText" class="font-semibold text-[#2491FA] flex items-center gap-1.5">
-                      <i class="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                      <span>กำลังอัปโหลดไฟล์...</span>
-                    </span>
-                    <span id="uploadProgressPercent" class="font-bold text-[#201E1C]">0%</span>
-                  </div>
-                  <div class="w-full bg-[#EDE7DA] h-2 rounded-full overflow-hidden">
-                    <div id="uploadProgressBar" class="bg-[#2491FA] h-full w-0 rounded-full transition-all duration-300"></div>
-                  </div>
-                </div>
-
-                <!-- Existing Attached Files (ไฟล์เดิมในระบบ สำหรับโหมดแก้ไข) -->
-                <div id="existingFilesContainer" class="hidden space-y-1.5 pt-1">
-                  <p class="text-[11px] font-bold text-[#6E6862] flex items-center gap-1">
-                    <i class="fa-solid fa-folder-open text-[#2491FA]"></i>
-                    <span>ไฟล์ที่แนบไว้ในระบบ:</span>
-                  </p>
-                  <div id="existingFilesList" class="space-y-1.5 max-h-32 overflow-y-auto pr-1"></div>
-                </div>
-
-                <!-- Selected New Files Queue (ไฟล์ใหม่ที่เลือกไว้ รอการบันทึก) -->
-                <div id="selectedFilesQueueContainer" class="hidden space-y-1.5 pt-1">
-                  <p class="text-[11px] font-bold text-[#2491FA] flex items-center gap-1">
-                    <i class="fa-solid fa-circle-plus"></i>
-                    <span>ไฟล์ใหม่ที่เตรียมอัปโหลด:</span>
-                  </p>
-                  <div id="selectedFilesQueueList" class="space-y-1.5 max-h-32 overflow-y-auto pr-1"></div>
-                </div>
-              </div>
             </div>
 
             <!-- ฝั่งขวา: กำหนดการ ผู้เกี่ยวข้อง & การติดตาม (5 Cols / ~42%) -->
@@ -814,6 +752,71 @@
                       <i class="fa-regular fa-calendar text-sm"></i>
                     </button>
                   </div>
+                </div>
+              </div>
+
+              <!-- การ์ด 3: เอกสารและไฟล์แนบที่เกี่ยวข้อง (Attachments & Files) -->
+              <div class="bg-[#EDE7DA]/35 p-4 rounded-2xl border border-[#EFE9DC] space-y-3">
+                <div class="flex items-center justify-between pb-2 border-b border-[#EFE9DC]">
+                  <div class="flex items-center gap-1.5 text-xs font-bold text-[#201E1C]">
+                    <i class="fa-solid fa-paperclip text-[#2491FA]"></i>
+                    <span>เอกสารและไฟล์แนบที่เกี่ยวข้อง</span>
+                  </div>
+                  <span id="attachedFilesCountBadge" class="text-[11px] font-bold text-[#6E6862] bg-white px-2 py-0.5 rounded-full border border-[#EFE9DC]">
+                    0 ไฟล์
+                  </span>
+                </div>
+
+                <!-- Drag & Drop Zone (Compact) -->
+                <div id="taskFileDropZone"
+                     onclick="document.getElementById('taskFileInput').click()"
+                     class="border-2 border-dashed border-[#EFE9DC] hover:border-[#2491FA] bg-[#FAF8F2] hover:bg-[#F3EFE6] rounded-xl p-3 text-center cursor-pointer transition-all group">
+                  <input type="file" id="taskFileInput" multiple class="hidden" onchange="handleFileSelect(event)">
+                  <div class="flex items-center justify-center gap-2.5 pointer-events-none">
+                    <div class="w-8 h-8 rounded-xl bg-blue-50 text-[#2491FA] group-hover:scale-105 flex items-center justify-center text-sm shadow-2xs transition-transform shrink-0">
+                      <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <div class="text-left">
+                      <p class="text-xs font-bold text-[#201E1C]">
+                        ลากไฟล์มาวาง หรือ <span class="text-[#2491FA] underline">คลิกเลือก</span>
+                      </p>
+                      <p class="text-[10px] text-[#6E6862]">
+                        ไม่จำกัดจำนวนและประเภทไฟล์
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Upload Progress Bar (แสดงขณะบันทึกและอัปโหลด) -->
+                <div id="taskUploadProgressWrapper" class="hidden bg-white p-2.5 rounded-xl border border-[#EFE9DC] space-y-1">
+                  <div class="flex items-center justify-between text-xs">
+                    <span id="uploadProgressText" class="font-semibold text-[#2491FA] flex items-center gap-1.5 text-[11px]">
+                      <i class="fa-solid fa-circle-notch fa-spin text-[10px]"></i>
+                      <span>กำลังอัปโหลดไฟล์...</span>
+                    </span>
+                    <span id="uploadProgressPercent" class="font-bold text-[#201E1C] text-[11px]">0%</span>
+                  </div>
+                  <div class="w-full bg-[#EDE7DA] h-1.5 rounded-full overflow-hidden">
+                    <div id="uploadProgressBar" class="bg-[#2491FA] h-full w-0 rounded-full transition-all duration-300"></div>
+                  </div>
+                </div>
+
+                <!-- Existing Attached Files (ไฟล์เดิมในระบบ สำหรับโหมดแก้ไข) -->
+                <div id="existingFilesContainer" class="hidden space-y-1 pt-0.5">
+                  <p class="text-[11px] font-bold text-[#6E6862] flex items-center gap-1">
+                    <i class="fa-solid fa-folder-open text-[#2491FA]"></i>
+                    <span>ไฟล์ที่แนบไว้ในระบบ:</span>
+                  </p>
+                  <div id="existingFilesList" class="space-y-1 max-h-28 overflow-y-auto pr-1"></div>
+                </div>
+
+                <!-- Selected New Files Queue (ไฟล์ใหม่ที่เลือกไว้ รอการบันทึก) -->
+                <div id="selectedFilesQueueContainer" class="hidden space-y-1 pt-0.5">
+                  <p class="text-[11px] font-bold text-[#2491FA] flex items-center gap-1">
+                    <i class="fa-solid fa-circle-plus"></i>
+                    <span>ไฟล์ใหม่ที่เตรียมอัปโหลด:</span>
+                  </p>
+                  <div id="selectedFilesQueueList" class="space-y-1 max-h-28 overflow-y-auto pr-1"></div>
                 </div>
               </div>
             </div>
