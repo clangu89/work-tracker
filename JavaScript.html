@@ -470,35 +470,36 @@ function renderTaskCardHtml(task) {
   const isHighlighted = state.highlightTaskId === task.id;
 
   return `
-    <div class="task-card bg-[#F7F4EA] p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs hover:shadow-md relative group ${isHighlighted ? 'task-card-bounce ring-2 ring-[#2491FA] ring-offset-2' : ''}"
+    <div class="task-card bg-[#F7F4EA] p-3 rounded-2xl border border-[#EFE9DC] shadow-2xs hover:shadow-md relative group ${isHighlighted ? 'task-card-bounce ring-2 ring-[#2491FA] ring-offset-2' : ''}"
          data-task-id="${task.id}"
          draggable="true"
          ondragstart="onCardDragStart(event, '${task.id}')"
          ondragend="onCardDragEnd(event)">
       
       <!-- Site & Priority Badges -->
-      <div class="flex items-center justify-between gap-2 mb-2">
+      <div class="flex items-center justify-between gap-1.5 mb-1.5">
         <span class="badge-site ${siteStyle.bg} ${siteStyle.text} border ${siteStyle.border}">
-          <i class="fa-solid fa-location-dot text-[10px]"></i>
-          <span class="truncate max-w-[140px]">${escapeHtml(task.site)}</span>
+          <i class="fa-solid fa-location-dot text-[9px]"></i>
+          <span class="truncate max-w-[130px]">${escapeHtml(task.site)}</span>
         </span>
-        <span class="text-xs font-semibold px-2 py-0.5 rounded-full ${priorityStyle}">
+        <span class="text-[11px] font-semibold px-2 py-0.5 rounded-full ${priorityStyle}">
           ${escapeHtml(task.priority)}
         </span>
       </div>
 
       <!-- Task Title & Badges -->
       <div class="flex items-start justify-between gap-1.5 mb-1.5">
-        <h4 class="font-bold text-[#201E1C] text-sm leading-snug group-hover:text-[#2491FA] transition-colors">
+        <h4 class="font-bold text-[#201E1C] text-[13px] leading-snug group-hover:text-[#2491FA] transition-colors line-clamp-2"
+            title="${escapeHtml(task.description ? `${task.title}\n\nรายละเอียด: ${task.description}` : task.title)}">
           ${escapeHtml(task.title)}
         </h4>
-        <div class="flex items-center gap-1 shrink-0">
+        <div class="flex items-center gap-1 shrink-0 pt-0.5">
           ${task.checklist && task.checklist.length > 0 ? (() => {
             const clStats = getChecklistStats(task.checklist);
             return `
-              <span class="inline-flex items-center gap-1 text-[10px] font-bold ${clStats.isAllDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-[#6E6862] bg-[#FAF8F2] border-[#EFE9DC]'} px-1.5 py-0.5 rounded-md border" title="รายการย่อยที่เสร็จ: ${clStats.text}">
+              <span class="inline-flex items-center gap-1 text-[10px] font-bold ${clStats.isAllDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-[#6E6862] bg-[#FAF8F2] border-[#EFE9DC]'} px-1.5 py-0.5 rounded-md border" title="งานย่อย: เสร็จแล้ว ${clStats.shortText} (${clStats.percent}%)">
                 <i class="fa-solid fa-list-check text-[9px] ${clStats.isAllDone ? 'text-emerald-600' : 'text-[#2491FA]'}"></i>
-                <span>${clStats.text}</span>
+                <span>${clStats.shortText}</span>
               </span>
             `;
           })() : ''}
@@ -511,105 +512,90 @@ function renderTaskCardHtml(task) {
         </div>
       </div>
 
-      <!-- Task Description (ถ้ามี) -->
-      ${task.description ? `
-        <p class="text-xs text-[#6E6862] mb-2.5 line-clamp-2 leading-relaxed">
-          ${escapeHtml(task.description)}
-        </p>
-      ` : ''}
-
-      <!-- Subtasks Checklist Progress Bar (ถ้ามี) -->
+      <!-- Subtasks Checklist Slim Micro-Bar (ถ้ามี) -->
       ${task.checklist && task.checklist.length > 0 ? (() => {
         const clStats = getChecklistStats(task.checklist);
         return `
-          <div class="mb-2.5 p-1.5 px-2 bg-[#FAF8F2] rounded-xl border border-[#EFE9DC]/80">
-            <div class="flex items-center justify-between text-[11px] mb-1">
-              <span class="text-[#6E6862] flex items-center gap-1 font-medium">
-                <i class="fa-solid fa-list-check text-[10px] text-[#2491FA]"></i>
-                <span>งานย่อย</span>
-              </span>
-              <span class="font-bold text-[11px] ${clStats.isAllDone ? 'text-emerald-600' : 'text-[#201E1C]'}">
-                ${clStats.text} (${clStats.percent}%)
-              </span>
+          <div class="mb-2 flex items-center gap-1.5" title="ความคืบหน้ารายการย่อย: ${clStats.shortText} (${clStats.percent}%)">
+            <div class="w-full bg-[#EDE7DA] rounded-full h-1 overflow-hidden flex-1">
+              <div class="${clStats.isAllDone ? 'bg-emerald-500' : 'bg-[#2491FA]'} h-1 rounded-full transition-all" style="width: ${clStats.percent}%"></div>
             </div>
-            <div class="w-full bg-[#EDE7DA] rounded-full h-1.5 overflow-hidden">
-              <div class="${clStats.isAllDone ? 'bg-emerald-500' : 'bg-[#2491FA]'} h-1.5 rounded-full transition-all" style="width: ${clStats.percent}%"></div>
-            </div>
+            <span class="text-[9px] font-bold ${clStats.isAllDone ? 'text-emerald-600' : 'text-[#9E9890]'} shrink-0">${clStats.percent}%</span>
           </div>
         `;
       })() : ''}
 
-      <!-- Reporter & Report Date (ถ้ามี) -->
+      <!-- Assignee & Due Date -->
+      <div class="flex items-center justify-between text-xs text-[#6E6862] border-t border-[#EFE9DC]/70 pt-1.5 mt-1">
+        <div class="flex items-center gap-1 font-medium text-[#201E1C] truncate max-w-[55%]">
+          <div class="w-5 h-5 rounded-full bg-[#EDE7DA] flex items-center justify-center text-[#201E1C] text-[10px] font-bold shrink-0">
+            <i class="fa-regular fa-user text-[9px]"></i>
+          </div>
+          <span class="truncate text-[11px]">${escapeHtml(task.assignee)}</span>
+        </div>
+
+        <div class="flex items-center gap-1 text-[11px] shrink-0 ${isOverdue ? 'text-rose-600 font-semibold overdue-alert' : 'text-[#6E6862]'}">
+          <i class="fa-regular fa-calendar text-[10px]"></i>
+          <span>${formatDateDisplay(task.dueDate)}</span>
+        </div>
+      </div>
+
+      <!-- Reporter & Report Date (ถ้ามี แสดงย่อกระชับ) -->
       ${task.reporter || task.reportDate ? `
-        <div class="text-[11px] text-[#6E6862] mb-1.5 flex items-center justify-between gap-1">
+        <div class="text-[10px] text-[#6E6862] mt-0.5 flex items-center justify-between gap-1 truncate">
           ${task.reporter ? `
-            <div class="flex items-center gap-1.5 truncate" title="ผู้แจ้ง: ${escapeHtml(task.reporter)}">
-              <i class="fa-solid fa-bullhorn text-[10px] text-[#2491FA]"></i>
-              <span class="text-slate-500 text-[10px]">ผู้แจ้ง:</span>
+            <div class="flex items-center gap-1 truncate" title="ผู้แจ้ง: ${escapeHtml(task.reporter)}">
+              <i class="fa-solid fa-bullhorn text-[8px] text-[#2491FA]"></i>
+              <span class="text-[#9E9890] text-[10px]">ผู้แจ้ง:</span>
               <span class="font-medium text-[#201E1C] truncate max-w-[110px]">${escapeHtml(task.reporter)}</span>
             </div>
           ` : '<span></span>'}
           ${task.reportDate ? `
-            <div class="text-[10px] text-[#6E6862] flex items-center gap-1 whitespace-nowrap" title="วันที่แจ้ง: ${formatDateDisplay(task.reportDate)}">
-              <i class="fa-regular fa-calendar-plus text-[9px] text-[#2491FA]"></i>
+            <div class="text-[9px] text-[#9E9890] flex items-center gap-1 whitespace-nowrap" title="วันที่แจ้ง: ${formatDateDisplay(task.reportDate)}">
+              <i class="fa-regular fa-calendar-plus text-[8px] text-[#2491FA]"></i>
               <span>${formatDateDisplay(task.reportDate)}</span>
             </div>
           ` : ''}
         </div>
       ` : ''}
 
-      <!-- Assignee & Due Date -->
-      <div class="flex items-center justify-between text-xs text-[#6E6862] border-t border-[#EFE9DC] pt-2.5 mt-2">
-        <div class="flex items-center gap-1.5 font-medium text-[#201E1C]">
-          <div class="w-6 h-6 rounded-full bg-[#EDE7DA] flex items-center justify-center text-[#201E1C] text-xs font-bold">
-            <i class="fa-regular fa-user text-[10px]"></i>
-          </div>
-          <span class="truncate max-w-[100px]">${escapeHtml(task.assignee)}</span>
-        </div>
-
-        <div class="flex items-center gap-1 ${isOverdue ? 'text-rose-600 font-semibold overdue-alert' : 'text-[#6E6862]'}">
-          <i class="fa-regular fa-calendar text-[11px]"></i>
-          <span>${formatDateDisplay(task.dueDate)}</span>
-        </div>
-      </div>
-
       <!-- Card Actions (Quick status change & Edit/Delete) -->
-      <div class="flex items-center justify-between mt-3 pt-2 border-t border-[#EFE9DC]">
+      <div class="flex items-center justify-between mt-2 pt-1.5 border-t border-[#EFE9DC]/70">
         <div class="flex items-center gap-1">
           ${prevStatus ? `
             <button onclick="quickChangeStatus('${task.id}', '${prevStatus}')" 
                     title="ย้ายกลับไป: ${prevStatus}"
-                    class="p-1 px-1.5 text-xs text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-lg transition-colors">
-              <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                    class="p-0.5 px-1.5 text-xs text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-lg transition-colors cursor-pointer">
+              <i class="fa-solid fa-chevron-left text-[9px]"></i>
             </button>
-          ` : '<span class="w-5"></span>'}
+          ` : '<span class="w-4"></span>'}
 
           ${nextStatus ? `
             <button onclick="quickChangeStatus('${task.id}', '${nextStatus}')" 
                     title="ย้ายไป: ${nextStatus}"
-                    class="p-1 px-1.5 text-xs text-[#2491FA] hover:text-[#1A7CE0] hover:bg-blue-100/60 rounded-lg transition-colors font-bold flex items-center gap-1">
+                    class="p-0.5 px-2 text-[11px] text-[#2491FA] hover:text-[#1A7CE0] hover:bg-blue-100/60 rounded-lg transition-colors font-bold flex items-center gap-1 cursor-pointer">
               <span>ถัดไป</span>
-              <i class="fa-solid fa-chevron-right text-[10px]"></i>
+              <i class="fa-solid fa-chevron-right text-[9px]"></i>
             </button>
-          ` : '<span class="text-xs text-emerald-600 font-semibold"><i class="fa-solid fa-check"></i> เสร็จสิ้น</span>'}
+          ` : '<span class="text-[11px] text-emerald-600 font-semibold"><i class="fa-solid fa-check"></i> เสร็จสิ้น</span>'}
         </div>
 
-        <div class="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition-opacity">
+        <div class="flex items-center gap-0.5 opacity-80 group-hover:opacity-100 transition-opacity">
           ${task.status === 'เสร็จสิ้น' ? `
             <button onclick="handleArchiveSingleTask('${task.id}', '${escapeJs(task.title)}')" 
                     title="จัดเก็บงานนี้เข้าคลัง (Archive)"
-                    class="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-100/60 rounded-lg transition-colors">
+                    class="p-1 text-amber-700 hover:text-amber-900 hover:bg-amber-100/60 rounded-lg transition-colors cursor-pointer">
               <i class="fa-solid fa-box-archive text-xs"></i>
             </button>
           ` : ''}
           <button onclick="openEditTaskModal('${task.id}')" 
                   title="แก้ไขงาน"
-                  class="p-1 text-[#6E6862] hover:text-[#2491FA] hover:bg-blue-50 rounded-lg transition-colors">
+                  class="p-1 text-[#6E6862] hover:text-[#2491FA] hover:bg-blue-50 rounded-lg transition-colors cursor-pointer">
             <i class="fa-regular fa-pen-to-square text-xs"></i>
           </button>
           <button onclick="confirmDeleteTask('${task.id}', '${escapeJs(task.title)}')" 
                   title="ลบงาน"
-                  class="p-1 text-[#6E6862] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                  class="p-1 text-[#6E6862] hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer">
             <i class="fa-regular fa-trash-can text-xs"></i>
           </button>
         </div>
@@ -662,9 +648,9 @@ function renderTableView(filteredTasks) {
             ${task.checklist && task.checklist.length > 0 ? (() => {
               const clStats = getChecklistStats(task.checklist);
               return `
-                <span class="inline-flex items-center gap-1 text-[10px] font-bold ${clStats.isAllDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-[#6E6862] bg-[#FAF8F2] border-[#EFE9DC]'} px-1.5 py-0.5 rounded border" title="รายการย่อยที่เสร็จ: ${clStats.text}">
+                <span class="inline-flex items-center gap-1 text-[10px] font-bold ${clStats.isAllDone ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-[#6E6862] bg-[#FAF8F2] border-[#EFE9DC]'} px-1.5 py-0.5 rounded border" title="รายการย่อยที่เสร็จ: ${clStats.shortText} (${clStats.percent}%)">
                   <i class="fa-solid fa-list-check text-[9px] ${clStats.isAllDone ? 'text-emerald-600' : 'text-[#2491FA]'}"></i>
-                  <span>${clStats.text}</span>
+                  <span>${clStats.shortText}</span>
                 </span>
               `;
             })() : ''}
@@ -829,6 +815,7 @@ function getChecklistStats(checklist) {
       done: 0,
       percent: 0,
       text: '0/00',
+      shortText: '0/0',
       isAllDone: false
     };
   }
@@ -844,6 +831,7 @@ function getChecklistStats(checklist) {
     done,
     percent,
     text: `${done}/${totalFormatted}`,
+    shortText: `${done}/${total}`,
     isAllDone
   };
 }
