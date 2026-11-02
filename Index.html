@@ -513,7 +513,7 @@
         <!-- Site Filter Dropdown -->
         <div class="w-full sm:w-auto min-w-[200px]">
           <div class="relative">
-            <select id="siteFilter" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+            <select id="siteFilter" onchange="onSiteFilterChange(this.value)" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
               <option value="ALL">🏢 ทุกไซต์งานทั้งหมด</option>
             </select>
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
@@ -525,7 +525,7 @@
         <!-- Assignee Filter Dropdown -->
         <div class="w-full sm:w-auto min-w-[190px]">
           <div class="relative">
-            <select id="assigneeFilter" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+            <select id="assigneeFilter" onchange="onAssigneeFilterChange(this.value)" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
               <option value="ALL">👤 ผู้รับผิดชอบทั้งหมด</option>
             </select>
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
@@ -536,7 +536,7 @@
 
         <!-- Priority Filter -->
         <div class="w-full sm:w-auto">
-          <select id="priorityFilter" class="w-full px-3 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+          <select id="priorityFilter" onchange="onPriorityFilterChange(this.value)" class="w-full px-3 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
             <option value="ALL">⚡ ทุกระดับความสำคัญ</option>
             <option value="ด่วนมาก">🔴 ด่วนมาก</option>
             <option value="สูง">🟠 สูง</option>
@@ -591,6 +591,13 @@
             <i class="fa-solid fa-magnifying-glass text-xs"></i>
           </div>
         </div>
+
+        <!-- Clear All Filters Button -->
+        <button id="btnClearAllFilters" type="button" onclick="clearAllFilters()" title="ล้างตัวกรองทั้งหมด (แสดงงานทั้งหมด)"
+                class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#6E6862] hover:text-rose-600 bg-white hover:bg-rose-50 border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs">
+          <i class="fa-solid fa-filter-circle-xmark text-xs text-rose-500"></i>
+          <span>ล้างตัวกรอง</span>
+        </button>
 
       </div>
 

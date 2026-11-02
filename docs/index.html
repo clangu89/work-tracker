@@ -766,7 +766,7 @@
         <!-- Site Filter Dropdown -->
         <div class="w-full sm:w-auto min-w-[200px]">
           <div class="relative">
-            <select id="siteFilter" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+            <select id="siteFilter" onchange="onSiteFilterChange(this.value)" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
               <option value="ALL">🏢 ทุกไซต์งานทั้งหมด</option>
             </select>
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
@@ -778,7 +778,7 @@
         <!-- Assignee Filter Dropdown -->
         <div class="w-full sm:w-auto min-w-[190px]">
           <div class="relative">
-            <select id="assigneeFilter" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+            <select id="assigneeFilter" onchange="onAssigneeFilterChange(this.value)" class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
               <option value="ALL">👤 ผู้รับผิดชอบทั้งหมด</option>
             </select>
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
@@ -789,7 +789,7 @@
 
         <!-- Priority Filter -->
         <div class="w-full sm:w-auto">
-          <select id="priorityFilter" class="w-full px-3 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+          <select id="priorityFilter" onchange="onPriorityFilterChange(this.value)" class="w-full px-3 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
             <option value="ALL">⚡ ทุกระดับความสำคัญ</option>
             <option value="ด่วนมาก">🔴 ด่วนมาก</option>
             <option value="สูง">🟠 สูง</option>
@@ -844,6 +844,13 @@
             <i class="fa-solid fa-magnifying-glass text-xs"></i>
           </div>
         </div>
+
+        <!-- Clear All Filters Button -->
+        <button id="btnClearAllFilters" type="button" onclick="clearAllFilters()" title="ล้างตัวกรองทั้งหมด (แสดงงานทั้งหมด)"
+                class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#6E6862] hover:text-rose-600 bg-white hover:bg-rose-50 border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs">
+          <i class="fa-solid fa-filter-circle-xmark text-xs text-rose-500"></i>
+          <span>ล้างตัวกรอง</span>
+        </button>
 
       </div>
 
@@ -3280,6 +3287,7 @@ function setupEventListeners() {
   // ฟิลเตอร์ไซต์งาน
   document.getElementById('siteFilter').addEventListener('change', (e) => {
     state.filters.site = e.target.value;
+    updateClearFilterBtnVisibility();
     renderDashboard();
   });
 
@@ -3288,6 +3296,7 @@ function setupEventListeners() {
   if (assigneeFilterEl) {
     assigneeFilterEl.addEventListener('change', (e) => {
       state.filters.assignee = e.target.value;
+      updateClearFilterBtnVisibility();
       renderDashboard();
     });
   }
@@ -3295,6 +3304,7 @@ function setupEventListeners() {
   // ฟิลเตอร์ระดับความสำคัญ
   document.getElementById('priorityFilter').addEventListener('change', (e) => {
     state.filters.priority = e.target.value;
+    updateClearFilterBtnVisibility();
     renderDashboard();
   });
 
@@ -3317,6 +3327,7 @@ function setupEventListeners() {
     fromEl.addEventListener('change', (e) => {
       const isoVal = parseDmyToIso(e.target.value);
       state.filters.dueDateFrom = isoVal;
+      updateClearFilterBtnVisibility();
       // หากเลือก From มากกว่า To ให้ปรับ To ให้เท่ากับ From
       if (toEl && toEl.value && isoVal) {
         const toIso = parseDmyToIso(toEl.value);
@@ -3333,6 +3344,7 @@ function setupEventListeners() {
     toEl.addEventListener('change', (e) => {
       const isoVal = parseDmyToIso(e.target.value);
       state.filters.dueDateTo = isoVal;
+      updateClearFilterBtnVisibility();
       // หากเลือก To น้อยกว่า From ให้ปรับ From ให้เท่ากับ To
       if (fromEl && fromEl.value && isoVal) {
         const fromIso = parseDmyToIso(fromEl.value);
@@ -3371,6 +3383,7 @@ function setupEventListeners() {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       state.filters.search = e.target.value.trim().toLowerCase();
+      updateClearFilterBtnVisibility();
       renderDashboard();
     }, 200);
   });
@@ -3470,20 +3483,46 @@ function renderDashboard() {
  */
 function getFilteredTasks() {
   return state.tasks.filter(task => {
-    // 1. ฟิลเตอร์ไซต์งาน
-    if (state.filters.site !== 'ALL' && task.site !== state.filters.site) {
-      return false;
+    // 1. ฟิลเตอร์ไซต์งาน (Trim & Normalize)
+    if (state.filters.site && state.filters.site !== 'ALL') {
+      const taskSite = String(task.site || '').trim();
+      const filterSite = String(state.filters.site || '').trim();
+      if (taskSite !== filterSite) {
+        return false;
+      }
     }
 
-    // 2. ฟิลเตอร์ผู้รับผิดชอบ
+    // 2. ฟิลเตอร์ผู้รับผิดชอบ (จับคู่ทั้ง FullName, Username, รองรับช่องว่าง และ Case-insensitive)
     if (state.filters.assignee && state.filters.assignee !== 'ALL') {
-      const targetAssignee = state.filters.assignee;
+      const targetAssignee = String(state.filters.assignee || '').trim();
+      const taskAssignee = String(task.assignee || '').trim();
+
       if (targetAssignee === 'ไม่ระบุ') {
-        if (task.assignee && task.assignee !== 'ไม่ระบุ' && task.assignee.trim() !== '') {
+        if (taskAssignee && taskAssignee !== 'ไม่ระบุ' && taskAssignee !== '-') {
           return false;
         }
-      } else if (task.assignee !== targetAssignee) {
-        return false;
+      } else {
+        const targetClean = targetAssignee.toLowerCase();
+        // ค้นหา User Profile เพื่อแมปชื่อเต็มและ Username ร่วมกัน
+        const matchedUser = (state.users || []).find(u => 
+          (u.fullName && u.fullName.trim().toLowerCase() === targetClean) ||
+          (u.username && u.username.trim().toLowerCase() === targetClean)
+        );
+
+        const possibleNames = [targetClean];
+        if (matchedUser) {
+          if (matchedUser.fullName) possibleNames.push(matchedUser.fullName.trim().toLowerCase());
+          if (matchedUser.username) possibleNames.push(matchedUser.username.trim().toLowerCase());
+        }
+
+        const taskAssigneeLower = taskAssignee.toLowerCase();
+        const isMatched = possibleNames.some(name => 
+          taskAssigneeLower === name || taskAssigneeLower.includes(name) || name.includes(taskAssigneeLower)
+        );
+
+        if (!isMatched) {
+          return false;
+        }
       }
     }
 
@@ -3611,7 +3650,7 @@ function renderTaskCardHtml(task) {
       <!-- Task Title & Badges -->
       <div class="flex items-start justify-between gap-1.5 mb-1.5">
         <h4 class="font-bold text-[#201E1C] text-[13px] leading-snug group-hover:text-[#2491FA] transition-colors line-clamp-2"
-            title="${escapeHtml(task.description ? `${task.title}\n\nรายละเอียด: ${task.description}` : task.title)}">
+            title="${escapeHtml(task.description ? `${task.title}\r\n\r\nรายละเอียด: ${task.description}` : task.title)}">
           ${escapeHtml(task.title)}
         </h4>
         <div class="flex items-center gap-1 shrink-0 pt-0.5">
@@ -4249,8 +4288,20 @@ function openEditTaskModal(taskId) {
 
   let assigneeMatched = false;
   if (assigneeSelect && task.assignee) {
+    const taskAssigneeTrim = String(task.assignee).trim().toLowerCase();
+    const matchedU = (state.users || []).find(u => 
+      (u.fullName && u.fullName.trim().toLowerCase() === taskAssigneeTrim) ||
+      (u.username && u.username.trim().toLowerCase() === taskAssigneeTrim)
+    );
+    const targetNames = [taskAssigneeTrim];
+    if (matchedU) {
+      if (matchedU.fullName) targetNames.push(matchedU.fullName.trim().toLowerCase());
+      if (matchedU.username) targetNames.push(matchedU.username.trim().toLowerCase());
+    }
+
     for (let i = 0; i < assigneeSelect.options.length; i++) {
-      if (assigneeSelect.options[i].value === task.assignee) {
+      const optVal = assigneeSelect.options[i].value.trim().toLowerCase();
+      if (targetNames.includes(optVal)) {
         assigneeSelect.selectedIndex = i;
         assigneeMatched = true;
         break;
@@ -5110,16 +5161,56 @@ function handleTestTelegram() {
 /**
  * Utilities & Helper Functions
  */
+function getSiteTasksCount(site) {
+  if (!state.tasks || state.tasks.length === 0) return 0;
+  const siteClean = String(site || '').trim();
+  return state.tasks.filter(t => String(t.site || '').trim() === siteClean).length;
+}
+
+function getAssigneeTasksCount(assigneeName) {
+  if (!state.tasks || state.tasks.length === 0) return 0;
+  const targetClean = String(assigneeName || '').trim().toLowerCase();
+
+  if (targetClean === 'ไม่ระบุ') {
+    return state.tasks.filter(t => !t.assignee || t.assignee.trim() === '' || t.assignee === 'ไม่ระบุ' || t.assignee === '-').length;
+  }
+
+  const matchedUser = (state.users || []).find(u => 
+    (u.fullName && u.fullName.trim().toLowerCase() === targetClean) ||
+    (u.username && u.username.trim().toLowerCase() === targetClean)
+  );
+
+  const possibleNames = [targetClean];
+  if (matchedUser) {
+    if (matchedUser.fullName) possibleNames.push(matchedUser.fullName.trim().toLowerCase());
+    if (matchedUser.username) possibleNames.push(matchedUser.username.trim().toLowerCase());
+  }
+
+  return state.tasks.filter(t => {
+    const a = String(t.assignee || '').trim().toLowerCase();
+    return possibleNames.some(p => a === p || a.includes(p) || p.includes(a));
+  }).length;
+}
+
 function renderSiteFilterOptions() {
   const select = document.getElementById('siteFilter');
-  const currentVal = state.filters.site;
+  if (!select) return;
 
-  let optionsHtml = '<option value="ALL">🏢 ทุกไซต์งานทั้งหมด</option>';
-  state.sites.forEach(site => {
-    optionsHtml += `<option value="${escapeHtml(site)}" ${site === currentVal ? 'selected' : ''}>${escapeHtml(site)}</option>`;
+  const currentVal = state.filters.site || 'ALL';
+  const totalTasks = state.tasks ? state.tasks.length : 0;
+
+  let optionsHtml = `<option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>🏢 ทุกไซต์งานทั้งหมด (${totalTasks})</option>`;
+  
+  const sitesList = (state.sites && state.sites.length > 0) ? state.sites : (state.allSites || []);
+  sitesList.forEach(site => {
+    const count = getSiteTasksCount(site);
+    optionsHtml += `<option value="${escapeHtml(site)}" ${site === currentVal ? 'selected' : ''}>${escapeHtml(site)} (${count})</option>`;
   });
 
   select.innerHTML = optionsHtml;
+  if (currentVal && select.value !== currentVal) {
+    select.value = currentVal;
+  }
 }
 
 function renderAssigneeFilterOptions() {
@@ -5127,7 +5218,8 @@ function renderAssigneeFilterOptions() {
   if (!select) return;
 
   const currentVal = state.filters.assignee || 'ALL';
-  let optionsHtml = '<option value="ALL">👤 ผู้รับผิดชอบทั้งหมด</option>';
+  const totalTasks = state.tasks ? state.tasks.length : 0;
+  let optionsHtml = `<option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>👤 ผู้รับผิดชอบทั้งหมด (${totalTasks})</option>`;
 
   // รวบรวมรายชื่อผู้รับผิดชอบทั้งหมด (จาก Users และจากงานเดิมใน Tasks)
   const names = [];
@@ -5154,17 +5246,113 @@ function renderAssigneeFilterOptions() {
   names.sort((a, b) => a.localeCompare(b, 'th'));
 
   names.forEach(name => {
-    optionsHtml += `<option value="${escapeHtml(name)}" ${name === currentVal ? 'selected' : ''}>👤 ${escapeHtml(name)}</option>`;
+    const count = getAssigneeTasksCount(name);
+    optionsHtml += `<option value="${escapeHtml(name)}" ${name === currentVal ? 'selected' : ''}>👤 ${escapeHtml(name)} (${count})</option>`;
   });
 
   // ตรวจสอบว่ามีงานที่ยังไม่ได้ระบุผู้รับผิดชอบหรือไม่
-  const hasUnassigned = state.tasks && state.tasks.some(t => !t.assignee || t.assignee.trim() === '' || t.assignee === 'ไม่ระบุ');
-  if (hasUnassigned) {
-    optionsHtml += `<option value="ไม่ระบุ" ${currentVal === 'ไม่ระบุ' ? 'selected' : ''}>⚪ ไม่ระบุผู้รับผิดชอบ</option>`;
+  const unassignedCount = getAssigneeTasksCount('ไม่ระบุ');
+  if (unassignedCount > 0 || (state.tasks && state.tasks.some(t => !t.assignee || t.assignee.trim() === '' || t.assignee === 'ไม่ระบุ'))) {
+    optionsHtml += `<option value="ไม่ระบุ" ${currentVal === 'ไม่ระบุ' ? 'selected' : ''}>⚪ ไม่ระบุผู้รับผิดชอบ (${unassignedCount})</option>`;
   }
 
   select.innerHTML = optionsHtml;
+  if (currentVal && select.value !== currentVal) {
+    select.value = currentVal;
+  }
 }
+
+// --------------------------------------------------------------------
+// GLOBAL FILTER CHANGE HANDLERS & RESET
+// --------------------------------------------------------------------
+
+function onSiteFilterChange(val) {
+  state.filters.site = val || 'ALL';
+  const select = document.getElementById('siteFilter');
+  if (select && select.value !== state.filters.site) select.value = state.filters.site;
+  updateClearFilterBtnVisibility();
+  renderDashboard();
+}
+window.onSiteFilterChange = onSiteFilterChange;
+
+function onAssigneeFilterChange(val) {
+  state.filters.assignee = val || 'ALL';
+  const select = document.getElementById('assigneeFilter');
+  if (select && select.value !== state.filters.assignee) select.value = state.filters.assignee;
+  updateClearFilterBtnVisibility();
+  renderDashboard();
+}
+window.onAssigneeFilterChange = onAssigneeFilterChange;
+
+function onPriorityFilterChange(val) {
+  state.filters.priority = val || 'ALL';
+  const select = document.getElementById('priorityFilter');
+  if (select && select.value !== state.filters.priority) select.value = state.filters.priority;
+  updateClearFilterBtnVisibility();
+  renderDashboard();
+}
+window.onPriorityFilterChange = onPriorityFilterChange;
+
+function clearAllFilters() {
+  state.filters.site = 'ALL';
+  state.filters.assignee = 'ALL';
+  state.filters.priority = 'ALL';
+  state.filters.search = '';
+  state.filters.dueDateFrom = '';
+  state.filters.dueDateTo = '';
+  state.filters.includeNoDueDate = false;
+
+  const s = document.getElementById('siteFilter');
+  if (s) s.value = 'ALL';
+  const a = document.getElementById('assigneeFilter');
+  if (a) a.value = 'ALL';
+  const p = document.getElementById('priorityFilter');
+  if (p) p.value = 'ALL';
+  const q = document.getElementById('searchInput');
+  if (q) q.value = '';
+  const df = document.getElementById('dueDateFromFilter');
+  if (df) setDateInputValue('dueDateFromFilter', '');
+  const dt = document.getElementById('dueDateToFilter');
+  if (dt) setDateInputValue('dueDateToFilter', '');
+  const noDue = document.getElementById('includeNoDueDateFilter');
+  if (noDue) noDue.checked = false;
+
+  updateClearFilterBtnVisibility();
+  renderDashboard();
+
+  if (typeof Swal !== 'undefined' && Swal.mixin) {
+    Swal.fire({
+      toast: true,
+      position: 'top-end',
+      icon: 'success',
+      title: 'ล้างตัวกรองทั้งหมดเรียบร้อยแล้ว',
+      showConfirmButton: false,
+      timer: 2000
+    });
+  }
+}
+window.clearAllFilters = clearAllFilters;
+
+function updateClearFilterBtnVisibility() {
+  const btn = document.getElementById('btnClearAllFilters');
+  if (!btn) return;
+  const isFiltered = (
+    (state.filters.site && state.filters.site !== 'ALL') ||
+    (state.filters.assignee && state.filters.assignee !== 'ALL') ||
+    (state.filters.priority && state.filters.priority !== 'ALL') ||
+    Boolean(state.filters.search) ||
+    Boolean(state.filters.dueDateFrom) ||
+    Boolean(state.filters.dueDateTo)
+  );
+  if (isFiltered) {
+    btn.classList.remove('hidden');
+    btn.classList.add('inline-flex');
+  } else {
+    btn.classList.add('hidden');
+    btn.classList.remove('inline-flex');
+  }
+}
+window.updateClearFilterBtnVisibility = updateClearFilterBtnVisibility;
 
 function renderSiteFormOptions() {
   const select = document.getElementById('taskSiteSelect');
@@ -5309,6 +5497,7 @@ function clearDueDateFilter() {
   if (toInput) setDateInputValue('dueDateToFilter', '');
   if (noDueCheckbox) noDueCheckbox.checked = false;
 
+  updateClearFilterBtnVisibility();
   renderDashboard();
 }
 
@@ -7015,7 +7204,7 @@ function toggleBulkSitesMode() {
     wrapper.classList.remove('hidden');
     toggleText.innerText = 'ปิดโหมดพิมพ์หลายบรรทัด';
     if (textarea) {
-      textarea.value = state.tempSites.join('\n');
+      textarea.value = state.tempSites.join('\r\n');
       textarea.focus();
     }
   } else {
@@ -7028,7 +7217,7 @@ function applyBulkSites() {
   const textarea = document.getElementById('bulkSitesTextarea');
   if (!textarea) return;
 
-  const lines = textarea.value.split('\n')
+  const lines = textarea.value.split('\r\n')
     .map(line => line.trim())
     .filter(Boolean);
 
