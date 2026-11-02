@@ -228,8 +228,18 @@
                   </div>
                 </div>
 
-                <div id="wtSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  <!-- Checkboxes for WT sites -->
+                <div id="wtSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5">
+                  <div class="flex items-center justify-between pb-1.5 border-b border-[#EFE9DC]/60 text-[11px] text-[#6E6862]">
+                    <span id="wtSitesCountBadge" class="font-medium">เลือก 0 ไซต์</span>
+                    <div class="flex items-center gap-2.5">
+                      <button type="button" onclick="selectAllWtSites(true)" class="text-[#2491FA] hover:underline font-semibold cursor-pointer">เลือกทั้งหมด</button>
+                      <span class="text-[#D6CEBF]">|</span>
+                      <button type="button" onclick="selectAllWtSites(false)" class="text-[#6E6862] hover:text-[#201E1C] hover:underline cursor-pointer">ล้างทั้งหมด</button>
+                    </div>
+                  </div>
+                  <div id="wtSiteCheckboxesList" class="space-y-1 max-h-48 overflow-y-auto pr-1">
+                    <!-- Checkboxes for WT sites -->
+                  </div>
                 </div>
               </div>
 
@@ -252,8 +262,18 @@
                   </div>
                 </div>
 
-                <div id="rdpSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  <!-- Checkboxes for RDP sites -->
+                <div id="rdpSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5">
+                  <div class="flex items-center justify-between pb-1.5 border-b border-[#EFE9DC]/60 text-[11px] text-[#6E6862]">
+                    <span id="rdpSitesCountBadge" class="font-medium">เลือก 0 ไซต์</span>
+                    <div class="flex items-center gap-2.5">
+                      <button type="button" onclick="selectAllRdpSites(true)" class="text-[#2491FA] hover:underline font-semibold cursor-pointer">เลือกทั้งหมด</button>
+                      <span class="text-[#D6CEBF]">|</span>
+                      <button type="button" onclick="selectAllRdpSites(false)" class="text-[#6E6862] hover:text-[#201E1C] hover:underline cursor-pointer">ล้างทั้งหมด</button>
+                    </div>
+                  </div>
+                  <div id="rdpSiteCheckboxesList" class="space-y-1 max-h-48 overflow-y-auto pr-1">
+                    <!-- Checkboxes for RDP sites -->
+                  </div>
                 </div>
               </div>
 

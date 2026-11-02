@@ -665,7 +665,13 @@ function getInitialData(requestUsername) {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) sitesPerm = parsed;
           } catch (e) {
-            sitesPerm = 'ALL';
+            if (raw.includes(',')) {
+              sitesPerm = raw.split(',').map(s => s.trim()).filter(Boolean);
+            } else if (raw !== '') {
+              sitesPerm = [raw];
+            } else {
+              sitesPerm = 'ALL';
+            }
           }
         }
       }
@@ -782,13 +788,20 @@ function getInitialData(requestUsername) {
     let filteredSites = allSites;
 
     if (userRole !== 'Admin' && Array.isArray(allowedSites)) {
-      const allowedSet = new Set(allowedSites);
-      filteredTasks = tasks.filter(t => allowedSet.has(t.site));
-      filteredSites = allSites.filter(s => allowedSet.has(s));
-      // ให้แน่ใจว่าไซต์ที่ได้รับอนุญาตทั้งหมดมีอยู่ในรายการตัวเลือก
-      allowedSites.forEach(s => {
-        if (!filteredSites.includes(s)) filteredSites.push(s);
-      });
+      if (allowedSites.length > 0) {
+        const allowedSet = new Set(allowedSites);
+        filteredTasks = tasks.filter(t => allowedSet.has(t.site));
+        filteredSites = allSites.filter(s => allowedSet.has(s));
+        // ให้แน่ใจว่าไซต์ที่ได้รับอนุญาตทั้งหมดมีอยู่ในรายการตัวเลือก
+        allowedSites.forEach(s => {
+          if (!filteredSites.includes(s)) filteredSites.push(s);
+        });
+      } else {
+        // หาก allowedSites เป็น [] (ว่างเปล่าจากความผิดพลาดในการตั้งค่า)
+        // ให้แสดงทุกไซต์งานชั่วคราวเพื่อป้องกันไม่ให้ผู้ใช้ถูกล็อกจนไม่เห็นงานใดๆ
+        filteredTasks = tasks;
+        filteredSites = allSites;
+      }
     }
 
     // คำนวณสรุปสถิติ (Stats) จากรายการงานที่ผู้ใช้มีสิทธิ์เข้าถึง
@@ -2288,7 +2301,13 @@ function getUsersList() {
             const parsed = JSON.parse(raw);
             if (Array.isArray(parsed)) allowedSites = parsed;
           } catch (e) {
-            allowedSites = 'ALL';
+            if (raw.includes(',')) {
+              allowedSites = raw.split(',').map(s => s.trim()).filter(Boolean);
+            } else if (raw !== '') {
+              allowedSites = [raw];
+            } else {
+              allowedSites = 'ALL';
+            }
           }
         }
       }

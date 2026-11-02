@@ -2516,8 +2516,18 @@
                   </div>
                 </div>
 
-                <div id="wtSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  <!-- Checkboxes for WT sites -->
+                <div id="wtSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5">
+                  <div class="flex items-center justify-between pb-1.5 border-b border-[#EFE9DC]/60 text-[11px] text-[#6E6862]">
+                    <span id="wtSitesCountBadge" class="font-medium">เลือก 0 ไซต์</span>
+                    <div class="flex items-center gap-2.5">
+                      <button type="button" onclick="selectAllWtSites(true)" class="text-[#2491FA] hover:underline font-semibold cursor-pointer">เลือกทั้งหมด</button>
+                      <span class="text-[#D6CEBF]">|</span>
+                      <button type="button" onclick="selectAllWtSites(false)" class="text-[#6E6862] hover:text-[#201E1C] hover:underline cursor-pointer">ล้างทั้งหมด</button>
+                    </div>
+                  </div>
+                  <div id="wtSiteCheckboxesList" class="space-y-1 max-h-48 overflow-y-auto pr-1">
+                    <!-- Checkboxes for WT sites -->
+                  </div>
                 </div>
               </div>
 
@@ -2540,8 +2550,18 @@
                   </div>
                 </div>
 
-                <div id="rdpSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                  <!-- Checkboxes for RDP sites -->
+                <div id="rdpSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5">
+                  <div class="flex items-center justify-between pb-1.5 border-b border-[#EFE9DC]/60 text-[11px] text-[#6E6862]">
+                    <span id="rdpSitesCountBadge" class="font-medium">เลือก 0 ไซต์</span>
+                    <div class="flex items-center gap-2.5">
+                      <button type="button" onclick="selectAllRdpSites(true)" class="text-[#2491FA] hover:underline font-semibold cursor-pointer">เลือกทั้งหมด</button>
+                      <span class="text-[#D6CEBF]">|</span>
+                      <button type="button" onclick="selectAllRdpSites(false)" class="text-[#6E6862] hover:text-[#201E1C] hover:underline cursor-pointer">ล้างทั้งหมด</button>
+                    </div>
+                  </div>
+                  <div id="rdpSiteCheckboxesList" class="space-y-1 max-h-48 overflow-y-auto pr-1">
+                    <!-- Checkboxes for RDP sites -->
+                  </div>
                 </div>
               </div>
 
@@ -8878,11 +8898,20 @@ function loadAdminData(forceRefresh = false) {
       if (res && res.success) {
         adminState.users = res.users || [];
         adminState.settings = res.settings || {};
-        adminState.wtSites = res.wtSites || [];
+        adminState.wtSites = res.wtSites || res.workTrackerSites || (res.settings && res.settings.SITES) || (window.state && state.sites) || [];
+        adminState.rdpSites = res.rdpSites || (window.rdpState && rdpState.sites) || [];
         adminState.wtSiteChatIds = (res.settings && res.settings.SITE_CHAT_IDS) ? res.settings.SITE_CHAT_IDS : {};
         adminState.rdpGroups = res.rdpGroups || [];
         adminState.auditLogs = res.auditLogs || [];
-        adminState.spreadsheetUrl = res.spreadsheetUrl || "";
+        adminState.spreadsheetUrl = res.spreadsheetUrl || res.sheetUrl || "";
+
+        // ซิงค์ข้อมูลกับ Global States เพื่อให้ทั้งระบบมองเห็นข้อมูลไซต์ร่วมกัน
+        if (window.state) {
+          if (!state.sites || state.sites.length === 0) state.sites = adminState.wtSites;
+        }
+        if (window.rdpState) {
+          if (!rdpState.sites || rdpState.sites.length === 0) rdpState.sites = adminState.rdpSites;
+        }
 
         // ปรับปรุง Link ไปยัง Google Sheet
         const sheetLink = document.getElementById("adminSheetLinkBtn");
@@ -9082,7 +9111,8 @@ function closeAdminUserForm() {
 
 function renderWtSiteCheckboxes(allowedSitesVal) {
   const wrapper = document.getElementById("wtSiteCheckboxesWrapper");
-  if (!wrapper) return;
+  const listContainer = document.getElementById("wtSiteCheckboxesList") || wrapper;
+  if (!wrapper || !listContainer) return;
 
   const isAll = (!allowedSitesVal || allowedSitesVal === 'ALL');
   const radios = document.getElementsByName("wtSiteAccessType");
@@ -9097,25 +9127,50 @@ function renderWtSiteCheckboxes(allowedSitesVal) {
   if (!isAll) {
     if (Array.isArray(allowedSitesVal)) allowedList = allowedSitesVal;
     else {
-      try { allowedList = JSON.parse(allowedSitesVal); } catch(e) { allowedList = [allowedSitesVal]; }
+      try { allowedList = JSON.parse(allowedSitesVal); } catch(e) {
+        if (typeof allowedSitesVal === 'string' && allowedSitesVal.includes(',')) {
+          allowedList = allowedSitesVal.split(',').map(s => s.trim()).filter(Boolean);
+        } else {
+          allowedList = [allowedSitesVal];
+        }
+      }
     }
   }
 
-  const allSites = adminState.wtSites || [];
+  const allSites = (adminState.wtSites && adminState.wtSites.length > 0)
+    ? adminState.wtSites
+    : ((window.state && state.sites && state.sites.length > 0) ? state.sites : []);
+
   if (allSites.length === 0) {
-    wrapper.innerHTML = '<p class="text-xs text-[#6E6862]">ยังไม่มีรายการไซต์งานในระบบ</p>';
+    listContainer.innerHTML = '<p class="text-xs text-[#6E6862] p-2 text-center">ยังไม่มีรายการไซต์งานในระบบ</p>';
+    updateWtSitesCountBadge();
     return;
   }
 
-  wrapper.innerHTML = allSites.map(s => {
+  listContainer.innerHTML = allSites.map(s => {
     const isChecked = isAll || allowedList.includes(s);
     return `
       <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer text-xs">
-        <input type="checkbox" class="chk-wt-site rounded text-[#2491FA]" value="${escapeHtml(s)}" ${isChecked ? 'checked' : ''}>
+        <input type="checkbox" class="chk-wt-site rounded text-[#2491FA]" value="${escapeHtml(s)}" ${isChecked ? 'checked' : ''} onchange="updateWtSitesCountBadge()">
         <span class="text-[#201E1C]">${escapeHtml(s)}</span>
       </label>
     `;
   }).join("");
+
+  updateWtSitesCountBadge();
+}
+
+function selectAllWtSites(selectAll) {
+  const checkboxes = document.querySelectorAll('.chk-wt-site');
+  checkboxes.forEach(cb => { cb.checked = selectAll; });
+  updateWtSitesCountBadge();
+}
+
+function updateWtSitesCountBadge() {
+  const badge = document.getElementById("wtSitesCountBadge");
+  const total = document.querySelectorAll('.chk-wt-site').length;
+  const checked = document.querySelectorAll('.chk-wt-site:checked').length;
+  if (badge) badge.textContent = `เลือก ${checked} จาก ${total} ไซต์`;
 }
 
 function toggleWtSiteCheckboxes(showCustom) {
@@ -9128,7 +9183,8 @@ function toggleWtSiteCheckboxes(showCustom) {
 
 function renderRdpSiteCheckboxes(allowedRdpSitesVal) {
   const wrapper = document.getElementById("rdpSiteCheckboxesWrapper");
-  if (!wrapper) return;
+  const listContainer = document.getElementById("rdpSiteCheckboxesList") || wrapper;
+  if (!wrapper || !listContainer) return;
 
   const isAll = (!allowedRdpSitesVal || allowedRdpSitesVal === 'ALL');
   const radios = document.getElementsByName("rdpSiteAccessType");
@@ -9143,27 +9199,52 @@ function renderRdpSiteCheckboxes(allowedRdpSitesVal) {
   if (!isAll) {
     if (Array.isArray(allowedRdpSitesVal)) allowedList = allowedRdpSitesVal;
     else {
-      try { allowedList = JSON.parse(allowedRdpSitesVal); } catch(e) { allowedList = [allowedRdpSitesVal]; }
+      try { allowedList = JSON.parse(allowedRdpSitesVal); } catch(e) {
+        if (typeof allowedRdpSitesVal === 'string' && allowedRdpSitesVal.includes(',')) {
+          allowedList = allowedRdpSitesVal.split(',').map(s => s.trim()).filter(Boolean);
+        } else {
+          allowedList = [allowedRdpSitesVal];
+        }
+      }
     }
   }
 
   // ดึงรายชื่อไซต์งาน RDP
-  const rdpSites = rdpState.sites || [];
+  const rdpSites = (adminState.rdpSites && adminState.rdpSites.length > 0)
+    ? adminState.rdpSites
+    : ((window.rdpState && rdpState.sites && rdpState.sites.length > 0) ? rdpState.sites : []);
+
   if (rdpSites.length === 0) {
-    wrapper.innerHTML = '<p class="text-xs text-[#6E6862]">ยังไม่มีรายการไซต์งาน RDP ในระบบ</p>';
+    listContainer.innerHTML = '<p class="text-xs text-[#6E6862] p-2 text-center">ยังไม่มีรายการไซต์งาน RDP ในระบบ</p>';
+    updateRdpSitesCountBadge();
     return;
   }
 
-  wrapper.innerHTML = rdpSites.map(s => {
+  listContainer.innerHTML = rdpSites.map(s => {
     const isChecked = isAll || allowedList.includes(s.site_id) || allowedList.includes(s.site_name);
     return `
       <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer text-xs">
-        <input type="checkbox" class="chk-rdp-site rounded text-[#2491FA]" value="${escapeHtml(s.site_id)}" ${isChecked ? 'checked' : ''}>
+        <input type="checkbox" class="chk-rdp-site rounded text-[#2491FA]" value="${escapeHtml(s.site_id)}" ${isChecked ? 'checked' : ''} onchange="updateRdpSitesCountBadge()">
         <span class="text-[#201E1C] font-semibold">${escapeHtml(s.site_name)}</span>
         <span class="text-[10px] text-[#6E6862]">(${escapeHtml(s.group_name || 'ทั่วไป')})</span>
       </label>
     `;
   }).join("");
+
+  updateRdpSitesCountBadge();
+}
+
+function selectAllRdpSites(selectAll) {
+  const checkboxes = document.querySelectorAll('.chk-rdp-site');
+  checkboxes.forEach(cb => { cb.checked = selectAll; });
+  updateRdpSitesCountBadge();
+}
+
+function updateRdpSitesCountBadge() {
+  const badge = document.getElementById("rdpSitesCountBadge");
+  const total = document.querySelectorAll('.chk-rdp-site').length;
+  const checked = document.querySelectorAll('.chk-rdp-site:checked').length;
+  if (badge) badge.textContent = `เลือก ${checked} จาก ${total} ไซต์`;
 }
 
 function toggleRdpSiteCheckboxes(showCustom) {
@@ -9252,6 +9333,10 @@ function handleAdminUserSubmit(event) {
   if (isCustomWt) {
     const selected = [];
     document.querySelectorAll(".chk-wt-site:checked").forEach(cb => selected.push(cb.value));
+    if (selected.length === 0) {
+      showToast("กรุณาเลือกไซต์งานติดตามงานอย่างน้อย 1 ไซต์ หรือเลือก 'ทุกไซต์งาน'", "warning");
+      return;
+    }
     allowedSites = selected;
   }
 
@@ -9264,6 +9349,10 @@ function handleAdminUserSubmit(event) {
   if (isCustomRdp) {
     const selected = [];
     document.querySelectorAll(".chk-rdp-site:checked").forEach(cb => selected.push(cb.value));
+    if (selected.length === 0) {
+      showToast("กรุณาเลือกไซต์งาน RDP อย่างน้อย 1 ไซต์ หรือเลือก 'ทุกไซต์งาน'", "warning");
+      return;
+    }
     allowedRdpSites = selected;
   }
 

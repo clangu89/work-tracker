@@ -664,11 +664,13 @@ function getAdminOverviewData(reqUsername) {
     return {
       success: true,
       users: users,
+      wtSites: wtSites,
       workTrackerSites: wtSites,
       rdpSites: rdpSitesData,
       rdpGroups: rdpGroups,
       settings: settings,
       auditLogs: logsRes.logs || [],
+      spreadsheetUrl: ss.getUrl(),
       sheetUrl: ss.getUrl()
     };
   } catch (err) {
