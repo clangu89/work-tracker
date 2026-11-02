@@ -107,6 +107,34 @@ function showToast(message, type = "info", duration = 3500) {
   Toast.show(message, type, duration);
 }
 
+/**
+ * คัดลอกข้อความลงคลิปบอร์ด พร้อมแสดง Toast
+ */
+async function copyToClipboard(text, label = "คัดลอกสำเร็จ") {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const input = document.createElement("input");
+      input.value = text;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+    }
+    showToast(`📋 ${label}: ${text}`, "success", 2000);
+  } catch (err) {
+    const input = document.createElement("input");
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand("copy");
+    document.body.removeChild(input);
+    showToast(`📋 ${label}: ${text}`, "success", 2000);
+  }
+}
+window.copyToClipboard = copyToClipboard;
+
 
 // Document Ready
 document.addEventListener('DOMContentLoaded', () => {

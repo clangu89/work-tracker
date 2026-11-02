@@ -1795,7 +1795,9 @@
 
       </div>
     </div>
-  </div> <!-- ================= /#workTrackerApp ================= -->
+  </div> <!-- /#viewArchivedTaskModal -->
+
+</div> <!-- ================= /#workTrackerApp ================= -->
 
   <!-- ================= MODAL: ONLINE USERS (ผู้ใช้งานที่กำลังออนไลน์) ================= -->
   <div id="onlineUsersModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
@@ -3147,6 +3149,34 @@ window.Toast = Toast;
 function showToast(message, type = "info", duration = 3500) {
   Toast.show(message, type, duration);
 }
+
+/**
+ * คัดลอกข้อความลงคลิปบอร์ด พร้อมแสดง Toast
+ */
+async function copyToClipboard(text, label = "คัดลอกสำเร็จ") {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const input = document.createElement("input");
+      input.value = text;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand("copy");
+      document.body.removeChild(input);
+    }
+    showToast(`📋 ${label}: ${text}`, "success", 2000);
+  } catch (err) {
+    const input = document.createElement("input");
+    input.value = text;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand("copy");
+    document.body.removeChild(input);
+    showToast(`📋 ${label}: ${text}`, "success", 2000);
+  }
+}
+window.copyToClipboard = copyToClipboard;
 
 
 // Document Ready
@@ -7769,7 +7799,12 @@ const RdpLauncher = {
         .withSuccessHandler(res => {
           if (res && res.online_users && Array.isArray(res.online_users)) {
             state.onlineUsers = res.online_users;
-            updateOnlineUsersBadge();
+            if (typeof updateOnlineUsersDisplay === 'function') {
+              updateOnlineUsersDisplay(state.onlineUsers.length, state.onlineUsers);
+            }
+            if (typeof updateNavbarUser === 'function') {
+              updateNavbarUser();
+            }
             renderRdpSites();
           }
         })
@@ -8010,7 +8045,12 @@ function loadRdpData(forceRefresh = false) {
 
         if (res.online_users && Array.isArray(res.online_users)) {
           state.onlineUsers = res.online_users;
-          updateOnlineUsersBadge();
+          if (typeof updateOnlineUsersDisplay === 'function') {
+            updateOnlineUsersDisplay(state.onlineUsers.length, state.onlineUsers);
+          }
+          if (typeof updateNavbarUser === 'function') {
+            updateNavbarUser();
+          }
         }
 
         populateRdpGroupFilter();
@@ -8692,6 +8732,15 @@ function closeProtocolGuideModal() {
   const modal = document.getElementById("protocol-guide-modal");
   if (modal) modal.classList.add("hidden");
 }
+
+/**
+ * ปิด Modal ของโมดูล RDP ตาม ID ที่ระบุ
+ */
+function hideRdpModal(modalId) {
+  const el = document.getElementById(modalId);
+  if (el) el.classList.add("hidden");
+}
+window.hideRdpModal = hideRdpModal;
 
 function switchProtocolGuideTab(tabName) {
   const btnSetup = document.getElementById("protocol-tab-setup");

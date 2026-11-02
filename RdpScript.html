@@ -78,7 +78,12 @@ const RdpLauncher = {
         .withSuccessHandler(res => {
           if (res && res.online_users && Array.isArray(res.online_users)) {
             state.onlineUsers = res.online_users;
-            updateOnlineUsersBadge();
+            if (typeof updateOnlineUsersDisplay === 'function') {
+              updateOnlineUsersDisplay(state.onlineUsers.length, state.onlineUsers);
+            }
+            if (typeof updateNavbarUser === 'function') {
+              updateNavbarUser();
+            }
             renderRdpSites();
           }
         })
@@ -319,7 +324,12 @@ function loadRdpData(forceRefresh = false) {
 
         if (res.online_users && Array.isArray(res.online_users)) {
           state.onlineUsers = res.online_users;
-          updateOnlineUsersBadge();
+          if (typeof updateOnlineUsersDisplay === 'function') {
+            updateOnlineUsersDisplay(state.onlineUsers.length, state.onlineUsers);
+          }
+          if (typeof updateNavbarUser === 'function') {
+            updateNavbarUser();
+          }
         }
 
         populateRdpGroupFilter();
@@ -1001,6 +1011,15 @@ function closeProtocolGuideModal() {
   const modal = document.getElementById("protocol-guide-modal");
   if (modal) modal.classList.add("hidden");
 }
+
+/**
+ * ปิด Modal ของโมดูล RDP ตาม ID ที่ระบุ
+ */
+function hideRdpModal(modalId) {
+  const el = document.getElementById(modalId);
+  if (el) el.classList.add("hidden");
+}
+window.hideRdpModal = hideRdpModal;
 
 function switchProtocolGuideTab(tabName) {
   const btnSetup = document.getElementById("protocol-tab-setup");
