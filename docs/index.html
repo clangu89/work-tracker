@@ -341,16 +341,62 @@
   .flatpickr-current-month .flatpickr-monthDropdown-months {
     font-weight: 700 !important;
   }
-  /* App Launcher Card Animations */
+  /* App Launcher Card Animations & Liquid Frosted Glass Portal */
+  .portal-liquid-bg {
+    background: radial-gradient(circle at 50% 20%, #f7f4ea 0%, #ebe3d3 100%);
+  }
+
+  /* Frosted Glass Navbar */
+  .glass-nav-milk {
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    background: rgba(255, 255, 255, 0.74);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 4px 20px -2px rgba(32, 30, 28, 0.05);
+  }
+
+  /* Frosted Milk Glass Portal Card */
+  .portal-card-milk {
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.52) 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.92);
+    box-shadow: inset 0 1px 2px 0 rgba(255, 255, 255, 0.95),
+                0 20px 45px -10px rgba(32, 30, 28, 0.1),
+                0 4px 16px rgba(36, 145, 250, 0.08);
+    border-radius: 2.25rem;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+  }
+  .portal-card-milk::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+  }
+  .portal-card-milk:hover {
+    transform: translateY(-6px) scale(1.015);
+    border-color: rgba(255, 255, 255, 1);
+    box-shadow: inset 0 1px 2px 0 rgba(255, 255, 255, 1),
+                0 28px 56px -12px rgba(32, 30, 28, 0.16),
+                0 0 30px rgba(36, 145, 250, 0.22);
+  }
+
+  /* Glass Badges in Portal */
+  .glass-badge {
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 2px 6px rgba(32, 30, 28, 0.04);
+  }
+
   .app-launcher-card {
     transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    background-color: var(--ch-card);
-    border: 1px solid var(--ch-border);
-  }
-  .app-launcher-card:hover {
-    transform: translateY(-4px) scale(1.01);
-    box-shadow: 0 16px 28px -4px rgba(32, 30, 28, 0.12), 0 6px 10px -2px rgba(32, 30, 28, 0.06);
-    border-color: #D9D1C3;
   }
 
   /* Remote Button Pulse & Hover */
@@ -588,16 +634,24 @@
     </div>
   </div>
 
-  <!-- ================= APP LAUNCHER / PORTAL SCREEN ================= -->
-  <div id="appLauncherScreen" class="hidden min-h-screen flex flex-col bg-[#FAF8F2] text-[#201E1C]">
+  <!-- ================= APP LAUNCHER / PORTAL SCREEN (LIQUID GLASS - FROSTED MILK) ================= -->
+  <div id="appLauncherScreen" class="hidden min-h-screen flex flex-col portal-liquid-bg text-[#201E1C] relative overflow-x-hidden">
     
-    <!-- Launcher Navbar -->
-    <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+    <!-- Fluid Floating Orbs Background (Liquid Engine) -->
+    <div class="fixed inset-0 pointer-events-none overflow-hidden z-0">
+      <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-sky-300/45 blur-3xl orb-1"></div>
+      <div class="absolute top-1/4 -right-20 w-[30rem] h-[30rem] rounded-full bg-amber-200/50 blur-3xl orb-2"></div>
+      <div class="absolute -bottom-28 left-1/4 w-[34rem] h-[34rem] rounded-full bg-rose-200/45 blur-3xl orb-3"></div>
+      <div class="absolute top-2/3 right-1/4 w-88 h-88 rounded-full bg-teal-200/40 blur-3xl orb-4"></div>
+    </div>
+
+    <!-- Frosted Glass Launcher Navbar -->
+    <header class="glass-nav-milk sticky top-0 z-30">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16 gap-4">
           <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-2xl bg-[#2491FA] flex items-center justify-center text-white shadow-md shadow-blue-500/25">
-              <i class="fa-solid fa-grip text-lg"></i>
+            <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#2491FA] to-sky-400 flex items-center justify-center text-white shadow-md shadow-blue-500/25 border border-white/50">
+              <i class="fa-solid fa-grip text-base"></i>
             </div>
             <div>
               <h1 class="text-base sm:text-lg font-bold text-[#201E1C] leading-tight">ศูนย์รวมระบบงาน (App Portal)</h1>
@@ -607,15 +661,15 @@
 
           <div class="flex items-center gap-2.5">
             <!-- User Badge -->
-            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC]">
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 glass-badge rounded-xl text-xs text-[#201E1C]">
               <i class="fa-solid fa-circle-user text-[#2491FA] text-sm"></i>
               <span class="user-display-name-nav font-semibold max-w-[140px] truncate">-</span>
-              <span class="user-role-badge-nav text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
+              <span class="user-role-badge-nav text-[10px] bg-[#2491FA] text-white px-1.5 py-0.2 rounded-md font-bold uppercase shadow-2xs">Member</span>
             </div>
 
             <!-- Online Badge -->
             <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
-                    class="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
+                    class="flex items-center gap-1.5 px-3 py-1.5 glass-badge hover:bg-white rounded-xl text-xs text-[#201E1C] transition-all cursor-pointer shadow-2xs active:scale-95">
               <span class="relative flex h-2 w-2">
                 <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -625,7 +679,7 @@
 
             <!-- Logout -->
             <button onclick="handleLogout()" title="ออกจากระบบ"
-                    class="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200 cursor-pointer">
+                    class="p-2 text-rose-600 hover:text-rose-700 bg-white/60 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200 cursor-pointer shadow-2xs">
               <i class="fa-solid fa-arrow-right-from-bracket"></i>
             </button>
           </div>
@@ -634,71 +688,86 @@
     </header>
 
     <!-- Main Launcher Area -->
-    <main class="flex-1 flex flex-col items-center justify-center max-w-5xl w-full mx-auto px-4 py-12">
+    <main class="flex-1 flex flex-col items-center justify-center max-w-5xl w-full mx-auto px-4 py-16 relative z-10">
       
       <!-- App Cards Grid -->
-      <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+      <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 w-full">
         
         <!-- CARD 1: WORK TRACKER -->
         <div id="launcherCardWorkTracker" onclick="enterApp('work_tracker')"
-             class="app-launcher-card bg-white rounded-3xl p-6 sm:p-7 border border-[#EFE9DC] shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group hover:-translate-y-1 relative overflow-hidden">
+             class="app-launcher-card portal-card-milk p-7 flex flex-col justify-between cursor-pointer group">
           <div class="space-y-4">
-            <div class="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center text-2xl group-hover:bg-[#2491FA] group-hover:text-white transition-all duration-300 shadow-sm">
-              <i class="fa-solid fa-list-check"></i>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบติดตามงาน</h3>
-                <span class="px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 rounded-md border border-amber-200">Work Tracker</span>
+            <div class="relative w-16 h-16 group-hover:scale-105 transition-transform duration-300">
+              <div class="absolute inset-0 rounded-2xl bg-gradient-to-tr from-amber-400 to-orange-500 blur-md opacity-35 group-hover:opacity-65 transition-opacity"></div>
+              <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-400 to-amber-500 border border-white/60 text-white flex items-center justify-center text-2xl shadow-lg shadow-amber-500/25">
+                <i class="fa-solid fa-list-check"></i>
               </div>
             </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-xl font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบติดตามงาน</h3>
+              </div>
+              <span class="px-2.5 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 rounded-md border border-amber-200/80">Work Tracker</span>
+            </div>
           </div>
-          <div class="pt-5 mt-5 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
+          <div class="pt-6 mt-6 border-t border-[#EFE9DC]/80 flex items-center justify-between text-xs font-bold text-[#2491FA]">
             <span>เปิดระบบติดตามงาน</span>
-            <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+            <i class="fa-solid fa-arrow-right group-hover:translate-x-1.5 transition-transform duration-200"></i>
           </div>
         </div>
 
         <!-- CARD 2: RDP MANAGER -->
         <div id="launcherCardRdp" onclick="enterApp('rdp_manager')"
-             class="app-launcher-card bg-white rounded-3xl p-6 sm:p-7 border border-[#EFE9DC] shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group hover:-translate-y-1 relative overflow-hidden">
+             class="app-launcher-card portal-card-milk p-7 flex flex-col justify-between cursor-pointer group">
           <div class="space-y-4">
-            <div class="w-14 h-14 rounded-2xl bg-blue-500/10 text-[#2491FA] flex items-center justify-center text-2xl group-hover:bg-[#2491FA] group-hover:text-white transition-all duration-300 shadow-sm">
-              <i class="fa-solid fa-desktop"></i>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบรีโมตไซต์งาน</h3>
-                <span class="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 rounded-md border border-blue-200">RDP Manager</span>
+            <div class="relative w-16 h-16 group-hover:scale-105 transition-transform duration-300">
+              <div class="absolute inset-0 rounded-2xl bg-gradient-to-tr from-sky-400 to-blue-600 blur-md opacity-35 group-hover:opacity-65 transition-opacity"></div>
+              <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-400 to-[#2491FA] border border-white/60 text-white flex items-center justify-center text-2xl shadow-lg shadow-blue-500/25">
+                <i class="fa-solid fa-desktop"></i>
               </div>
             </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-xl font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบรีโมตไซต์งาน</h3>
+              </div>
+              <span class="px-2.5 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 rounded-md border border-blue-200/80">RDP Manager</span>
+            </div>
           </div>
-          <div class="pt-5 mt-5 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
+          <div class="pt-6 mt-6 border-t border-[#EFE9DC]/80 flex items-center justify-between text-xs font-bold text-[#2491FA]">
             <span>เปิดระบบรีโมต</span>
-            <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+            <i class="fa-solid fa-arrow-right group-hover:translate-x-1.5 transition-transform duration-200"></i>
           </div>
         </div>
 
         <!-- CARD 3: ADMIN CENTER (Visible to Admins) -->
         <div id="launcherCardAdmin" onclick="enterApp('admin')"
-             class="app-launcher-card hidden bg-white rounded-3xl p-6 sm:p-7 border border-purple-200/80 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group hover:-translate-y-1 relative overflow-hidden">
+             class="app-launcher-card portal-card-milk hidden p-7 flex flex-col justify-between cursor-pointer group">
           <div class="space-y-4">
-            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center text-2xl group-hover:bg-purple-600 group-hover:text-white transition-all duration-300 shadow-sm">
-              <i class="fa-solid fa-shield-halved"></i>
-            </div>
-            <div>
-              <div class="flex items-center gap-2">
-                <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-purple-600 transition-colors">ระบบผู้ดูแลระบบ</h3>
-                <span class="px-2 py-0.5 text-[10px] font-bold bg-purple-50 text-purple-700 rounded-md border border-purple-200">Admin Center</span>
+            <div class="relative w-16 h-16 group-hover:scale-105 transition-transform duration-300">
+              <div class="absolute inset-0 rounded-2xl bg-gradient-to-tr from-purple-400 to-indigo-600 blur-md opacity-35 group-hover:opacity-65 transition-opacity"></div>
+              <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-500 to-indigo-600 border border-white/60 text-white flex items-center justify-center text-2xl shadow-lg shadow-purple-500/25">
+                <i class="fa-solid fa-shield-halved"></i>
               </div>
             </div>
+            <div>
+              <div class="flex items-center gap-2 mb-1">
+                <h3 class="text-xl font-bold text-[#201E1C] group-hover:text-purple-600 transition-colors">ระบบผู้ดูแลระบบ</h3>
+              </div>
+              <span class="px-2.5 py-0.5 text-[10px] font-bold bg-purple-50 text-purple-700 rounded-md border border-purple-200/80">Admin Center</span>
+            </div>
           </div>
-          <div class="pt-5 mt-5 border-t border-purple-100 flex items-center justify-between text-xs font-bold text-purple-600">
+          <div class="pt-6 mt-6 border-t border-[#EFE9DC]/80 flex items-center justify-between text-xs font-bold text-purple-600">
             <span>เข้าสู่ระบบ Admin</span>
-            <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+            <i class="fa-solid fa-arrow-right group-hover:translate-x-1.5 transition-transform duration-200"></i>
           </div>
         </div>
 
+      </div>
+
+      <!-- Security & Status Micro Badge -->
+      <div class="mt-12 text-center text-xs text-[#6E6862]/80 flex items-center justify-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+        <span>ระบบพร้อมใช้งาน • Liquid Glass Frosted Milk Theme</span>
       </div>
 
     </main>
