@@ -524,20 +524,24 @@ function saveSettings(newSettings) {
     if (newSettings.TELEGRAM_BOT_TOKEN !== undefined) {
       updateOrAdd('TELEGRAM_BOT_TOKEN', newSettings.TELEGRAM_BOT_TOKEN, 'Token Telegram Bot');
     }
-    if (newSettings.TELEGRAM_CHAT_ID !== undefined) {
-      updateOrAdd('TELEGRAM_CHAT_ID', newSettings.TELEGRAM_CHAT_ID, 'Chat ID หลัก รับการแจ้งเตือน');
+    if (newSettings.TELEGRAM_CHAT_ID !== undefined || newSettings.TELEGRAM_MAIN_GROUP_CHAT_ID !== undefined) {
+      const val = newSettings.TELEGRAM_CHAT_ID !== undefined ? newSettings.TELEGRAM_CHAT_ID : newSettings.TELEGRAM_MAIN_GROUP_CHAT_ID;
+      updateOrAdd('TELEGRAM_CHAT_ID', String(val), 'Chat ID หลัก รับการแจ้งเตือน');
     }
-    if (newSettings.NOTIFY_ON_CREATE !== undefined) {
-      updateOrAdd('NOTIFY_ON_CREATE', String(newSettings.NOTIFY_ON_CREATE), 'แจ้งเตือนเมื่องานถูกสร้าง');
+    if (newSettings.NOTIFY_ON_CREATE !== undefined || newSettings.NOTIFY_ON_TASK_CREATE !== undefined) {
+      const val = newSettings.NOTIFY_ON_CREATE !== undefined ? newSettings.NOTIFY_ON_CREATE : newSettings.NOTIFY_ON_TASK_CREATE;
+      updateOrAdd('NOTIFY_ON_CREATE', String(val), 'แจ้งเตือนเมื่องานถูกสร้าง');
     }
     if (newSettings.NOTIFY_ON_STATUS_CHANGE !== undefined) {
       updateOrAdd('NOTIFY_ON_STATUS_CHANGE', String(newSettings.NOTIFY_ON_STATUS_CHANGE), 'แจ้งเตือนเมื่อเปลี่ยนสถานะ');
     }
-    if (newSettings.NOTIFY_ASSIGNEE_ON_CREATE !== undefined) {
-      updateOrAdd('NOTIFY_ASSIGNEE_ON_CREATE', String(newSettings.NOTIFY_ASSIGNEE_ON_CREATE), 'แจ้งเตือนผู้รับผิดชอบเมื่อมีงานใหม่');
+    if (newSettings.NOTIFY_ASSIGNEE_ON_CREATE !== undefined || newSettings.NOTIFY_ASSIGNEE !== undefined) {
+      const val = newSettings.NOTIFY_ASSIGNEE_ON_CREATE !== undefined ? newSettings.NOTIFY_ASSIGNEE_ON_CREATE : newSettings.NOTIFY_ASSIGNEE;
+      updateOrAdd('NOTIFY_ASSIGNEE_ON_CREATE', String(val), 'แจ้งเตือนผู้รับผิดชอบเมื่อมีงานใหม่');
     }
-    if (newSettings.NOTIFY_MAIN_GROUP_ALWAYS !== undefined) {
-      updateOrAdd('NOTIFY_MAIN_GROUP_ALWAYS', String(newSettings.NOTIFY_MAIN_GROUP_ALWAYS), 'ส่งเข้ากลุ่มหลักส่วนกลางควบคู่ไปด้วยเสมอ');
+    if (newSettings.NOTIFY_MAIN_GROUP_ALWAYS !== undefined || newSettings.NOTIFY_MAIN_GROUP !== undefined) {
+      const val = newSettings.NOTIFY_MAIN_GROUP_ALWAYS !== undefined ? newSettings.NOTIFY_MAIN_GROUP_ALWAYS : newSettings.NOTIFY_MAIN_GROUP;
+      updateOrAdd('NOTIFY_MAIN_GROUP_ALWAYS', String(val), 'ส่งเข้ากลุ่มหลักส่วนกลางควบคู่ไปด้วยเสมอ');
     }
     if (newSettings.ALLOW_PASSWORD_LOGIN !== undefined) {
       updateOrAdd('ALLOW_PASSWORD_LOGIN', String(newSettings.ALLOW_PASSWORD_LOGIN), 'อนุญาตเข้าสู่ระบบด้วยรหัสผ่านสำรอง');
@@ -554,8 +558,11 @@ function saveSettings(newSettings) {
     if (newSettings.RDP_DEFAULT_SHARE_DRIVES !== undefined) {
       updateOrAdd('RDP_DEFAULT_SHARE_DRIVES', String(newSettings.RDP_DEFAULT_SHARE_DRIVES), 'แชร์ไดรฟ์และ Clipboard เริ่มต้น');
     }
-    if (newSettings.SITE_TELEGRAM_CHAT_IDS !== undefined && typeof newSettings.SITE_TELEGRAM_CHAT_IDS === 'object') {
-      updateOrAdd('SITE_TELEGRAM_CHAT_IDS', JSON.stringify(newSettings.SITE_TELEGRAM_CHAT_IDS), 'Chat ID กลุ่ม Telegram แต่ละไซต์งาน (JSON Object)');
+    if ((newSettings.SITE_TELEGRAM_CHAT_IDS !== undefined || newSettings.SITE_CHAT_IDS !== undefined)) {
+      const chatIdsObj = newSettings.SITE_TELEGRAM_CHAT_IDS !== undefined ? newSettings.SITE_TELEGRAM_CHAT_IDS : newSettings.SITE_CHAT_IDS;
+      if (typeof chatIdsObj === 'object') {
+        updateOrAdd('SITE_TELEGRAM_CHAT_IDS', JSON.stringify(chatIdsObj), 'Chat ID กลุ่ม Telegram แต่ละไซต์งาน (JSON Object)');
+      }
     }
     if (newSettings.SITES !== undefined && Array.isArray(newSettings.SITES)) {
       updateOrAdd('SITES', JSON.stringify(newSettings.SITES), 'รายชื่อไซต์งานทั้งหมด');

@@ -8886,7 +8886,7 @@ function switchAdminScreen(screenId) {
  * โหลดข้อมูลภาพรวมระบบทั้งหมดสำหรับ Admin Center
  */
 function loadAdminData(forceRefresh = false) {
-  if (adminState.isLoading) return;
+  if (adminState.isLoading && !forceRefresh) return;
   adminState.isLoading = true;
 
   const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
@@ -8900,17 +8900,18 @@ function loadAdminData(forceRefresh = false) {
         adminState.settings = res.settings || {};
         adminState.wtSites = res.wtSites || res.workTrackerSites || (res.settings && res.settings.SITES) || (window.state && state.sites) || [];
         adminState.rdpSites = res.rdpSites || (window.rdpState && rdpState.sites) || [];
-        adminState.wtSiteChatIds = (res.settings && res.settings.SITE_CHAT_IDS) ? res.settings.SITE_CHAT_IDS : {};
+        adminState.wtSiteChatIds = (res.settings && (res.settings.SITE_TELEGRAM_CHAT_IDS || res.settings.SITE_CHAT_IDS)) ? (res.settings.SITE_TELEGRAM_CHAT_IDS || res.settings.SITE_CHAT_IDS) : {};
         adminState.rdpGroups = res.rdpGroups || [];
         adminState.auditLogs = res.auditLogs || [];
         adminState.spreadsheetUrl = res.spreadsheetUrl || res.sheetUrl || "";
 
         // ซิงค์ข้อมูลกับ Global States เพื่อให้ทั้งระบบมองเห็นข้อมูลไซต์ร่วมกัน
         if (window.state) {
-          if (!state.sites || state.sites.length === 0) state.sites = adminState.wtSites;
+          state.sites = adminState.wtSites;
         }
         if (window.rdpState) {
           if (!rdpState.sites || rdpState.sites.length === 0) rdpState.sites = adminState.rdpSites;
+          rdpState.groups = adminState.rdpGroups;
         }
 
         // ปรับปรุง Link ไปยัง Google Sheet
@@ -9504,11 +9505,11 @@ function populateWtSettings() {
   const chkAssignee = document.getElementById("admin-wt-notify-assignee");
   const chkMain = document.getElementById("admin-wt-notify-maingroup");
 
-  if (mainChatInput) mainChatInput.value = s.TELEGRAM_MAIN_GROUP_CHAT_ID || "";
-  if (chkCreate) chkCreate.checked = (s.NOTIFY_ON_TASK_CREATE !== "false");
-  if (chkStatus) chkStatus.checked = (s.NOTIFY_ON_STATUS_CHANGE !== "false");
-  if (chkAssignee) chkAssignee.checked = (s.NOTIFY_ASSIGNEE !== "false");
-  if (chkMain) chkMain.checked = (s.NOTIFY_MAIN_GROUP !== "false");
+  if (mainChatInput) mainChatInput.value = s.TELEGRAM_CHAT_ID || s.TELEGRAM_MAIN_GROUP_CHAT_ID || "";
+  if (chkCreate) chkCreate.checked = (s.NOTIFY_ON_CREATE !== false && s.NOTIFY_ON_CREATE !== "false" && s.NOTIFY_ON_TASK_CREATE !== "false");
+  if (chkStatus) chkStatus.checked = (s.NOTIFY_ON_STATUS_CHANGE !== false && s.NOTIFY_ON_STATUS_CHANGE !== "false");
+  if (chkAssignee) chkAssignee.checked = (s.NOTIFY_ASSIGNEE_ON_CREATE !== false && s.NOTIFY_ASSIGNEE_ON_CREATE !== "false" && s.NOTIFY_ASSIGNEE !== "false");
+  if (chkMain) chkMain.checked = (s.NOTIFY_MAIN_GROUP_ALWAYS === true || s.NOTIFY_MAIN_GROUP_ALWAYS === "true" || s.NOTIFY_MAIN_GROUP === "true");
 }
 
 function saveAdminWtNotificationSettings() {
@@ -9519,23 +9520,44 @@ function saveAdminWtNotificationSettings() {
   const chkMain = document.getElementById("admin-wt-notify-maingroup").checked ? "true" : "false";
 
   const newSettings = {
+    TELEGRAM_CHAT_ID: mainChatId,
     TELEGRAM_MAIN_GROUP_CHAT_ID: mainChatId,
+    NOTIFY_ON_CREATE: chkCreate,
     NOTIFY_ON_TASK_CREATE: chkCreate,
     NOTIFY_ON_STATUS_CHANGE: chkStatus,
+    NOTIFY_ASSIGNEE_ON_CREATE: chkAssignee,
     NOTIFY_ASSIGNEE: chkAssignee,
+    NOTIFY_MAIN_GROUP_ALWAYS: chkMain,
     NOTIFY_MAIN_GROUP: chkMain
   };
 
+  const btn = document.querySelector('button[onclick="saveAdminWtNotificationSettings()"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
+  }
+
   google.script.run
     .withSuccessHandler(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกการแจ้งเตือนงาน';
+      }
       if (res && res.success) {
         showToast("บันทึกการตั้งค่าการแจ้งเตือนงานเรียบร้อย", "success");
-        loadAdminData();
+        if (adminState.settings) {
+          Object.assign(adminState.settings, newSettings);
+        }
+        loadAdminData(true);
       } else {
         showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึก", "error");
       }
     })
     .withFailureHandler(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกการแจ้งเตือนงาน';
+      }
       showToast("บันทึกไม่สำเร็จ: " + (err.message || err), "error");
     })
     .saveSettings(newSettings);
@@ -9642,9 +9664,21 @@ function saveAdminSitesChanges() {
   const chatIds = {};
   rows.forEach(r => {
     const sName = r.dataset.site;
-    const cid = r.querySelector(".site-chatid-input").value.trim();
-    if (sName && cid) chatIds[sName] = cid;
+    const input = r.querySelector(".site-chatid-input");
+    if (sName && input) {
+      const cid = input.value.trim();
+      if (cid) chatIds[sName] = cid;
+    }
   });
+
+  adminState.wtSiteChatIds = chatIds;
+  if (adminState.settings) {
+    adminState.settings.SITE_TELEGRAM_CHAT_IDS = chatIds;
+    adminState.settings.SITES = adminState.wtSites;
+  }
+  if (window.state) {
+    state.sites = adminState.wtSites;
+  }
 
   const btn = document.getElementById("btnAdminSaveSites");
   if (btn) {
@@ -9661,7 +9695,9 @@ function saveAdminSitesChanges() {
 
       if (res && res.success) {
         showToast("บันทึกรายชื่อไซต์งานเรียบร้อย", "success");
-        loadAdminData();
+        adminState.wtSites = res.sites || adminState.wtSites;
+        adminState.wtSiteChatIds = res.chatIds || chatIds;
+        loadAdminData(true);
       } else {
         showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึกไซต์งาน", "error");
       }
@@ -9686,7 +9722,7 @@ function populateRdpSettings() {
   const drivesCheck = document.getElementById("admin-rdp-default-sharedrives");
 
   if (modeSelect) modeSelect.value = s.RDP_DEFAULT_CONN_MODE || "protocol";
-  if (drivesCheck) drivesCheck.checked = (s.RDP_DEFAULT_SHARE_DRIVES !== "false");
+  if (drivesCheck) drivesCheck.checked = (s.RDP_DEFAULT_SHARE_DRIVES !== "false" && s.RDP_DEFAULT_SHARE_DRIVES !== false);
 }
 
 function saveAdminRdpPreferences() {
@@ -9698,16 +9734,34 @@ function saveAdminRdpPreferences() {
     RDP_DEFAULT_SHARE_DRIVES: shareDrives
   };
 
+  const btn = document.querySelector('button[onclick="saveAdminRdpPreferences()"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
+  }
+
   google.script.run
     .withSuccessHandler(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกค่าเริ่มต้น RDP';
+      }
       if (res && res.success) {
         showToast("บันทึกค่าเริ่มต้นการเชื่อมต่อ RDP เรียบร้อย", "success");
-        loadAdminData();
+        if (adminState.settings) {
+          adminState.settings.RDP_DEFAULT_CONN_MODE = mode;
+          adminState.settings.RDP_DEFAULT_SHARE_DRIVES = (shareDrives === "true");
+        }
+        loadAdminData(true);
       } else {
         showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึก", "error");
       }
     })
     .withFailureHandler(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกค่าเริ่มต้น RDP';
+      }
       showToast("บันทึกไม่สำเร็จ: " + (err.message || err), "error");
     })
     .saveSettings(newSettings);
@@ -9729,9 +9783,13 @@ function renderAdminGroupsTable() {
     return;
   }
 
+  const allRdpSites = (adminState.rdpSites && adminState.rdpSites.length > 0)
+    ? adminState.rdpSites
+    : ((window.rdpState && rdpState.sites && rdpState.sites.length > 0) ? rdpState.sites : []);
+
   tbody.innerHTML = groups.map(g => {
     // นับจำนวนไซต์ที่อยู่ในกลุ่มนี้
-    const sitesCount = (rdpState.sites || []).filter(s => (s.group_name || '').toLowerCase() === g.group_name.toLowerCase()).length;
+    const sitesCount = allRdpSites.filter(s => (s.group_name || '').toLowerCase() === g.group_name.toLowerCase()).length;
 
     return `
       <tr class="hover:bg-[#FAF8F2] transition-colors">
@@ -9741,7 +9799,7 @@ function renderAdminGroupsTable() {
         <td class="px-4 py-3 align-middle text-xs text-[#6E6862]">
           ${escapeHtml(g.description || '-')}
         </td>
-        <td class="px-4 py-3 align-middle">
+        <td class="px-4 py-3 align-middle text-center">
           <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-[#EDE7DA] text-[#2491FA]">
             ${sitesCount} ไซต์
           </span>
@@ -9789,10 +9847,14 @@ function closeAdminGroupForm() {
   adminState.editingGroupId = null;
 }
 
-function handleAdminGroupSubmit(event) {
-  event.preventDefault();
-  const name = document.getElementById("admin-group-name").value.trim();
-  const desc = document.getElementById("admin-group-desc").value.trim();
+function submitAdminGroupForm(event) {
+  if (event && event.preventDefault) event.preventDefault();
+  const nameInput = document.getElementById("admin-group-name");
+  const descInput = document.getElementById("admin-group-desc");
+  if (!nameInput) return;
+
+  const name = nameInput.value.trim();
+  const desc = descInput ? descInput.value.trim() : "";
 
   if (!name) {
     showToast("กรุณาระบุชื่อกลุ่มงาน", "warning");
@@ -9807,22 +9869,38 @@ function handleAdminGroupSubmit(event) {
 
   const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
 
+  const btn = document.querySelector('#adminGroupFormWrapper button[onclick="submitAdminGroupForm()"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
+  }
+
   google.script.run
     .withSuccessHandler(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกกลุ่ม';
+      }
       if (res && res.success) {
         showToast(res.message || "บันทึกกลุ่มงานเรียบร้อย", "success");
         closeAdminGroupForm();
-        loadAdminData();
-        loadRdpData(true);
+        loadAdminData(true);
+        if (typeof loadRdpData === 'function') loadRdpData(true);
       } else {
         showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึกกลุ่มงาน", "error");
       }
     })
     .withFailureHandler(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกกลุ่ม';
+      }
       showToast("บันทึกกลุ่มงานไม่สำเร็จ: " + (err.message || err), "error");
     })
     .saveRdpGroup(groupData, currentUsername);
 }
+window.submitAdminGroupForm = submitAdminGroupForm;
+window.handleAdminGroupSubmit = submitAdminGroupForm;
 
 function deleteAdminGroupConfirm(groupId, groupName) {
   if (!confirm(`คุณต้องการลบกลุ่มงาน "${groupName}" ใช่หรือไม่? (ไซต์งานในกลุ่มจะถูกย้ายเป็นกลุ่มทั่วไป)`)) {
@@ -9835,8 +9913,8 @@ function deleteAdminGroupConfirm(groupId, groupName) {
     .withSuccessHandler(res => {
       if (res && res.success) {
         showToast(res.message || "ลบกลุ่มงานเรียบร้อย", "success");
-        loadAdminData();
-        loadRdpData(true);
+        loadAdminData(true);
+        if (typeof loadRdpData === 'function') loadRdpData(true);
       } else {
         showToast((res && res.message) || "ไม่สามารถลบกลุ่มงานได้", "error");
       }

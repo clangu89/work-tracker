@@ -239,21 +239,14 @@ function deleteRdpGroup(groupId, reqUsername) {
       return { success: false, message: 'ไม่พบกลุ่มงานนี้ในระบบ' };
     }
 
-    // ตรวจสอบว่ามีไซต์ที่ใช้กลุ่มนี้อยู่หรือไม่
+    // ตรวจสอบและย้ายไซต์งานที่ผูกกับกลุ่มนี้ไปเป็นกลุ่ม 'ทั่วไป'
     if (sSheet) {
       const sData = sSheet.getDataRange().getValues();
-      const boundSites = [];
       for (let j = 1; j < sData.length; j++) {
         const siteGroup = String(sData[j][6] || '').trim();
         if (siteGroup.toLowerCase() === groupName.toLowerCase()) {
-          boundSites.push(String(sData[j][1] || sData[j][0]));
+          sSheet.getRange(j + 1, 7).setValue('ทั่วไป');
         }
-      }
-      if (boundSites.length > 0) {
-        return {
-          success: false,
-          message: `ไม่สามารถลบกลุ่ม "${groupName}" ได้ เนื่องจากยังมีไซต์งานผูกอยู่ ${boundSites.length} ไซต์ (${boundSites.slice(0, 3).join(', ')}${boundSites.length > 3 ? '...' : ''}) กรุณาย้ายกลุ่มของไซต์งานก่อนลบ`
-        };
       }
     }
 
