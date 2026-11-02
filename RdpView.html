@@ -1,0 +1,420 @@
+<!-- ================================================================ -->
+<!-- RDP MANAGER MODULE (ระบบจัดการการเชื่อมต่อรีโมตไซต์งาน) -->
+<!-- ================================================================ -->
+<div id="rdpManagerApp" class="hidden min-h-screen flex flex-col bg-white text-[#201E1C]">
+
+  <!-- Top Navbar for RDP Manager -->
+  <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-3">
+        
+        <!-- App Switcher & Title -->
+        <div class="flex items-center gap-2.5 sm:gap-3.5">
+          <!-- App Switcher Button -->
+          <button onclick="openAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
+            <i class="fa-solid fa-grip text-[#2491FA] text-sm"></i>
+            <span class="hidden sm:inline">เลือกระบบ</span>
+          </button>
+
+          <div class="h-6 w-px bg-[#EFE9DC]"></div>
+
+          <!-- Logo & System Name -->
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#2491FA] text-white flex items-center justify-center shadow-md shadow-blue-500/20 text-sm sm:text-base flex-shrink-0">
+              <i class="fa-solid fa-desktop"></i>
+            </div>
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-[#201E1C] leading-tight">ระบบรีโมตไซต์งาน</h2>
+              <p class="text-[10px] sm:text-[11px] text-[#6E6862] font-medium">Remote Desktop Manager</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Tools -->
+        <div class="flex items-center gap-2 sm:gap-2.5">
+          <!-- Logged-in User Profile Badge -->
+          <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC]">
+            <i class="fa-solid fa-circle-user text-[#2491FA] text-sm"></i>
+            <span class="user-display-name-nav font-semibold max-w-[120px] truncate">-</span>
+            <span class="user-role-badge-nav text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
+          </div>
+
+          <!-- Online Users Counter & View Button -->
+          <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span class="font-semibold text-xs text-[#201E1C]"><span class="online-users-count-badge">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
+          </button>
+
+          <!-- 1-Click Setup & Troubleshooting Guide -->
+          <button onclick="openProtocolGuideModal()" title="ติดตั้งตัวเชื่อมต่อ 1-Click หรือแก้ปัญหา Copy ไฟล์"
+                  class="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200/80 rounded-xl transition-all cursor-pointer shadow-2xs">
+            <i class="fa-solid fa-bolt text-amber-600 text-xs"></i>
+            <span class="hidden sm:inline">ตัวเชื่อมต่อ 1-Click</span>
+          </button>
+
+          <!-- Client Settings Button -->
+          <button onclick="openClientSettingsModal()" title="ตั้งค่าโหมดการเชื่อมต่อ RDP"
+                  class="p-2 text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-xl transition-colors border border-[#EFE9DC] cursor-pointer">
+            <i class="fa-solid fa-gear"></i>
+          </button>
+
+          <!-- Add Site Button (Admin Only) -->
+          <button onclick="openSiteModal()" id="btnRdpAddSite"
+                  class="hidden inline-flex items-center gap-1.5 px-3.5 py-1.5 sm:py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all cursor-pointer">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span class="hidden sm:inline">เพิ่มไซต์งาน</span>
+          </button>
+
+          <!-- Logout Button -->
+          <button onclick="handleLogout()" title="ออกจากระบบ"
+                  class="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200 cursor-pointer">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main RDP Container -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Filters & View Switcher Bar -->
+    <div class="bg-[#F7F4EA] p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs flex flex-col md:flex-row md:items-center md:justify-between gap-3.5">
+      
+      <!-- Left Filters -->
+      <div class="flex flex-wrap items-center gap-3 flex-1">
+        <!-- Search Input -->
+        <div class="w-full sm:w-72 relative">
+          <input type="text" id="rdp-search-input" placeholder="ค้นหาไซต์, ชื่อเครื่อง, IP, User..."
+                 class="w-full pl-9 pr-3 py-2 text-xs bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] placeholder-[#6E6862] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none">
+          <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-[#6E6862]">
+            <i class="fa-solid fa-magnifying-glass text-xs"></i>
+          </div>
+        </div>
+
+        <!-- Group Filter Dropdown -->
+        <div class="w-full sm:w-auto min-w-[200px]">
+          <div class="relative">
+            <select id="group-filter-select"
+                    class="w-full pl-8 pr-8 py-2 text-xs font-medium bg-[#EDE7DA]/70 border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none cursor-pointer">
+              <option value="ALL">📁 ทุกกลุ่มงานทั้งหมด</option>
+            </select>
+            <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#6E6862]">
+              <i class="fa-solid fa-layer-group text-xs"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Refresh Button -->
+        <button onclick="loadRdpSites()" title="รีเฟรชข้อมูลไซต์งาน"
+                class="p-2 text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-xl transition-colors border border-[#EFE9DC]">
+          <i class="fa-solid fa-arrows-rotate text-xs" id="btnRdpRefreshIcon"></i>
+        </button>
+      </div>
+
+      <!-- Right Controls: Count & View Switcher -->
+      <div class="flex items-center justify-between md:justify-end gap-3 self-stretch md:self-auto">
+        <span id="sites-count-badge" class="text-xs font-bold text-[#6E6862] bg-[#EDE7DA] px-3 py-1.5 rounded-xl border border-[#EFE9DC]">
+          0 ไซต์
+        </span>
+
+        <div class="flex items-center gap-1 bg-[#EDE7DA] p-1 rounded-xl border border-[#EFE9DC]">
+          <button id="btnViewGridRdp" onclick="setRdpViewMode('grid')" title="มุมมองการ์ด (Grid View)"
+                  class="px-3 py-1.5 text-xs font-bold rounded-lg bg-[#2491FA] text-white shadow-2xs transition-colors flex items-center gap-1.5">
+            <i class="fa-solid fa-grip"></i>
+            <span class="hidden sm:inline">การ์ด</span>
+          </button>
+          <button id="btnViewTableRdp" onclick="setRdpViewMode('table')" title="มุมมองตาราง (Table View)"
+                  class="px-3 py-1.5 text-xs font-medium rounded-lg text-[#201E1C] hover:bg-white/60 transition-colors flex items-center gap-1.5">
+            <i class="fa-solid fa-table-list"></i>
+            <span class="hidden sm:inline">ตาราง</span>
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Sites Display Container -->
+    <div id="sites-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+      <!-- Dynamically Rendered Site Cards / Table -->
+    </div>
+
+  </main>
+
+  <!-- ================= MODAL: ADD / EDIT RDP SITE (MULTI-MACHINE) ================= -->
+  <div id="site-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="hideRdpModal('site-modal')"></div>
+    <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
+      <div class="relative w-full max-w-3xl rounded-3xl bg-[#FAF8F2] p-5 sm:p-7 shadow-2xl border border-[#EFE9DC] transition-all my-8 text-left max-h-[92vh] flex flex-col">
+        
+        <!-- Header -->
+        <div class="flex items-center justify-between pb-3.5 border-b border-[#EFE9DC] shrink-0 mb-4">
+          <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-2xl bg-blue-50 text-[#2491FA] flex items-center justify-center text-lg border border-blue-100 shadow-2xs">
+              <i class="fa-solid fa-server"></i>
+            </div>
+            <div>
+              <h3 id="site-modal-title" class="text-base sm:text-lg font-bold text-[#201E1C]">เพิ่มไซต์งานใหม่</h3>
+              <p class="text-[11px] text-[#6E6862]">กำหนดรายละเอียดไซต์งาน กลุ่ม และรายการเครื่องเซิร์ฟเวอร์</p>
+            </div>
+          </div>
+          <button type="button" onclick="hideRdpModal('site-modal')" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-2 rounded-xl transition-colors cursor-pointer">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Form Body (Scrollable) -->
+        <form id="site-form" onsubmit="handleSiteSubmit(event)" class="space-y-4 overflow-y-auto flex-1 pr-1">
+          <!-- Site Basic Info -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 bg-white p-4 rounded-2xl border border-[#EFE9DC]">
+            <div>
+              <label class="block text-xs font-semibold text-[#201E1C] mb-1">ชื่อไซต์งาน / สถานที่ <span class="text-rose-500">*</span></label>
+              <input type="text" id="form-site-name" required placeholder="เช่น สำนักงานใหญ่ (HQ Datacenter)"
+                     class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white text-[#201E1C]">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-[#201E1C] mb-1">กลุ่มงาน / แผนก <span class="text-rose-500">*</span></label>
+              <select id="form-site-group" required
+                      class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white text-[#201E1C] cursor-pointer">
+              </select>
+            </div>
+
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-[#201E1C] mb-1">รายละเอียด / หมายเหตุไซต์งาน</label>
+              <input type="text" id="form-site-desc" placeholder="เช่น เครื่องแม่ข่ายเซิร์ฟเวอร์หลัก กทม. ชั้น 5"
+                     class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white text-[#201E1C]">
+            </div>
+          </div>
+
+          <!-- Multi-Machine List Section -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <i class="fa-solid fa-network-wired text-[#2491FA] text-sm"></i>
+                <span class="text-xs font-bold text-[#201E1C]">รายการเครื่องในไซต์นี้</span>
+                <span id="form-machines-count-badge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-[#EDE7DA] text-[#201E1C] border border-[#EFE9DC]">1 เครื่อง</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <button type="button" onclick="duplicateLastMachineRow()"
+                        class="px-2.5 py-1 text-[11px] font-semibold text-[#2491FA] bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition-colors flex items-center gap-1 cursor-pointer">
+                  <i class="fa-regular fa-copy"></i>
+                  <span>คัดลอกเครื่องล่าสุด</span>
+                </button>
+                <button type="button" onclick="addMachineFormRow()"
+                        class="px-2.5 py-1 text-[11px] font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-lg shadow-2xs transition-all flex items-center gap-1 cursor-pointer">
+                  <i class="fa-solid fa-plus text-[10px]"></i>
+                  <span>เพิ่มเครื่อง</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Machine Rows Container -->
+            <div id="machines-form-container" class="space-y-3">
+              <!-- Rendered dynamically -->
+            </div>
+          </div>
+
+          <!-- Buttons -->
+          <div class="flex items-center justify-end gap-2.5 pt-3 border-t border-[#EFE9DC] shrink-0">
+            <button type="button" onclick="hideRdpModal('site-modal')"
+                    class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
+              ยกเลิก
+            </button>
+            <button type="submit" id="btnSubmitSite"
+                    class="px-5 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-floppy-disk"></i>
+              <span>บันทึกไซต์งาน</span>
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: CLIENT CONNECTION SETTINGS ================= -->
+  <div id="client-settings-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="hideRdpModal('client-settings-modal')"></div>
+    <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
+      <div class="relative w-full max-w-md rounded-3xl bg-[#FAF8F2] p-5 sm:p-6 shadow-2xl border border-[#EFE9DC] transition-all my-8 text-left">
+        
+        <div class="flex items-center justify-between pb-3 border-b border-[#EFE9DC] mb-4">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-[#2491FA]"></i>
+            <h3 class="text-base font-bold text-[#201E1C]">ตั้งค่าการเชื่อมต่อ RDP ของคุณ</h3>
+          </div>
+          <button type="button" onclick="hideRdpModal('client-settings-modal')" class="text-[#6E6862] hover:text-[#201E1C] p-1.5 rounded-lg">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <form id="client-settings-form" onsubmit="handleSaveClientSettings(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-[#201E1C] mb-1">โหมดการเชื่อมต่อเมื่อกดปุ่ม "Remote"</label>
+            <select id="client-conn-mode"
+                    class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none text-[#201E1C] cursor-pointer">
+              <option value="protocol">⚡ 1-Click Zero-Prompt (เปิด Windows RDP และล็อกอินอัตโนมัติทันที)</option>
+              <option value="rdp_file">📁 ดาวน์โหลดไฟล์ .rdp (โหมดมาตรฐาน)</option>
+            </select>
+          </div>
+
+          <div class="p-3 bg-white rounded-xl border border-[#EFE9DC]">
+            <label class="flex items-start gap-2.5 cursor-pointer select-none">
+              <input type="checkbox" id="client-share-drives" checked class="mt-0.5 rounded text-[#2491FA] focus:ring-[#2491FA]">
+              <div class="text-xs">
+                <span class="font-bold text-[#201E1C] block">📋 อนุญาต Copy-Paste ไฟล์และแชร์ไดรฟ์เข้าเครื่องรีโมต</span>
+                <span class="text-[11px] text-[#6E6862] mt-0.5 block leading-relaxed">
+                  เปิดใช้งาน Clipboard และ Drives (*) อัตโนมัติ เพื่อให้กด Ctrl+C / Ctrl+V ก๊อปปี้ข้อความและไฟล์เข้า-ออกรีโมตได้ทันที
+                </span>
+              </div>
+            </label>
+          </div>
+
+          <div class="p-3 bg-blue-50/70 border border-blue-200/80 rounded-xl text-xs text-[#201E1C] space-y-1">
+            <div class="font-bold text-[#2491FA] flex items-center gap-1">
+              <i class="fa-solid fa-circle-info"></i> คำแนะนำ:
+            </div>
+            <p class="text-[11px] text-[#6E6862]">
+              หากเลือกโหมด 1-Click Zero-Prompt กรุณาติดตั้งตัวเชื่อมต่อ (v2.0) เพียงครั้งเดียว โดยกดปุ่ม <b>"ตัวเชื่อมต่อ 1-Click"</b> บนแถบเมนูด้านบน
+            </p>
+          </div>
+
+          <div class="flex items-center justify-end gap-2 pt-3 border-t border-[#EFE9DC]">
+            <button type="button" onclick="hideRdpModal('client-settings-modal')"
+                    class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] rounded-xl">
+              ปิด
+            </button>
+            <button type="submit"
+                    class="px-5 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20">
+              บันทึกการตั้งค่า
+            </button>
+          </div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: PROTOCOL SETUP & CLIPBOARD TROUBLESHOOTER ================= -->
+  <div id="protocol-guide-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity" onclick="hideRdpModal('protocol-guide-modal')"></div>
+    <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
+      <div class="relative w-full max-w-xl rounded-3xl bg-[#FAF8F2] p-5 sm:p-6 shadow-2xl border border-[#EFE9DC] transition-all my-8 text-left max-h-[90vh] flex flex-col">
+        
+        <div class="flex items-center justify-between pb-3.5 border-b border-[#EFE9DC] shrink-0">
+          <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center text-sm">
+              <i class="fa-solid fa-bolt"></i>
+            </div>
+            <h3 class="text-base font-bold text-[#201E1C]">ตัวเชื่อมต่อ 1-Click & แก้ปัญหา Copy ไฟล์</h3>
+          </div>
+          <button type="button" onclick="hideRdpModal('protocol-guide-modal')" class="text-[#6E6862] hover:text-[#201E1C] p-1.5 rounded-lg">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Tab Switcher -->
+        <div class="flex border-b border-[#EFE9DC] gap-2 pt-3 pb-2 shrink-0">
+          <button type="button" id="protocol-tab-setup" onclick="switchProtocolModalTab('setup')"
+                  class="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-white border border-[#EFE9DC] text-[#2491FA] shadow-2xs transition-all cursor-pointer">
+            ⚡ ติดตั้ง / อัปเดต 1-Click (v2.0)
+          </button>
+          <button type="button" id="protocol-tab-troubleshoot" onclick="switchProtocolModalTab('troubleshoot')"
+                  class="px-3.5 py-1.5 text-xs font-medium rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all cursor-pointer">
+            🛠️ แก้ปัญหา Copy ไฟล์/ข้อความไม่ได้
+          </button>
+        </div>
+
+        <!-- Tab 1: Setup Panel -->
+        <div id="protocol-panel-setup" class="space-y-4 py-3 overflow-y-auto text-xs text-[#201E1C]">
+          <p class="text-[#6E6862] leading-relaxed">
+            ระบบ <b>1-Click Zero-Prompt (v2.0)</b> ช่วยให้คุณกดปุ่ม <b>"Remote"</b> บนหน้าเว็บ แล้วเปิด <b>Windows Remote Desktop (mstsc.exe)</b> ล็อกอินรหัสผ่านให้อัตโนมัติ พร้อมเปิดใช้งาน <b>Copy-Paste ข้อความและไฟล์ทุกชนิด</b> ทันที!
+          </p>
+
+          <div class="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 leading-relaxed">
+            <span class="font-bold">🔄 สำหรับผู้ที่เคยติดตั้งเวอร์ชันเก่าไว้แล้ว:</span><br>
+            กดดาวน์โหลดตัวติดตั้ง <b>v2.0</b> ด้านล่างไปดับเบิลคลิกทับอีก 1 ครั้ง เพื่อเปิดระบบ Copy ไฟล์และแชร์ไดรฟ์ (ปลอดภัย 100% รันในระดับ Current User ไม่ต้องใช้สิทธิ์ Admin)
+          </div>
+
+          <div class="bg-white p-4 rounded-2xl border border-[#EFE9DC] space-y-2">
+            <div class="font-bold text-[#201E1C] text-sm">ขั้นตอนการติดตั้ง / อัปเดต:</div>
+            <ol class="list-decimal list-inside space-y-1.5 text-[#6E6862]">
+              <li>กดปุ่ม <b>"ดาวน์โหลดตัวติดตั้ง v2.0 (.bat)"</b> ด้านล่าง</li>
+              <li>ดับเบิลคลิกเปิดไฟล์ <code class="bg-[#EDE7DA] px-1.5 py-0.5 rounded font-mono text-[#201E1C]">install-rdp-protocol.bat</code></li>
+              <li>รอจนขึ้น <code class="text-emerald-600 font-bold font-mono">[SUCCESS] Installation v2.0</code> แล้วกดปุ่มใดๆ เพื่อปิด</li>
+              <li>กลับมาที่หน้าเว็บนี้ แล้วกดปุ่ม <b>"Remote"</b> ได้ทันที!</li>
+            </ol>
+          </div>
+
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+            <span class="text-[11px] text-[#6E6862]">* ปลอดภัย 100% ไม่ดัดแปลงไฟล์ระบบของเครื่อง</span>
+            <button type="button" onclick="RdpLauncher.downloadProtocolInstaller()"
+                    class="inline-flex items-center justify-center px-4 py-2.5 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer">
+              <i class="fa-solid fa-download mr-1.5"></i>
+              <span>ดาวน์โหลดตัวติดตั้ง v2.0 (.bat)</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: Troubleshoot Panel -->
+        <div id="protocol-panel-troubleshoot" class="hidden space-y-4 py-3 overflow-y-auto text-xs text-[#201E1C]">
+          <!-- Step A: Client Side -->
+          <div class="p-4 bg-blue-50/70 rounded-2xl border border-blue-200 space-y-2">
+            <div class="font-bold text-[#2491FA] text-sm flex items-center justify-between">
+              <span>1️⃣ ตรวจสอบฝั่งเครื่องเรา (Client)</span>
+              <span class="text-[10px] px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full font-bold">ทำครั้งเดียว</span>
+            </div>
+            <p class="text-[#6E6862]">
+              หาก Copy <b>ไฟล์</b> เข้า-ออกไม่ได้ หรือไม่เห็นไดรฟ์เครื่องเราใน This PC ของเครื่องรีโมต ให้ติดตั้งตัวเชื่อมต่อ <b>v2.0</b> แล้ว <b>ปิดหน้าต่าง Remote เดิม (Disconnect) และกดปุ่ม Remote ใหม่อีก 1 ครั้ง</b>
+            </p>
+            <div class="pt-1">
+              <button type="button" onclick="RdpLauncher.downloadProtocolInstaller()"
+                      class="inline-flex items-center px-3 py-1.5 text-xs font-bold text-[#2491FA] bg-white hover:bg-blue-50 border border-blue-200 rounded-xl transition-colors cursor-pointer">
+                <i class="fa-solid fa-download mr-1.5"></i>
+                <span>ดาวน์โหลดตัวติดตั้ง 1-Click v2.0 (.bat)</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Step B: Remote Server Auto-type Fixer -->
+          <div class="p-4 bg-amber-50/70 rounded-2xl border border-amber-200 space-y-2.5">
+            <div class="font-bold text-amber-900 text-sm">
+              <span>2️⃣ ซ่อมฝั่งเครื่องปลายทาง (กรณี Copy ไม่ได้ทั้งข้อความและไฟล์)</span>
+            </div>
+            <p class="text-[#6E6862]">
+              หากก๊อปปี้ <b>ข้อความก็ไม่ได้ ไฟล์ก็ไม่ได้</b> แปลว่าโปรเซส <code class="bg-white px-1 rounded border border-amber-200 font-mono">rdpclip.exe</code> บนเซิร์ฟเวอร์ปลายทางค้าง ให้ซ่อมด้วยปุ่มพิมพ์คำสั่งซ่อมอัตโนมัติ:
+            </p>
+            <ol class="list-decimal list-inside space-y-1 text-[#6E6862] bg-white/80 p-3 rounded-xl border border-amber-200/70">
+              <li>ในหน้าจอเครื่องรีโมต คลิกขวาปุ่ม <b>Start</b> เลือก <b>Run</b> (หรือเปิดหน้าต่าง <b>CMD</b> ทิ้งไว้)</li>
+              <li>สลับกลับมากดปุ่มสีส้มด้านล่างนี้ ระบบจะพิมพ์คำสั่งซ่อมเข้าหน้ารีโมตให้อัตโนมัติ (รองรับทั้งคีย์บอร์ดไทยและอังกฤษ)</li>
+            </ol>
+
+            <div class="pt-1">
+              <button type="button" onclick="RdpLauncher.triggerRemoteClipboardFix('restart_rdpclip')"
+                      class="inline-flex items-center px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 rounded-xl shadow-sm active:scale-95 transition-all cursor-pointer">
+                <i class="fa-solid fa-keyboard mr-1.5"></i>
+                <span>พิมพ์คำสั่งซ่อม rdpclip.exe เข้าหน้าต่าง Remote อัตโนมัติ</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-3 border-t border-[#EFE9DC] shrink-0">
+          <button type="button" onclick="hideRdpModal('protocol-guide-modal')"
+                  class="px-4 py-1.5 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] rounded-xl cursor-pointer">
+            ปิด
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>

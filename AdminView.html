@@ -1,0 +1,692 @@
+<!-- ================================================================ -->
+<!-- ADMIN CENTER MODULE (ระบบผู้ดูแลระบบ ศูนย์รวมการตั้งค่าและกำหนดสิทธิ์) -->
+<!-- ================================================================ -->
+<div id="adminCenterApp" class="hidden min-h-screen flex flex-col bg-white text-[#201E1C]">
+
+  <!-- Top Navbar for Admin Center -->
+  <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-3">
+        
+        <!-- App Switcher & Title -->
+        <div class="flex items-center gap-2.5 sm:gap-3.5">
+          <button onclick="openAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
+            <i class="fa-solid fa-grip text-[#2491FA] text-sm"></i>
+            <span class="hidden sm:inline">เลือกระบบ</span>
+          </button>
+
+          <div class="h-6 w-px bg-[#EFE9DC]"></div>
+
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-gradient-to-tr from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-purple-500/20 text-sm sm:text-base flex-shrink-0">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-[#201E1C] leading-tight">ระบบผู้ดูแลระบบ (Admin Center)</h2>
+              <p class="text-[10px] sm:text-[11px] text-[#6E6862] font-medium">ศูนย์กลางกำหนดสิทธิ์และรวมการตั้งค่าทุกระบบ</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Tools -->
+        <div class="flex items-center gap-2 sm:gap-2.5">
+          <!-- Admin Badge -->
+          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-xl text-xs text-purple-900 border border-purple-200/80">
+            <i class="fa-solid fa-user-shield text-purple-600 text-sm"></i>
+            <span class="user-display-name-nav font-semibold max-w-[120px] truncate">-</span>
+            <span class="text-[10px] bg-purple-600 text-white px-1.5 py-0.2 rounded-md font-bold uppercase">ADMIN</span>
+          </div>
+
+          <!-- Online Users Counter & View Button -->
+          <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
+            <span class="relative flex h-2 w-2">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span class="font-semibold text-xs text-[#201E1C]"><span class="online-users-count-badge">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
+          </button>
+
+          <!-- Sheet Direct Link -->
+          <a id="adminSheetLinkBtn" href="#" target="_blank" title="เปิด Google Sheets ฐานข้อมูลหลัก"
+             class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-100/70 hover:bg-emerald-100 border border-emerald-300/60 rounded-xl transition-colors">
+            <i class="fa-solid fa-file-excel text-emerald-700"></i>
+            <span>Google Sheet</span>
+          </a>
+
+          <!-- Logout Button -->
+          <button onclick="handleLogout()" title="ออกจากระบบ"
+                  class="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200 cursor-pointer">
+            <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Admin Body: 2-Column Sidebar + Content -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      
+      <!-- ================= SIDEBAR NAVIGATION ================= -->
+      <aside class="lg:col-span-3 bg-[#FAF8F2] rounded-3xl p-3 border border-[#EFE9DC] shadow-2xs sticky top-20">
+        <div class="px-3 py-2 text-[11px] font-bold text-[#6E6862] uppercase tracking-wider">
+          เมนูการจัดการระบบ
+        </div>
+
+        <nav class="space-y-1 mt-1">
+          <button type="button" onclick="switchAdminScreen('users')" id="admin-nav-users"
+                  class="admin-nav-btn active w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-bold text-left cursor-pointer">
+            <i class="fa-solid fa-users text-sm w-4 text-center"></i>
+            <span>👥 ผู้ใช้งานและกำหนดสิทธิ์</span>
+          </button>
+
+          <button type="button" onclick="switchAdminScreen('global')" id="admin-nav-global"
+                  class="admin-nav-btn w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-left cursor-pointer">
+            <i class="fa-solid fa-key text-sm w-4 text-center"></i>
+            <span>🔐 ตั้งค่าส่วนกลาง & OTP</span>
+          </button>
+
+          <button type="button" onclick="switchAdminScreen('worktracker')" id="admin-nav-worktracker"
+                  class="admin-nav-btn w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-left cursor-pointer">
+            <i class="fa-solid fa-list-check text-sm w-4 text-center"></i>
+            <span>📋 ตั้งค่าระบบติดตามงาน</span>
+          </button>
+
+          <button type="button" onclick="switchAdminScreen('rdp')" id="admin-nav-rdp"
+                  class="admin-nav-btn w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-left cursor-pointer">
+            <i class="fa-solid fa-desktop text-sm w-4 text-center"></i>
+            <span>🖥️ ตั้งค่าระบบรีโมต & กลุ่ม</span>
+          </button>
+
+          <button type="button" onclick="switchAdminScreen('migration')" id="admin-nav-migration"
+                  class="admin-nav-btn w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-left cursor-pointer">
+            <i class="fa-solid fa-clock-rotate-left text-sm w-4 text-center"></i>
+            <span>📜 ประวัติระบบ & โอนย้าย</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- ================= CONTENT PANELS ================= -->
+      <section class="lg:col-span-9 space-y-6">
+
+        <!-- ---------------------------------------------------- -->
+        <!-- SCREEN 1: USERS & PERMISSIONS MATRIX -->
+        <!-- ---------------------------------------------------- -->
+        <div id="admin-screen-users" class="space-y-4">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#FAF8F2] p-4 rounded-3xl border border-[#EFE9DC]">
+            <div>
+              <h3 class="text-base font-bold text-[#201E1C]">จัดการผู้ใช้งานและกำหนดสิทธิ์ (Users & Permissions)</h3>
+              <p class="text-xs text-[#6E6862] mt-0.5">กำหนดสิทธิ์เข้าถึงรายระบบ (Work Tracker, RDP Manager, Admin) และสิทธิ์รายไซต์งาน</p>
+            </div>
+            <button type="button" onclick="openAdminUserForm()"
+                    class="px-4 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto">
+              <i class="fa-solid fa-user-plus text-xs"></i>
+              <span>เพิ่มผู้ใช้ใหม่</span>
+            </button>
+          </div>
+
+          <!-- Add / Edit User Form Container (Collapsible) -->
+          <div id="adminUserFormContainer" class="hidden bg-[#FAF8F2] p-5 sm:p-6 rounded-3xl border border-[#EFE9DC] space-y-4 shadow-sm">
+            <div class="flex items-center justify-between border-b border-[#EFE9DC] pb-3">
+              <h4 id="adminUserFormTitle" class="text-sm font-bold text-[#201E1C]">➕ เพิ่มผู้ใช้ใหม่และกำหนดสิทธิ์</h4>
+              <button type="button" onclick="closeAdminUserForm()" class="text-[#6E6862] hover:text-[#201E1C]">
+                <i class="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+
+            <form id="adminUserForm" onsubmit="handleAdminUserSubmit(event)" class="space-y-4">
+              <!-- Basic Info -->
+              <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 bg-white p-4 rounded-2xl border border-[#EFE9DC]">
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">Username (ตัวพิมพ์เล็ก) <span class="text-rose-500">*</span></label>
+                  <input type="text" id="admin-user-username" required placeholder="เช่น somchai"
+                         class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C] font-mono">
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">ชื่อ-นามสกุล / ชื่อแสดงผล <span class="text-rose-500">*</span></label>
+                  <input type="text" id="admin-user-fullname" required placeholder="เช่น สมชาย ช่างไฟ"
+                         class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C]">
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">บทบาทหลัก (Role)</label>
+                  <select id="admin-user-role" onchange="handleAdminUserRoleChange()"
+                          class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C] cursor-pointer">
+                    <option value="Member">Member (ผู้ใช้ทั่วไป)</option>
+                    <option value="Admin">Admin (ผู้ดูแลระบบ)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">Telegram Chat ID (ส่วนตัว)</label>
+                  <input type="text" id="admin-user-chatid" placeholder="เช่น 987654321"
+                         class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C] font-mono">
+                  <span class="text-[10px] text-[#6E6862] mt-0.5 block">สำหรับรับรหัส OTP PIN 6 หลัก</span>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">รหัสผ่านสำรอง (Password Fallback)</label>
+                  <input type="password" id="admin-user-password" placeholder="ตั้งรหัสผ่าน หรือเว้นว่างหากคงเดิม"
+                         class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C]">
+                  <span id="admin-user-pass-hint" class="text-[10px] text-[#6E6862] mt-0.5 block">สำหรับล็อกอินสำรอง</span>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">สถานะบัญชี</label>
+                  <select id="admin-user-status"
+                          class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C] cursor-pointer">
+                    <option value="Active">Active (เปิดใช้งาน)</option>
+                    <option value="Inactive">Inactive (ระงับการใช้งาน)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Permission: Allowed Apps Matrix -->
+              <div class="bg-white p-4 rounded-2xl border border-[#EFE9DC] space-y-2">
+                <label class="block text-xs font-bold text-[#201E1C] flex items-center gap-1.5">
+                  <i class="fa-solid fa-table-cells-large text-[#2491FA]"></i>
+                  <span>1. สิทธิ์การเข้าถึงระบบ (Allowed Systems)</span>
+                </label>
+                <p class="text-[11px] text-[#6E6862]">เลือกให้ผู้ใช้นี้มองเห็นและเปิดใช้งานระบบใดได้บ้างบนหน้า App Launcher:</p>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  <label class="flex items-center gap-2 p-2.5 rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/60 cursor-pointer text-xs">
+                    <input type="checkbox" id="perm-app-worktracker" checked class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+                    <span class="font-bold text-[#201E1C]">📋 ระบบติดตามงาน</span>
+                  </label>
+                  <label class="flex items-center gap-2 p-2.5 rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/60 cursor-pointer text-xs">
+                    <input type="checkbox" id="perm-app-rdp" checked class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+                    <span class="font-bold text-[#201E1C]">🖥️ ระบบรีโมตไซต์งาน</span>
+                  </label>
+                  <label class="flex items-center gap-2 p-2.5 rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/60 cursor-pointer text-xs">
+                    <input type="checkbox" id="perm-app-admin" class="rounded text-[#2491FA] focus:ring-[#2491FA]">
+                    <span class="font-bold text-purple-700">🛡️ ระบบผู้ดูแลระบบ (Admin)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Permission: Work Tracker Sites -->
+              <div class="bg-white p-4 rounded-2xl border border-[#EFE9DC] space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-bold text-[#201E1C] flex items-center gap-1.5">
+                    <i class="fa-solid fa-location-dot text-[#2491FA]"></i>
+                    <span>2. สิทธิ์ไซต์งานในระบบติดตามงาน (Work Tracker Sites)</span>
+                  </label>
+                  <div class="flex items-center gap-3 text-xs">
+                    <label class="flex items-center gap-1 cursor-pointer">
+                      <input type="radio" name="wtSiteAccessType" value="ALL" checked onchange="toggleWtSiteCheckboxes(false)" class="text-[#2491FA]">
+                      <span>ทุกไซต์งาน</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer">
+                      <input type="radio" name="wtSiteAccessType" value="CUSTOM" onchange="toggleWtSiteCheckboxes(true)" class="text-[#2491FA]">
+                      <span>กำหนดเฉพาะไซต์</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div id="wtSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  <!-- Checkboxes for WT sites -->
+                </div>
+              </div>
+
+              <!-- Permission: RDP Manager Sites -->
+              <div class="bg-white p-4 rounded-2xl border border-[#EFE9DC] space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <label class="block text-xs font-bold text-[#201E1C] flex items-center gap-1.5">
+                    <i class="fa-solid fa-desktop text-[#2491FA]"></i>
+                    <span>3. สิทธิ์ไซต์งานในระบบรีโมต (RDP Manager Sites)</span>
+                  </label>
+                  <div class="flex items-center gap-3 text-xs">
+                    <label class="flex items-center gap-1 cursor-pointer">
+                      <input type="radio" name="rdpSiteAccessType" value="ALL" checked onchange="toggleRdpSiteCheckboxes(false)" class="text-[#2491FA]">
+                      <span>ทุกไซต์งาน (*)</span>
+                    </label>
+                    <label class="flex items-center gap-1 cursor-pointer">
+                      <input type="radio" name="rdpSiteAccessType" value="CUSTOM" onchange="toggleRdpSiteCheckboxes(true)" class="text-[#2491FA]">
+                      <span>กำหนดเฉพาะไซต์</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div id="rdpSiteCheckboxesWrapper" class="hidden pt-2 border-t border-[#EFE9DC] space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  <!-- Checkboxes for RDP sites -->
+                </div>
+              </div>
+
+              <!-- Form Buttons -->
+              <div class="flex items-center justify-end gap-2.5 pt-2">
+                <button type="button" onclick="closeAdminUserForm()"
+                        class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] rounded-xl cursor-pointer">
+                  ยกเลิก
+                </button>
+                <button type="submit" id="btnAdminSaveUser"
+                        class="px-5 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 cursor-pointer">
+                  บันทึกข้อมูลผู้ใช้
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <!-- Users Table -->
+          <div class="bg-white rounded-3xl border border-[#EFE9DC] overflow-hidden shadow-2xs">
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-[#FAF8F2] border-b border-[#EFE9DC] font-semibold text-[#6E6862]">
+                  <tr>
+                    <th class="px-4 py-3">Username</th>
+                    <th class="px-4 py-3">ชื่อ-นามสกุล</th>
+                    <th class="px-4 py-3">สิทธิ์ระบบ (Apps)</th>
+                    <th class="px-4 py-3">Telegram Chat ID</th>
+                    <th class="px-4 py-3">สิทธิ์งาน (WT)</th>
+                    <th class="px-4 py-3">สิทธิ์รีโมต (RDP)</th>
+                    <th class="px-4 py-3">สถานะ</th>
+                    <th class="px-4 py-3 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="adminUsersTableBody" class="divide-y divide-[#EFE9DC]">
+                  <!-- Rendered dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------------------------------------------------- -->
+        <!-- SCREEN 2: GLOBAL & AUTH SETTINGS -->
+        <!-- ---------------------------------------------------- -->
+        <div id="admin-screen-global" class="hidden space-y-5">
+          <div class="bg-[#FAF8F2] p-4 rounded-3xl border border-[#EFE9DC]">
+            <h3 class="text-base font-bold text-[#201E1C]">ตั้งค่าระบบกลาง & นโยบายความปลอดภัย (Global & Auth)</h3>
+            <p class="text-xs text-[#6E6862] mt-0.5">จัดการ Telegram Bot กลางสำหรับส่งรหัส OTP และนโยบายการล็อกอิน</p>
+          </div>
+
+          <form id="adminGlobalSettingsForm" onsubmit="handleSaveGlobalSettings(event)" class="space-y-4">
+            <!-- Telegram Bot Config -->
+            <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-3.5 shadow-2xs">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-xs font-bold text-[#2491FA]">
+                  <i class="fa-brands fa-telegram text-base"></i>
+                  <span>Telegram Bot Token ส่วนกลาง</span>
+                </div>
+                <a href="https://t.me/BotFather" target="_blank" class="text-[11px] text-[#2491FA] hover:underline">
+                  สร้างบอทผ่าน @BotFather
+                </a>
+              </div>
+
+              <div>
+                <input type="password" id="admin-global-bot-token" placeholder="เช่น 7123456789:AAFx..."
+                       class="w-full px-3.5 py-2.5 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] outline-none font-mono text-[#201E1C]">
+                <p class="text-[11px] text-[#6E6862] mt-1">ใช้สำหรับส่งรหัส PIN 6 หลักไปยัง Telegram ของผู้ใช้ และแจ้งเตือนของทุกระบบ</p>
+              </div>
+
+              <div class="flex items-center gap-3 pt-1">
+                <button type="button" onclick="testAdminTelegramBot()" id="btnAdminTestBot"
+                        class="px-3.5 py-2 text-xs font-bold text-[#2491FA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5">
+                  <i class="fa-brands fa-telegram"></i>
+                  <span>ทดสอบเชื่อมต่อ Bot</span>
+                </button>
+                <span id="admin-bot-test-status" class="text-xs font-semibold"></span>
+              </div>
+            </div>
+
+            <!-- Security Policies -->
+            <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-3.5 shadow-2xs">
+              <div class="text-xs font-bold text-[#201E1C] flex items-center gap-2">
+                <i class="fa-solid fa-lock text-[#2491FA]"></i>
+                <span>นโยบายความปลอดภัยการเข้าสู่ระบบ</span>
+              </div>
+
+              <div class="p-3 bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC]">
+                <label class="flex items-start gap-2.5 cursor-pointer">
+                  <input type="checkbox" id="admin-allow-password-login" checked class="mt-0.5 rounded text-[#2491FA] focus:ring-[#2491FA]">
+                  <div class="text-xs">
+                    <span class="font-bold text-[#201E1C] block">อนุญาตให้เข้าสู่ระบบด้วยรหัสผ่านสำรอง (Password Fallback)</span>
+                    <span class="text-[11px] text-[#6E6862] block mt-0.5">เปิดตัวเลือกให้ผู้ใช้สามารถล็อกอินด้วยรหัสผ่านได้ กรณีที่ไม่ได้ผูก Telegram หรือ Telegram ขัดข้อง</span>
+                  </div>
+                </label>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">อายุรหัส PIN 6 หลัก (นาที)</label>
+                  <input type="number" id="admin-pin-expire-minutes" min="1" max="60" value="5"
+                         class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C]">
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-[#201E1C] mb-1">จำนวนครั้งที่อนุญาตให้กรอก PIN ผิด</label>
+                  <input type="number" id="admin-max-pin-attempts" min="1" max="10" value="3"
+                         class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C]">
+                </div>
+              </div>
+            </div>
+
+            <!-- Google Drive Authorization -->
+            <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-2.5 shadow-2xs">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2 text-xs font-bold text-[#2491FA]">
+                  <i class="fa-brands fa-google-drive text-base"></i>
+                  <span>สิทธิ์การเข้าถึง Google Drive (ไฟล์แนบ)</span>
+                </div>
+                <span class="text-[10px] bg-blue-100 text-[#2491FA] px-2 py-0.5 rounded-full font-bold">DriveApp</span>
+              </div>
+              <p class="text-[11px] text-[#6E6862]">
+                หากพบปัญหาเรื่องสิทธิ์ Google Drive ให้กดปุ่มด้านล่างเพื่อเปิดหน้าต่าง Apps Script Editor แล้วกดปุ่ม <b>Run</b> ฟังก์ชัน <code>authorizeDriveApp</code>
+              </p>
+              <a href="https://script.google.com/d/1cd4_bnt_nnuKTQzu3F6gDmMpwWoeBBcuNyqPCn3lDBsAfmguacW1aUBE/edit" target="_blank"
+                 class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#2491FA] bg-[#FAF8F2] hover:bg-blue-50 border border-blue-200 rounded-xl transition-colors">
+                <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
+                <span>เปิด Apps Script Editor เพื่อยืนยันสิทธิ์ Drive</span>
+              </a>
+            </div>
+
+            <div class="flex justify-end pt-2">
+              <button type="submit"
+                      class="px-5 py-2.5 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 cursor-pointer">
+                บันทึกการตั้งค่าระบบกลาง
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- ---------------------------------------------------- -->
+        <!-- SCREEN 3: WORK TRACKER SETTINGS & SITES -->
+        <!-- ---------------------------------------------------- -->
+        <div id="admin-screen-worktracker" class="hidden space-y-5">
+          <div class="bg-[#FAF8F2] p-4 rounded-3xl border border-[#EFE9DC]">
+            <h3 class="text-base font-bold text-[#201E1C]">ตั้งค่าระบบติดตามงาน (Work Tracker Settings)</h3>
+            <p class="text-xs text-[#6E6862] mt-0.5">จัดการการแจ้งเตือนงานในกลุ่ม Telegram และรายชื่อไซต์งาน</p>
+          </div>
+
+          <!-- Telegram Group Notification Conditions -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-3.5 shadow-2xs">
+            <div class="text-xs font-bold text-[#201E1C] flex items-center gap-2">
+              <i class="fa-solid fa-bell text-[#2491FA]"></i>
+              <span>การส่งข้อความแจ้งเตือนงานเข้ากลุ่ม Telegram</span>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-[#201E1C] mb-1">Telegram Group ID หลัก (Default)</label>
+              <input type="text" id="admin-wt-chatid" placeholder="เช่น -1001234567890 หรือ Chat ID กลุ่มหลัก"
+                     class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 text-[#201E1C] font-mono">
+              <span class="text-[11px] text-[#6E6862] mt-0.5 block">ห้องแชตกลุ่มหลัก สำหรับไซต์งานที่ไม่ได้ระบุกลุ่มเฉพาะ (Fallback)</span>
+            </div>
+
+            <div class="space-y-2 pt-1">
+              <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer">
+                <input type="checkbox" id="admin-wt-notify-create" class="rounded text-[#2491FA]">
+                <span>แจ้งเตือนเข้าห้องแชตกลุ่มเมื่อสร้างงานใหม่</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer">
+                <input type="checkbox" id="admin-wt-notify-status" class="rounded text-[#2491FA]">
+                <span>แจ้งเตือนเข้าห้องแชตกลุ่มเมื่อเปลี่ยนสถานะงาน</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer">
+                <input type="checkbox" id="admin-wt-notify-assignee" class="rounded text-[#2491FA]">
+                <span class="font-medium">แจ้งเตือนเข้า Telegram ส่วนตัวของผู้รับผิดชอบเมื่องานถูกสร้างใหม่</span>
+              </label>
+              <label class="flex items-center gap-2 text-xs text-[#201E1C] cursor-pointer">
+                <input type="checkbox" id="admin-wt-notify-maingroup" class="rounded text-[#2491FA]">
+                <span>ส่งเข้าห้องแชตกลุ่มหลักส่วนกลางด้วยเสมอ (แม้ไซต์งานนั้นจะมีกลุ่มเฉพาะแล้วก็ตาม)</span>
+              </label>
+            </div>
+
+            <div class="pt-2 flex justify-end">
+              <button type="button" onclick="saveAdminWtNotificationSettings()"
+                      class="px-4 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 cursor-pointer">
+                บันทึกการแจ้งเตือนงาน
+              </button>
+            </div>
+          </div>
+
+          <!-- Work Tracker Sites Management -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-4 shadow-2xs">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-bold text-[#201E1C]">รายชื่อไซต์งานและกลุ่ม Telegram ประจำไซต์</h4>
+                <p class="text-[11px] text-[#6E6862]">จัดการไซต์งานและผูก Telegram Group ID แยกตามไซต์งาน</p>
+              </div>
+              <button type="button" onclick="toggleAdminBulkSitesMode()"
+                      class="text-[11px] text-[#2491FA] hover:underline font-semibold cursor-pointer">
+                <i class="fa-solid fa-paste mr-1"></i> <span id="adminBulkSitesToggleText">โหมดพิมพ์หลายบรรทัด</span>
+              </button>
+            </div>
+
+            <!-- Quick Add Site -->
+            <div id="adminQuickAddSiteWrapper" class="bg-[#FAF8F2] p-3 rounded-2xl border border-[#EFE9DC] flex flex-col sm:flex-row gap-2">
+              <input type="text" id="adminInputNewSiteName" placeholder="พิมพ์ชื่อไซต์งานใหม่ เช่น ไซต์ D - อาคารสาทร..."
+                     onkeydown="if(event.key==='Enter'){event.preventDefault();addNewSiteFromAdmin();}"
+                     class="flex-1 px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 text-[#201E1C]">
+              <button type="button" onclick="addNewSiteFromAdmin()"
+                      class="px-4 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-2xs cursor-pointer whitespace-nowrap">
+                เพิ่มไซต์งาน
+              </button>
+            </div>
+
+            <!-- Bulk Sites Textarea (Hidden by default) -->
+            <div id="adminBulkSitesWrapper" class="hidden bg-[#FAF8F2] p-3 rounded-2xl border border-[#EFE9DC] space-y-2">
+              <textarea id="adminBulkSitesTextarea" rows="4" placeholder="ไซต์ A - คอนโดทองหล่อ&#10;ไซต์ B - สำนักงานใหญ่&#10;ไซต์ C - สุขุมวิท"
+                        class="w-full p-2.5 text-xs font-mono bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 text-[#201E1C]"></textarea>
+              <div class="flex justify-end">
+                <button type="button" onclick="applyAdminBulkSites()"
+                        class="px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl transition-colors cursor-pointer">
+                  นำเข้ารายการด้านบน
+                </button>
+              </div>
+            </div>
+
+            <!-- Sites List Container -->
+            <div class="bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC] overflow-hidden">
+              <div class="px-4 py-2.5 bg-[#EDE7DA]/50 border-b border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#201E1C]">
+                <span>รายการไซต์งานในระบบ (<span id="adminSitesCountBadge">0</span>)</span>
+                <span class="text-[11px] text-[#6E6862] font-normal">การจัดการ & Telegram กลุ่ม</span>
+              </div>
+              <div id="adminSitesListContainer" class="divide-y divide-[#EFE9DC] max-h-72 overflow-y-auto">
+                <!-- Rendered dynamically -->
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2">
+              <span class="text-[11px] text-[#6E6862]"><i class="fa-solid fa-circle-info text-[#2491FA] mr-1"></i>กดปุ่มบันทึกเพื่ออัปเดตไซต์งานขึ้นระบบ</span>
+              <button type="button" onclick="saveAdminSitesChanges()" id="btnAdminSaveSites"
+                      class="px-5 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 cursor-pointer">
+                บันทึกรายชื่อไซต์งาน
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- ---------------------------------------------------- -->
+        <!-- SCREEN 4: RDP MANAGER SETTINGS & GROUPS -->
+        <!-- ---------------------------------------------------- -->
+        <div id="admin-screen-rdp" class="hidden space-y-5">
+          <div class="bg-[#FAF8F2] p-4 rounded-3xl border border-[#EFE9DC]">
+            <h3 class="text-base font-bold text-[#201E1C]">ตั้งค่าระบบรีโมต & กลุ่มงาน (RDP Settings & Groups)</h3>
+            <p class="text-xs text-[#6E6862] mt-0.5">กำหนดค่าการเชื่อมต่อเริ่มต้น จัดการกลุ่มไซต์งาน และดาวน์โหลดสคริปต์ 1-Click</p>
+          </div>
+
+          <!-- RDP Default Preferences -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-4 shadow-2xs">
+            <div class="text-xs font-bold text-[#201E1C] flex items-center gap-2">
+              <i class="fa-solid fa-sliders text-[#2491FA]"></i>
+              <span>การตั้งค่าการเชื่อมต่อรีโมตเริ่มต้น (System Defaults)</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-[#201E1C] mb-1">โหมดการเชื่อมต่อเริ่มต้นสำหรับผู้ใช้ใหม่</label>
+                <select id="admin-rdp-default-mode"
+                        class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none text-[#201E1C] cursor-pointer">
+                  <option value="protocol">⚡ 1-Click Zero-Prompt (rdpconnect://)</option>
+                  <option value="rdp_file">📁 ดาวน์โหลดไฟล์ .rdp</option>
+                </select>
+              </div>
+
+              <div class="flex items-center pt-5">
+                <label class="flex items-center gap-2 cursor-pointer text-xs">
+                  <input type="checkbox" id="admin-rdp-default-sharedrives" checked class="rounded text-[#2491FA]">
+                  <span class="font-bold text-[#201E1C]">เปิดแชร์ Clipboard และ Drives อัตโนมัติเป็นค่าเริ่มต้น</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="flex justify-end">
+              <button type="button" onclick="saveAdminRdpPreferences()"
+                      class="px-4 py-2 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 cursor-pointer">
+                บันทึกค่าเริ่มต้น RDP
+              </button>
+            </div>
+          </div>
+
+          <!-- Groups Management -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-4 shadow-2xs">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-bold text-[#201E1C]">หมวดหมู่กลุ่มไซต์งานรีโมต (RDP Groups)</h4>
+                <p class="text-[11px] text-[#6E6862]">จัดระเบียบไซต์งานเป็นหมวดหมู่เพื่อง่ายต่อการค้นหาและฟิลเตอร์</p>
+              </div>
+              <button type="button" onclick="openAdminGroupForm()"
+                      class="px-3.5 py-1.5 text-xs font-bold text-[#2491FA] bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition-colors cursor-pointer flex items-center gap-1">
+                <i class="fa-solid fa-plus text-[10px]"></i>
+                <span>เพิ่มกลุ่มใหม่</span>
+              </button>
+            </div>
+
+            <!-- Group Form (Collapsible) -->
+            <div id="adminGroupFormWrapper" class="hidden bg-[#FAF8F2] p-4 rounded-2xl border border-[#EFE9DC] space-y-3">
+              <h5 id="adminGroupFormTitle" class="text-xs font-bold text-[#201E1C]">➕ เพิ่มกลุ่มงานใหม่</h5>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-[#201E1C] mb-1">ชื่อกลุ่มงาน <span class="text-rose-500">*</span></label>
+                  <input type="text" id="admin-group-name" placeholder="เช่น Datacenter, Logistics, Region-1"
+                         class="w-full px-3 py-1.5 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 text-[#201E1C]">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-[#201E1C] mb-1">คำอธิบายกลุ่ม</label>
+                  <input type="text" id="admin-group-desc" placeholder="ระบุรายละเอียดเพิ่มเติมเกี่ยวกับกลุ่มนี้..."
+                         class="w-full px-3 py-1.5 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 text-[#201E1C]">
+                </div>
+              </div>
+              <div class="flex justify-end gap-2 pt-1">
+                <button type="button" onclick="closeAdminGroupForm()" class="px-3 py-1.5 text-xs text-[#6E6862] hover:text-[#201E1C]">ยกเลิก</button>
+                <button type="button" onclick="submitAdminGroupForm()" class="px-4 py-1.5 text-xs font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl">บันทึกกลุ่ม</button>
+              </div>
+            </div>
+
+            <!-- Groups Table -->
+            <div class="border border-[#EFE9DC] rounded-2xl overflow-hidden">
+              <table class="w-full text-left text-xs">
+                <thead class="bg-[#FAF8F2] border-b border-[#EFE9DC] font-semibold text-[#6E6862]">
+                  <tr>
+                    <th class="px-4 py-3">ชื่อกลุ่มงาน</th>
+                    <th class="px-4 py-3">คำอธิบาย</th>
+                    <th class="px-4 py-3 text-center">จำนวนไซต์</th>
+                    <th class="px-4 py-3 text-right">จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="adminGroupsTableBody" class="divide-y divide-[#EFE9DC]">
+                  <!-- Rendered dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- 1-Click Helper Distributable -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs">
+            <div>
+              <h4 class="text-xs font-bold text-[#201E1C]">ไฟล์ตัวติดตั้ง 1-Click Protocol (v2.0) สำหรับแจกจ่าย</h4>
+              <p class="text-[11px] text-[#6E6862] mt-0.5">ดาวน์โหลดไฟล์ .bat เพื่อส่งต่อให้ผู้ใช้งานใหม่นำไปติดตั้งบนเครื่องคอมพิวเตอร์</p>
+            </div>
+            <button type="button" onclick="RdpLauncher.downloadProtocolInstaller()"
+                    class="px-4 py-2 text-xs font-bold text-white bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 rounded-xl shadow-md shadow-blue-500/20 active:scale-95 transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto">
+              <i class="fa-solid fa-download mr-1.5"></i>
+              <span>ดาวน์โหลด install-rdp-protocol.bat</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ---------------------------------------------------- -->
+        <!-- SCREEN 5: AUDIT LOGS & LEGACY DATA MIGRATION -->
+        <!-- ---------------------------------------------------- -->
+        <div id="admin-screen-migration" class="hidden space-y-5">
+          <div class="bg-[#FAF8F2] p-4 rounded-3xl border border-[#EFE9DC]">
+            <h3 class="text-base font-bold text-[#201E1C]">ประวัติการใช้งาน & โอนย้ายข้อมูล (Audit Logs & Migration)</h3>
+            <p class="text-xs text-[#6E6862] mt-0.5">ตรวจสอบบันทึกการใช้งาน และโอนย้ายข้อมูลจากระบบ RDP Manager เดิม</p>
+          </div>
+
+          <!-- 1-Click Migration Card -->
+          <div class="bg-gradient-to-br from-blue-50 to-indigo-50/50 p-5 rounded-3xl border border-blue-200/80 space-y-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="space-y-1">
+                <div class="flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse"></span>
+                  <h4 class="text-xs font-bold text-blue-900">โอนย้าย / ซิงค์ข้อมูลจาก Google Spreadsheet เดิมของ RDP Manager</h4>
+                </div>
+                <p class="text-[11px] text-blue-800/80 leading-relaxed">
+                  สเปรดชีตเป้าหมาย: <code class="font-mono bg-white/80 px-1.5 py-0.5 rounded border border-blue-200 text-blue-900">1r-mSATonJBdsFUqGzPlOi6oDzp87XbeI7YFd3jP7VCk</code><br>
+                  ระบบจะดึงข้อมูลไซต์งาน, รายการเครื่องและรหัสผ่านทั้งหมด, กลุ่มงาน, สิทธิ์ และผู้ใช้เดิมมาผสานเข้ากับฐานข้อมูลหลักให้อัตโนมัติ โดยไม่ทับข้อมูลเดิมเสียหาย
+                </p>
+              </div>
+
+              <button type="button" onclick="triggerLegacyRdpMigration()" id="btnTriggerMigration"
+                      class="px-4 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/25 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+                <span>ซิงค์ข้อมูลจาก RDP เดิม</span>
+              </button>
+            </div>
+
+            <div id="migrationResultCallout" class="hidden p-3 bg-white/90 rounded-2xl border border-blue-200 text-xs text-blue-900">
+              <!-- Result summary -->
+            </div>
+          </div>
+
+          <!-- Audit Logs Table -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-3.5 shadow-2xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="text-xs font-bold text-[#201E1C] flex items-center gap-2">
+                <i class="fa-solid fa-list-ul text-[#2491FA]"></i>
+                <span>ประวัติกิจกรรมในระบบ (Audit Logs)</span>
+              </div>
+
+              <!-- Search / Refresh -->
+              <div class="flex items-center gap-2">
+                <input type="text" id="adminLogSearchInput" placeholder="ค้นหาประวัติ..."
+                       class="px-3 py-1.5 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none text-[#201E1C]">
+                <button type="button" onclick="loadAdminAuditLogs()" title="รีเฟรชประวัติ"
+                        class="p-2 text-[#6E6862] hover:text-[#201E1C] hover:bg-[#FAF8F2] rounded-xl border border-[#EFE9DC]">
+                  <i class="fa-solid fa-arrows-rotate text-xs"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="border border-[#EFE9DC] rounded-2xl overflow-hidden">
+              <div class="overflow-x-auto max-h-96 overflow-y-auto">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-[#FAF8F2] border-b border-[#EFE9DC] sticky top-0 font-semibold text-[#6E6862]">
+                    <tr>
+                      <th class="px-4 py-2.5">วันเวลา</th>
+                      <th class="px-4 py-2.5">ผู้ใช้</th>
+                      <th class="px-4 py-2.5">การกระทำ (Action)</th>
+                      <th class="px-4 py-2.5">รหัสเป้าหมาย</th>
+                      <th class="px-4 py-2.5">รายละเอียด</th>
+                    </tr>
+                  </thead>
+                  <tbody id="adminAuditLogsTableBody" class="divide-y divide-[#EFE9DC]">
+                    <!-- Rendered dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+</div>

@@ -182,4 +182,72 @@
   .flatpickr-current-month .flatpickr-monthDropdown-months {
     font-weight: 700 !important;
   }
+  /* App Launcher Card Animations */
+  .app-launcher-card {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    background-color: var(--ch-card);
+    border: 1px solid var(--ch-border);
+  }
+  .app-launcher-card:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 16px 28px -4px rgba(32, 30, 28, 0.12), 0 6px 10px -2px rgba(32, 30, 28, 0.06);
+    border-color: #D9D1C3;
+  }
+
+  /* Remote Button Pulse & Hover */
+  .btn-remote-pulse {
+    transition: all 0.18s ease;
+  }
+  .btn-remote-pulse:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -1px rgba(36, 145, 250, 0.35);
+  }
+  .btn-remote-pulse:active {
+    transform: scale(0.97);
+  }
+
+  /* Toast Notifications */
+  #toast-container {
+    position: fixed;
+    top: 1.25rem;
+    right: 1.25rem;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    pointer-events: none;
+  }
+  .toast {
+    pointer-events: auto;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    opacity: 0;
+    transform: translateX(2rem) scale(0.95);
+  }
+  .toast-show {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  .toast-hide {
+    opacity: 0;
+    transform: translateY(-1rem) scale(0.9);
+  }
+
+  /* Admin Center Navigation Items */
+  .admin-nav-btn {
+    transition: all 0.15s ease;
+  }
+  .admin-nav-btn.active {
+    background-color: #FFFFFF;
+    color: var(--ch-blue);
+    font-weight: 700;
+    box-shadow: 0 1px 3px 0 rgba(32, 30, 28, 0.08);
+    border: 1px solid var(--ch-border);
+  }
+  .admin-nav-btn:not(.active) {
+    color: var(--ch-text-muted);
+  }
+  .admin-nav-btn:not(.active):hover {
+    background-color: var(--ch-card-subtle);
+    color: var(--ch-text-main);
+  }
 </style>

@@ -1,6 +1,11 @@
 **/**
 !appsscript.json
 !Code.js
+!RdpBackend.js
 !Index.html
 !Styles.html
 !JavaScript.html
+!RdpView.html
+!AdminView.html
+!RdpScript.html
+!AdminScript.html

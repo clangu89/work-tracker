@@ -1,0 +1,1023 @@
+<script>
+/**
+ * ====================================================================
+ * RDP MANAGER CLIENT-SIDE MODULE
+ * ====================================================================
+ * จัดการส่วนติดต่อผู้ใช้ของระบบ RDP Manager ใน Work Tracker:
+ * - RdpLauncher: Zero-Prompt Custom Protocol (rdpconnect://) & .rdp file generator
+ * - Multi-Machine Site Rendering (Card Grid & Table Views)
+ * - Site CRUD Modal with dynamic multi-machine rows
+ * - Client Settings & 1-Click Protocol Guide
+ */
+
+// Configuration Helper for RDP Client Preferences
+const RDP_CONFIG = {
+  getConnectionMode() {
+    return localStorage.getItem("rdp_conn_mode") || "protocol";
+  },
+  setConnectionMode(mode) {
+    localStorage.setItem("rdp_conn_mode", mode);
+  },
+  getShareDrives() {
+    const val = localStorage.getItem("rdp_share_drives");
+    return val === null ? true : (val === "true");
+  },
+  setShareDrives(bool) {
+    localStorage.setItem("rdp_share_drives", bool ? "true" : "false");
+  }
+};
+
+// RDP Launcher & Protocol Bridge
+const RdpLauncher = {
+  HELPER_VERSION: 2,
+
+  encodeUtf8Base64(obj) {
+    const utf8Bytes = new TextEncoder().encode(JSON.stringify(obj));
+    let bin = "";
+    utf8Bytes.forEach(b => {
+      bin += String.fromCharCode(b);
+    });
+    return btoa(bin);
+  },
+
+  decodeUtf8Base64(b64) {
+    if (!b64) return null;
+    try {
+      const binStr = atob(b64);
+      const bytes = Uint8Array.from(binStr, c => c.charCodeAt(0));
+      let jsonStr;
+      try {
+        jsonStr = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+      } catch (e) {
+        jsonStr = binStr;
+      }
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // เชื่อมต่อไปยังไซต์และเครื่องเป้าหมาย
+  connect(site, machine = null) {
+    const targetMachine = machine || (site.machines && site.machines.length > 0 ? site.machines[0] : null) || {
+      machine_id: "MCH-1",
+      machine_name: site.site_name,
+      ip_address: site.ip_address,
+      port: site.port || 3389,
+      username: site.username,
+      password: site.password,
+      remote_payload: site.remote_payload
+    };
+
+    const mode = RDP_CONFIG.getConnectionMode(); // 'protocol' หรือ 'rdp_file'
+    const currentUser = (state && state.currentUser) ? state.currentUser.username : "guest";
+
+    // บันทึก Audit Log และสถานะการ Remote ผ่าน API ในเบื้องหลัง
+    if (typeof google !== "undefined" && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(res => {
+          if (res && res.online_users && Array.isArray(res.online_users)) {
+            state.onlineUsers = res.online_users;
+            updateOnlineUsersBadge();
+            renderRdpSites();
+          }
+        })
+        .withFailureHandler(err => console.warn("Log remote action failed:", err))
+        .logRdpRemoteAction(
+          currentUser,
+          site.site_id,
+          site.site_name,
+          targetMachine.machine_id,
+          targetMachine.machine_name
+        );
+    }
+
+    if (mode === "protocol") {
+      this.launchViaProtocol(site, targetMachine);
+    } else {
+      this.launchViaRdpFile(site, targetMachine);
+    }
+  },
+
+  // 1. เปิดผ่าน Custom Protocol (rdpconnect://)
+  launchViaProtocol(site, machine) {
+    let dataObj = this.decodeUtf8Base64(machine.remote_payload);
+
+    if (!dataObj) {
+      dataObj = {
+        id: site.site_id + "_" + (machine.machine_id || "MCH-1"),
+        site_id: site.site_id,
+        machine_id: machine.machine_id,
+        name: `${site.site_name} - ${machine.machine_name || "Machine"}`,
+        ip: machine.ip_address,
+        port: machine.port || 3389,
+        user: machine.username,
+        pass: machine.password || ""
+      };
+    }
+
+    dataObj.v = this.HELPER_VERSION;
+    dataObj.clipboard = true;
+    dataObj.drives = RDP_CONFIG.getShareDrives();
+
+    const payload = this.encodeUtf8Base64(dataObj);
+    const uri = "rdpconnect://" + payload;
+
+    const link = document.createElement("a");
+    link.href = uri;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    const targetLabel = machine.machine_name ? `${site.site_name} (${machine.machine_name})` : site.site_name;
+    showToast(`⚡ กำลังส่งคำสั่งเชื่อมต่อ Windows Remote Desktop ไปยัง "${targetLabel}"...`, "success");
+  },
+
+  // 2. สร้างและดาวน์โหลดไฟล์ .rdp มาตรฐาน (Fallback)
+  launchViaRdpFile(site, machine) {
+    const fullAddress = `${machine.ip_address}:${machine.port || 3389}`;
+    const username = machine.username || "";
+    const shareDrives = RDP_CONFIG.getShareDrives();
+
+    const rdpContent = [
+      "screen mode id:i:2",
+      "use multimon:i:0",
+      "desktopwidth:i:1920",
+      "desktopheight:i:1080",
+      "session bpp:i:32",
+      "compression:i:1",
+      "keyboardhook:i:2",
+      "audiomode:i:0",
+      "redirectprinters:i:0",
+      "redirectcomports:i:0",
+      "redirectsmartcards:i:0",
+      "redirectclipboard:i:1",
+      `drivestoredirect:s:${shareDrives ? "*" : ""}`,
+      "redirectposdevices:i:0",
+      "displayconnectionbar:i:1",
+      "autoreconnection enabled:i:1",
+      "authentication level:i:2",
+      "prompt for credentials:i:0",
+      "negotiate security layer:i:1",
+      "enablecredsspsupport:i:1",
+      `full address:s:${fullAddress}`,
+      `username:s:${username}`
+    ].join("\r\n");
+
+    const blob = new Blob([rdpContent], { type: "application/x-rdp" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const rawSafeName = `${site.site_name || "remote"}_${machine.machine_name || "machine"}`;
+    const safeName = rawSafeName.replace(/[^a-zA-Z0-9_\u0E00-\u0E7F]/g, "_");
+    a.href = url;
+    a.download = `${safeName}.rdp`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    const targetLabel = machine.machine_name ? `${site.site_name} (${machine.machine_name})` : site.site_name;
+    showToast(`📁 ดาวน์โหลดไฟล์การเชื่อมต่อสำหรับ "${targetLabel}" เรียบร้อยแล้ว`, "info");
+  },
+
+  // 3. สั่ง Auto-Type คำสั่งซ่อม rdpclip.exe
+  triggerRemoteClipboardFix(cmdType = "restart_rdpclip") {
+    const payload = this.encodeUtf8Base64({
+      v: this.HELPER_VERSION,
+      action: "fix_clipboard",
+      cmdType: cmdType
+    });
+
+    const uri = "rdpconnect://" + payload;
+    const link = document.createElement("a");
+    link.href = uri;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast("⌨️ กำลังสลับไปหน้าต่าง Remote Desktop และพิมพ์คำสั่งซ่อม Clipboard ให้อัตโนมัติ...", "info");
+  },
+
+  // ดาวน์โหลดไฟล์ install-rdp-protocol.bat
+  downloadProtocolInstaller() {
+    const cacheTs = Date.now();
+    const batContent = `@echo off
+chcp 65001 >nul
+echo ========================================================
+echo   RDP Manager: 1-Click Zero-Prompt Protocol Setup v2.0
+echo   (Clipboard ^& File Copy Redirection Enabled)
+echo   Work Tracker Integration (clangu89)
+echo ========================================================
+echo.
+
+set "SCRIPT_URL=https://raw.githubusercontent.com/clangu89/work-tracker/main/helper/install-rdp-protocol.ps1?t=${cacheTs}"
+set "TMP_PS1=%TEMP%\\install-rdp-protocol.ps1"
+
+echo [*] Downloading installer script v2.0 from repository...
+curl.exe -sL "%SCRIPT_URL%" -o "%TMP_PS1%"
+
+if not exist "%TMP_PS1%" (
+    echo [!] Download failed or offline. Running local HKCU protocol registration...
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$d = Join-Path $env:LOCALAPPDATA 'RDPManager'; if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }; $rp = 'HKCU:\\Software\\Classes\\rdpconnect'; if (-not (Test-Path $rp)) { New-Item -Path $rp -Force | Out-Null }; Set-Item -Path $rp -Value 'URL:RDP Connect Protocol'; New-ItemProperty -Path $rp -Name 'URL Protocol' -Value '' -PropertyType String -Force | Out-Null"
+) else (
+    echo [*] Executing protocol installation v2.0...
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%TMP_PS1%"
+    del "%TMP_PS1%" 2>nul
+)
+
+echo.
+pause
+`;
+
+    const blob = new Blob([batContent], { type: "application/x-bat" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "install-rdp-protocol.bat";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    showToast("📥 ดาวน์โหลดตัวติดตั้ง v2.0 สำเร็จ (ดับเบิลคลิกไฟล์เพื่อเปิดใช้งาน)", "success");
+  }
+};
+
+// RDP Internal State
+const rdpState = {
+  sites: [],
+  groups: [],
+  searchTerm: "",
+  selectedGroup: "ALL",
+  viewMode: localStorage.getItem("rdp_view_mode") || "grid",
+  editingSiteId: null,
+  editingSiteMachines: [],
+  isLoading: false
+};
+
+/**
+ * เริ่มต้นทำงานเมื่อเปิดเข้าสู่หน้าจอ RDP Manager
+ */
+function initRdpApp() {
+  // ตรวจสอบสิทธิ์ Admin เพื่อแสดง/ซ่อนปุ่มเพิ่มไซต์งาน
+  const isAdmin = (state && state.currentUser && state.currentUser.role === 'Admin');
+  const btnAddSite = document.getElementById("btnRdpAddSite");
+  if (btnAddSite) {
+    if (isAdmin) {
+      btnAddSite.classList.remove("hidden");
+    } else {
+      btnAddSite.classList.add("hidden");
+    }
+  }
+
+  // ผูกการค้นหาและตัวกรอง
+  const searchInput = document.getElementById("rdp-search-input");
+  if (searchInput && !searchInput.dataset.bound) {
+    searchInput.dataset.bound = "true";
+    searchInput.addEventListener("input", (e) => {
+      rdpState.searchTerm = e.target.value.trim();
+      renderRdpSites();
+    });
+  }
+
+  const groupFilter = document.getElementById("group-filter-select");
+  if (groupFilter && !groupFilter.dataset.bound) {
+    groupFilter.dataset.bound = "true";
+    groupFilter.addEventListener("change", (e) => {
+      rdpState.selectedGroup = e.target.value;
+      renderRdpSites();
+    });
+  }
+
+  // ปรับสถานะปุ่ม View Switcher
+  setRdpViewMode(rdpState.viewMode, false);
+
+  // โหลดข้อมูลไซต์งาน RDP
+  loadRdpData();
+}
+
+/**
+ * ดึงข้อมูลไซต์งานและกลุ่ม RDP จากเซิร์ฟเวอร์
+ */
+function loadRdpData(forceRefresh = false) {
+  if (rdpState.isLoading) return;
+  rdpState.isLoading = true;
+
+  const refreshIcon = document.getElementById("btnRdpRefreshIcon");
+  if (refreshIcon) refreshIcon.classList.add("fa-spin");
+
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+
+  google.script.run
+    .withSuccessHandler(res => {
+      rdpState.isLoading = false;
+      if (refreshIcon) refreshIcon.classList.remove("fa-spin");
+
+      if (res && res.success) {
+        rdpState.sites = res.sites || [];
+        rdpState.groups = res.groups || [];
+
+        if (res.online_users && Array.isArray(res.online_users)) {
+          state.onlineUsers = res.online_users;
+          updateOnlineUsersBadge();
+        }
+
+        populateRdpGroupFilter();
+        renderRdpSites();
+      } else {
+        showToast((res && res.message) || "ไม่สามารถโหลดข้อมูลไซต์ RDP ได้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      rdpState.isLoading = false;
+      if (refreshIcon) refreshIcon.classList.remove("fa-spin");
+      showToast("เกิดข้อผิดพลาดในการโหลดข้อมูล RDP: " + (err.message || err), "error");
+    })
+    .getRdpInitialData(currentUsername);
+}
+
+/**
+ * สลับโหมดการแสดงผล Grid หรือ Table
+ */
+function setRdpViewMode(mode, doRender = true) {
+  rdpState.viewMode = mode;
+  localStorage.setItem("rdp_view_mode", mode);
+
+  const btnGrid = document.getElementById("btnViewGridRdp");
+  const btnTable = document.getElementById("btnViewTableRdp");
+
+  if (btnGrid && btnTable) {
+    if (mode === "grid") {
+      btnGrid.className = "px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-[#2491FA] shadow-xs transition-all";
+      btnTable.className = "px-3 py-1.5 text-xs font-semibold rounded-lg text-[#6E6862] hover:text-[#201E1C] transition-all";
+    } else {
+      btnTable.className = "px-3 py-1.5 text-xs font-semibold rounded-lg bg-white text-[#2491FA] shadow-xs transition-all";
+      btnGrid.className = "px-3 py-1.5 text-xs font-semibold rounded-lg text-[#6E6862] hover:text-[#201E1C] transition-all";
+    }
+  }
+
+  if (doRender) {
+    renderRdpSites();
+  }
+}
+
+/**
+ * เติมตัวเลือกกลุ่มใน Dropdown Filter
+ */
+function populateRdpGroupFilter() {
+  const select = document.getElementById("group-filter-select");
+  if (!select) return;
+
+  const currentVal = rdpState.selectedGroup;
+  let optionsHtml = `<option value="ALL">ทุกหมวดหมู่ (${rdpState.sites.length})</option>`;
+
+  const groupNames = new Set(rdpState.groups.map(g => g.group_name));
+  rdpState.sites.forEach(s => {
+    if (s.group_name) groupNames.add(s.group_name);
+  });
+
+  groupNames.forEach(gName => {
+    const count = rdpState.sites.filter(s => (s.group_name || "").toLowerCase() === gName.toLowerCase()).length;
+    optionsHtml += `<option value="${escapeHtml(gName)}">${escapeHtml(gName)} (${count})</option>`;
+  });
+
+  select.innerHTML = optionsHtml;
+  select.value = currentVal;
+}
+
+/**
+ * ค้นหาว่ามีใครกำลัง Remote เชื่อมต่อเครื่องนี้อยู่หรือไม่
+ */
+function getActiveRemoteForMachine(siteId, machineId) {
+  if (!state || !state.onlineUsers || !Array.isArray(state.onlineUsers)) return null;
+  const now = Date.now();
+  const currentUsername = (state.currentUser ? state.currentUser.username : "").toLowerCase();
+
+  return state.onlineUsers.find(u => {
+    if (!u.activeRemote) return false;
+    // ข้ามตัวผู้ใช้งานเอง
+    if (String(u.username || '').toLowerCase() === currentUsername) return false;
+    // ตรวจสอบว่า Remote ที่เครื่องนี้ภายใน 4 ชั่วโมง
+    const isRecent = (now - (u.activeRemote.connectedAt || 0)) < (4 * 3600 * 1000);
+    return isRecent &&
+           String(u.activeRemote.siteId) === String(siteId) &&
+           String(u.activeRemote.machineId) === String(machineId);
+  });
+}
+
+/**
+ * แสดงผลไซต์งาน RDP ในหน้าจอหลัก
+ */
+function renderRdpSites() {
+  const container = document.getElementById("sites-container");
+  if (!container) return;
+
+  const term = rdpState.searchTerm.toLowerCase().trim();
+  const filtered = rdpState.sites.filter(site => {
+    const matchesSite =
+      (site.site_name || "").toLowerCase().includes(term) ||
+      (site.description || "").toLowerCase().includes(term) ||
+      (site.group_name || "").toLowerCase().includes(term);
+
+    const matchesMachine = (site.machines || []).some(m =>
+      (m.machine_name && m.machine_name.toLowerCase().includes(term)) ||
+      (m.ip_address && m.ip_address.toLowerCase().includes(term)) ||
+      (m.username && m.username.toLowerCase().includes(term)) ||
+      (m.note && m.note.toLowerCase().includes(term))
+    );
+
+    const matchesSearch = !term || matchesSite || matchesMachine;
+    const matchesGroup = rdpState.selectedGroup === "ALL" || (site.group_name || "") === rdpState.selectedGroup;
+
+    return matchesSearch && matchesGroup;
+  });
+
+  const totalMachines = filtered.reduce((sum, s) => sum + (s.machines ? s.machines.length : 1), 0);
+  const badgeEl = document.getElementById("sites-count-badge");
+  if (badgeEl) badgeEl.textContent = `${filtered.length} ไซต์ (${totalMachines} เครื่อง)`;
+
+  if (filtered.length === 0) {
+    container.className = "w-full";
+    container.innerHTML = `
+      <div class="py-16 text-center bg-[#FAF8F2] rounded-2xl border border-dashed border-[#EDE7DA]">
+        <div class="w-14 h-14 mx-auto mb-3 bg-[#EDE7DA] rounded-2xl flex items-center justify-center text-[#6E6862]">
+          <i class="fa-solid fa-desktop text-2xl"></i>
+        </div>
+        <h3 class="text-sm font-bold text-[#201E1C]">ไม่พบข้อมูลไซต์งาน</h3>
+        <p class="text-xs text-[#6E6862] mt-1">ลองเปลี่ยนคำค้นหา หรือเพิ่มไซต์งานใหม่เข้าระบบ</p>
+      </div>
+    `;
+    return;
+  }
+
+  const isAdmin = (state && state.currentUser && state.currentUser.role === 'Admin');
+
+  if (rdpState.viewMode === "grid") {
+    container.className = "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5";
+    container.innerHTML = filtered.map(site => {
+      const machines = (site.machines && site.machines.length > 0) ? site.machines : [
+        {
+          machine_id: "MCH-1",
+          machine_name: "เครื่องหลัก",
+          ip_address: site.ip_address,
+          port: site.port || 3389,
+          username: site.username,
+          password: site.password,
+          note: ""
+        }
+      ];
+
+      return `
+      <div class="bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC] shadow-2xs hover:shadow-md transition-all duration-200 overflow-hidden flex flex-col justify-between group">
+        <div class="p-4 sm:p-5">
+          <!-- Card Header -->
+          <div class="flex items-start justify-between gap-2.5 mb-2.5">
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#EDE7DA] text-[#201E1C] border border-[#EFE9DC]">
+                  ${escapeHtml(site.group_name || 'ทั่วไป')}
+                </span>
+                <span class="text-[11px] font-bold text-[#2491FA]">
+                  <i class="fa-solid fa-server mr-1"></i>${machines.length} เครื่อง
+                </span>
+              </div>
+              <h3 class="text-base font-bold text-[#201E1C] mt-1 truncate" title="${escapeHtml(site.site_name)}">
+                ${escapeHtml(site.site_name)}
+              </h3>
+              ${site.description ? `<p class="text-xs text-[#6E6862] mt-0.5 line-clamp-1">${escapeHtml(site.description)}</p>` : ''}
+            </div>
+
+            <!-- Site Actions (Admin) -->
+            ${isAdmin ? `
+            <div class="flex items-center gap-1 shrink-0">
+              <button onclick="openSiteModal('${site.site_id}')" class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-white rounded-lg transition-colors" title="แก้ไขไซต์งาน">
+                <i class="fa-solid fa-pen-to-square text-xs"></i>
+              </button>
+              <button onclick="deleteRdpSiteConfirm('${site.site_id}', '${escapeHtml(site.site_name)}')" class="p-1.5 text-[#6E6862] hover:text-rose-600 hover:bg-white rounded-lg transition-colors" title="ลบไซต์งาน">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+              </button>
+            </div>
+            ` : ''}
+          </div>
+
+          <!-- Machine List inside Site Card -->
+          <div class="space-y-2.5 mt-3 pt-3 border-t border-[#EFE9DC]">
+            ${machines.map(m => {
+              const activeUser = getActiveRemoteForMachine(site.site_id, m.machine_id);
+              const fullAddr = `${m.ip_address || ''}:${m.port || 3389}`;
+
+              return `
+              <div class="p-3 rounded-xl border ${activeUser ? 'bg-amber-50/80 border-amber-300 ring-1 ring-amber-300/50' : 'bg-white border-[#EFE9DC]'} transition-all">
+                <div class="flex items-center justify-between gap-2 mb-2">
+                  <div class="flex items-center gap-1.5 min-w-0">
+                    <i class="fa-solid fa-display text-[#2491FA] text-xs shrink-0"></i>
+                    <span class="text-xs font-bold text-[#201E1C] truncate">${escapeHtml(m.machine_name || 'Machine')}</span>
+                  </div>
+
+                  ${activeUser ? `
+                  <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 shrink-0">
+                    <span class="relative flex h-1.5 w-1.5">
+                      <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span class="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+                    </span>
+                    <span>${escapeHtml(activeUser.fullName || activeUser.username)} ใช้งานอยู่</span>
+                  </span>
+                  ` : ''}
+                </div>
+
+                <!-- Specs / Credentials -->
+                <div class="bg-[#FAF8F2] p-2 rounded-lg border border-[#EFE9DC] text-[11px] font-mono space-y-1 text-[#201E1C]">
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#6E6862] font-sans text-[10px]">IP:</span>
+                    <div class="flex items-center gap-1">
+                      <span class="font-bold">${escapeHtml(fullAddr)}</span>
+                      <button onclick="copyToClipboard('${fullAddr}', 'คัดลอก IP')" class="text-[#6E6862] hover:text-[#201E1C] p-0.5" title="คัดลอก IP">
+                        <i class="fa-regular fa-copy text-[11px]"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div class="flex items-center justify-between">
+                    <span class="text-[#6E6862] font-sans text-[10px]">User:</span>
+                    <div class="flex items-center gap-1">
+                      <span>${escapeHtml(m.username || '-')}</span>
+                      <button onclick="copyToClipboard('${m.username || ''}', 'คัดลอก Username')" class="text-[#6E6862] hover:text-[#201E1C] p-0.5" title="คัดลอก User">
+                        <i class="fa-regular fa-copy text-[11px]"></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  ${m.note ? `
+                  <div class="text-[10px] text-[#6E6862] font-sans pt-0.5 border-t border-[#EFE9DC] truncate">
+                    <i class="fa-regular fa-note-sticky mr-1"></i>${escapeHtml(m.note)}
+                  </div>
+                  ` : ''}
+                </div>
+
+                <!-- 1-Click Remote Button for this Machine -->
+                <button onclick="handleMachineRemoteConnect('${site.site_id}', '${m.machine_id}')"
+                        class="btn-remote-pulse mt-2.5 w-full py-1.5 px-3 text-xs font-bold rounded-xl text-white shadow-xs transition-all flex items-center justify-center gap-1.5 ${activeUser ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#2491FA] hover:bg-[#1A7CE0]'} cursor-pointer active:scale-98">
+                  <i class="fa-solid fa-bolt text-xs"></i>
+                  <span>Remote (${escapeHtml(m.machine_name || 'Machine')})</span>
+                </button>
+              </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      </div>
+      `;
+    }).join("");
+  } else {
+    // Table View
+    container.className = "bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC] shadow-2xs overflow-hidden";
+    container.innerHTML = `
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs">
+          <thead class="bg-[#EDE7DA] border-b border-[#EFE9DC] font-bold text-[#6E6862] uppercase">
+            <tr>
+              <th class="px-5 py-3">ชื่อไซต์งาน</th>
+              <th class="px-5 py-3">กลุ่ม</th>
+              <th class="px-5 py-3">รายการเครื่องในไซต์</th>
+              ${isAdmin ? '<th class="px-5 py-3 text-right">จัดการไซต์</th>' : ''}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#EFE9DC]">
+            ${filtered.map(site => {
+              const machines = (site.machines && site.machines.length > 0) ? site.machines : [
+                {
+                  machine_id: "MCH-1",
+                  machine_name: "เครื่องหลัก",
+                  ip_address: site.ip_address,
+                  port: site.port || 3389,
+                  username: site.username,
+                  password: site.password,
+                  note: ""
+                }
+              ];
+
+              return `
+              <tr class="hover:bg-white/80 transition-colors">
+                <td class="px-5 py-3.5 align-top">
+                  <div class="font-bold text-[#201E1C] text-sm">${escapeHtml(site.site_name)}</div>
+                  <div class="text-[11px] text-[#2491FA] font-bold mt-0.5"><i class="fa-solid fa-server mr-1"></i>${machines.length} เครื่อง</div>
+                  ${site.description ? `<div class="text-[11px] text-[#6E6862] mt-0.5">${escapeHtml(site.description)}</div>` : ''}
+                </td>
+                <td class="px-5 py-3.5 align-top">
+                  <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-[#EDE7DA] text-[#201E1C] border border-[#EFE9DC]">
+                    ${escapeHtml(site.group_name || 'ทั่วไป')}
+                  </span>
+                </td>
+                <td class="px-5 py-3.5">
+                  <div class="space-y-2">
+                    ${machines.map(m => {
+                      const activeUser = getActiveRemoteForMachine(site.site_id, m.machine_id);
+                      const fullAddr = `${m.ip_address || ''}:${m.port || 3389}`;
+
+                      return `
+                      <div class="flex flex-col sm:flex-row sm:items-center justify-between p-2 rounded-xl border ${activeUser ? 'bg-amber-50/80 border-amber-300' : 'bg-white border-[#EFE9DC]'} gap-2">
+                        <div class="flex items-center gap-2 flex-wrap">
+                          <i class="fa-solid fa-display text-[#2491FA] text-xs"></i>
+                          <span class="font-bold text-[#201E1C]">${escapeHtml(m.machine_name || 'Machine')}</span>
+                          <span class="font-mono text-[#6E6862]">${escapeHtml(fullAddr)}</span>
+                          <span class="text-[#6E6862] font-mono">(${escapeHtml(m.username || '-')})</span>
+                          ${activeUser ? `<span class="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300"><i class="fa-solid fa-user mr-1"></i>${escapeHtml(activeUser.fullName || activeUser.username)} กำลังรีโมต</span>` : ''}
+                        </div>
+                        <button onclick="handleMachineRemoteConnect('${site.site_id}', '${m.machine_id}')"
+                                class="btn-remote-pulse py-1 px-3 text-xs font-bold rounded-lg text-white shadow-2xs ${activeUser ? 'bg-amber-600 hover:bg-amber-700' : 'bg-[#2491FA] hover:bg-[#1A7CE0]'} cursor-pointer shrink-0">
+                          <i class="fa-solid fa-bolt mr-1"></i>Remote
+                        </button>
+                      </div>
+                      `;
+                    }).join("")}
+                  </div>
+                </td>
+                ${isAdmin ? `
+                <td class="px-5 py-3.5 align-top text-right">
+                  <div class="flex items-center justify-end gap-1">
+                    <button onclick="openSiteModal('${site.site_id}')" class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-white rounded-lg transition-colors" title="แก้ไขไซต์งาน">
+                      <i class="fa-solid fa-pen-to-square"></i>
+                    </button>
+                    <button onclick="deleteRdpSiteConfirm('${site.site_id}', '${escapeHtml(site.site_name)}')" class="p-1.5 text-[#6E6862] hover:text-rose-600 hover:bg-white rounded-lg transition-colors" title="ลบไซต์งาน">
+                      <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                  </div>
+                </td>
+                ` : ''}
+              </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+}
+
+/**
+ * Handler เมื่อกดปุ่ม Remote ที่เครื่องเป้าหมาย
+ */
+function handleMachineRemoteConnect(siteId, machineId) {
+  const site = rdpState.sites.find(s => String(s.site_id) === String(siteId));
+  if (!site) return;
+  const machine = (site.machines || []).find(m => String(m.machine_id) === String(machineId)) || null;
+  RdpLauncher.connect(site, machine);
+}
+
+// --------------------------------------------------------------------
+// SITE CRUD MODAL (Multi-Machine Support)
+// --------------------------------------------------------------------
+
+/**
+ * เปิด Modal เพิ่ม/แก้ไขไซต์งาน RDP
+ */
+function openSiteModal(siteId = null) {
+  rdpState.editingSiteId = siteId;
+  const modal = document.getElementById("site-modal");
+  const modalTitle = document.getElementById("site-modal-title");
+  const groupSelect = document.getElementById("form-site-group");
+
+  // เติมกลุ่มใน Select
+  if (groupSelect) {
+    if (rdpState.groups.length === 0) {
+      groupSelect.innerHTML = '<option value="ทั่วไป">ทั่วไป</option>';
+    } else {
+      groupSelect.innerHTML = rdpState.groups.map(g => `
+        <option value="${escapeHtml(g.group_name)}">${escapeHtml(g.group_name)}</option>
+      `).join("");
+    }
+  }
+
+  if (siteId) {
+    const site = rdpState.sites.find(s => String(s.site_id) === String(siteId));
+    if (!site) return;
+    if (modalTitle) modalTitle.textContent = "แก้ไขไซต์งาน";
+    document.getElementById("form-site-name").value = site.site_name || "";
+    if (groupSelect) groupSelect.value = site.group_name || "ทั่วไป";
+    document.getElementById("form-site-desc").value = site.description || "";
+
+    rdpState.editingSiteMachines = (site.machines && site.machines.length > 0)
+      ? JSON.parse(JSON.stringify(site.machines))
+      : [{
+          machine_id: "MCH-1",
+          machine_name: site.site_name,
+          ip_address: site.ip_address || "",
+          port: site.port || 3389,
+          username: site.username || "administrator",
+          password: site.password || "",
+          note: ""
+        }];
+  } else {
+    if (modalTitle) modalTitle.textContent = "เพิ่มไซต์งานใหม่";
+    document.getElementById("form-site-name").value = "";
+    if (groupSelect && rdpState.groups.length > 0) groupSelect.value = rdpState.groups[0].group_name;
+    document.getElementById("form-site-desc").value = "";
+
+    rdpState.editingSiteMachines = [{
+      machine_id: "MCH-1",
+      machine_name: "เครื่องหลัก",
+      ip_address: "",
+      port: 3389,
+      username: "administrator",
+      password: "",
+      note: ""
+    }];
+  }
+
+  renderMachinesFormRows();
+  if (modal) modal.classList.remove("hidden");
+}
+
+/**
+ * ปิด Site Modal
+ */
+function closeSiteModal() {
+  const modal = document.getElementById("site-modal");
+  if (modal) modal.classList.add("hidden");
+  rdpState.editingSiteId = null;
+  rdpState.editingSiteMachines = [];
+}
+
+/**
+ * วาดรายการฟอร์มเครื่องในไซต์งาน
+ */
+function renderMachinesFormRows() {
+  const container = document.getElementById("machines-form-container");
+  const badge = document.getElementById("form-machines-count-badge");
+  if (!container) return;
+
+  if (badge) badge.textContent = `${rdpState.editingSiteMachines.length} เครื่อง`;
+
+  container.innerHTML = rdpState.editingSiteMachines.map((m, idx) => `
+    <div class="machine-form-row bg-white p-3.5 rounded-xl border border-[#EFE9DC] shadow-2xs space-y-3" data-idx="${idx}">
+      <div class="flex items-center justify-between gap-2 border-b border-[#EFE9DC] pb-2">
+        <div class="flex items-center gap-2">
+          <span class="w-5 h-5 rounded-md bg-[#EDE7DA] text-[#2491FA] text-[11px] font-bold flex items-center justify-center">${idx + 1}</span>
+          <span class="text-xs font-bold text-[#201E1C]">เครื่องที่ ${idx + 1}</span>
+        </div>
+        <div class="flex items-center gap-1">
+          <button type="button" onclick="duplicateMachineRow(${idx})" class="text-[#6E6862] hover:text-[#2491FA] p-1 text-xs" title="คัดลอกค่าเครื่องนี้">
+            <i class="fa-regular fa-clone"></i>
+          </button>
+          ${rdpState.editingSiteMachines.length > 1 ? `
+          <button type="button" onclick="removeMachineRow(${idx})" class="text-rose-500 hover:text-rose-700 p-1 text-xs" title="ลบเครื่องนี้">
+            <i class="fa-regular fa-trash-can"></i>
+          </button>
+          ` : ''}
+        </div>
+      </div>
+
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div>
+          <label class="block text-[11px] font-semibold text-[#6E6862] mb-1">ชื่อเครื่อง *</label>
+          <input type="text" class="m-field-name w-full px-2.5 py-1.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-lg text-[#201E1C] text-xs outline-none focus:ring-1 focus:ring-[#2491FA]" value="${escapeHtml(m.machine_name || '')}" placeholder="เช่น เครื่องแม่ข่าย, เครื่องคิดเงิน" required>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <div class="col-span-2">
+            <label class="block text-[11px] font-semibold text-[#6E6862] mb-1">IP Address *</label>
+            <input type="text" class="m-field-ip w-full px-2.5 py-1.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-lg text-[#201E1C] font-mono text-xs outline-none focus:ring-1 focus:ring-[#2491FA]" value="${escapeHtml(m.ip_address || '')}" placeholder="192.168.1.10" required>
+          </div>
+          <div>
+            <label class="block text-[11px] font-semibold text-[#6E6862] mb-1">Port</label>
+            <input type="number" class="m-field-port w-full px-2 py-1.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-lg text-[#201E1C] font-mono text-xs outline-none focus:ring-1 focus:ring-[#2491FA]" value="${m.port || 3389}">
+          </div>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-[#6E6862] mb-1">Username *</label>
+          <input type="text" class="m-field-user w-full px-2.5 py-1.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-lg text-[#201E1C] font-mono text-xs outline-none focus:ring-1 focus:ring-[#2491FA]" value="${escapeHtml(m.username || 'administrator')}" required>
+        </div>
+        <div>
+          <label class="block text-[11px] font-semibold text-[#6E6862] mb-1">Password</label>
+          <input type="password" class="m-field-pass w-full px-2.5 py-1.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-lg text-[#201E1C] font-mono text-xs outline-none focus:ring-1 focus:ring-[#2491FA]" value="${escapeHtml(m.password || '')}" placeholder="เว้นว่างถ้าไม่เปลี่ยน">
+        </div>
+        <div class="sm:col-span-2">
+          <label class="block text-[11px] font-semibold text-[#6E6862] mb-1">หมายเหตุเพิ่มเติม</label>
+          <input type="text" class="m-field-note w-full px-2.5 py-1.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-lg text-[#201E1C] text-xs outline-none focus:ring-1 focus:ring-[#2491FA]" value="${escapeHtml(m.note || '')}" placeholder="เช่น ห้อง Server ชั้น 2">
+        </div>
+      </div>
+    </div>
+  `).join("");
+}
+
+function syncMachinesFormFromDom() {
+  const rows = document.querySelectorAll("#machines-form-container .machine-form-row");
+  const updated = [];
+  rows.forEach((row, i) => {
+    const existing = rdpState.editingSiteMachines[i] || {};
+    updated.push({
+      machine_id: existing.machine_id || `MCH-${Date.now()}-${i + 1}`,
+      machine_name: row.querySelector(".m-field-name").value.trim(),
+      ip_address: row.querySelector(".m-field-ip").value.trim(),
+      port: parseInt(row.querySelector(".m-field-port").value, 10) || 3389,
+      username: row.querySelector(".m-field-user").value.trim(),
+      password: row.querySelector(".m-field-pass").value,
+      note: row.querySelector(".m-field-note").value.trim()
+    });
+  });
+  rdpState.editingSiteMachines = updated;
+}
+
+function addMachineFormRow(data = null) {
+  syncMachinesFormFromDom();
+  rdpState.editingSiteMachines.push(data || {
+    machine_id: `MCH-${Date.now()}`,
+    machine_name: `เครื่อง ${rdpState.editingSiteMachines.length + 1}`,
+    ip_address: "",
+    port: 3389,
+    username: "administrator",
+    password: "",
+    note: ""
+  });
+  renderMachinesFormRows();
+}
+
+function duplicateMachineRow(idx) {
+  syncMachinesFormFromDom();
+  const source = rdpState.editingSiteMachines[idx];
+  if (!source) return;
+  const clone = JSON.parse(JSON.stringify(source));
+  clone.machine_id = `MCH-${Date.now()}`;
+  clone.machine_name = `${clone.machine_name} (สำเนา)`;
+  rdpState.editingSiteMachines.splice(idx + 1, 0, clone);
+  renderMachinesFormRows();
+}
+
+function duplicateLastMachineRow() {
+  if (rdpState.editingSiteMachines.length === 0) {
+    addMachineFormRow();
+    return;
+  }
+  duplicateMachineRow(rdpState.editingSiteMachines.length - 1);
+}
+
+function removeMachineRow(idx) {
+  if (rdpState.editingSiteMachines.length <= 1) {
+    showToast("ไซต์งานต้องมีเครื่องอย่างน้อย 1 เครื่อง", "warning");
+    return;
+  }
+  syncMachinesFormFromDom();
+  rdpState.editingSiteMachines.splice(idx, 1);
+  renderMachinesFormRows();
+}
+
+/**
+ * บันทึกไซต์งานและเครื่องทั้งหมด
+ */
+function handleSiteSubmit(event) {
+  event.preventDefault();
+  syncMachinesFormFromDom();
+
+  const siteName = document.getElementById("form-site-name").value.trim();
+  const groupName = document.getElementById("form-site-group").value.trim() || "ทั่วไป";
+  const desc = document.getElementById("form-site-desc").value.trim();
+
+  if (!siteName) {
+    showToast("กรุณาระบุชื่อไซต์งาน", "warning");
+    return;
+  }
+
+  if (rdpState.editingSiteMachines.length === 0) {
+    showToast("กรุณาเพิ่มเครื่องอย่างน้อย 1 เครื่อง", "warning");
+    return;
+  }
+
+  for (let i = 0; i < rdpState.editingSiteMachines.length; i++) {
+    const m = rdpState.editingSiteMachines[i];
+    if (!m.machine_name || !m.ip_address || !m.username) {
+      showToast(`กรุณากรอกข้อมูลเครื่องที่ ${i + 1} ให้ครบถ้วน (ชื่อ, IP, Username)`, "warning");
+      return;
+    }
+  }
+
+  const siteData = {
+    site_id: rdpState.editingSiteId || "",
+    site_name: siteName,
+    group_name: groupName,
+    description: desc,
+    machines: rdpState.editingSiteMachines
+  };
+
+  const btnSubmit = document.getElementById("btnSubmitSite");
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
+  }
+
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>บันทึกไซต์งาน';
+      }
+
+      if (res && res.success) {
+        showToast(res.message || "บันทึกข้อมูลไซต์งานเรียบร้อย", "success");
+        closeSiteModal();
+        loadRdpData(true);
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึกไซต์งาน", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk mr-1"></i>บันทึกไซต์งาน';
+      }
+      showToast("บันทึกไซต์งานไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveRdpSite(siteData, currentUsername);
+}
+
+/**
+ * ยืนยันและลบไซต์งาน
+ */
+function deleteRdpSiteConfirm(siteId, siteName) {
+  if (!confirm(`คุณต้องการลบไซต์งาน "${siteName}" และรายการเครื่องทั้งหมดในไซต์นี้ใช่หรือไม่?`)) {
+    return;
+  }
+
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast(res.message || "ลบไซต์งานเรียบร้อยแล้ว", "success");
+        loadRdpData(true);
+      } else {
+        showToast((res && res.message) || "ไม่สามารถลบไซต์งานได้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("ลบไซต์งานไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .deleteRdpSite(siteId, currentUsername);
+}
+
+// --------------------------------------------------------------------
+// CLIENT SETTINGS MODAL
+// --------------------------------------------------------------------
+
+function openClientSettingsModal() {
+  const modal = document.getElementById("client-settings-modal");
+  const modeSelect = document.getElementById("client-conn-mode");
+  const drivesCheck = document.getElementById("client-share-drives");
+
+  if (modeSelect) modeSelect.value = RDP_CONFIG.getConnectionMode();
+  if (drivesCheck) drivesCheck.checked = RDP_CONFIG.getShareDrives();
+
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeClientSettingsModal() {
+  const modal = document.getElementById("client-settings-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function handleClientSettingsSubmit(event) {
+  event.preventDefault();
+  const modeSelect = document.getElementById("client-conn-mode");
+  const drivesCheck = document.getElementById("client-share-drives");
+
+  if (modeSelect) RDP_CONFIG.setConnectionMode(modeSelect.value);
+  if (drivesCheck) RDP_CONFIG.setShareDrives(drivesCheck.checked);
+
+  showToast("บันทึกการตั้งค่าการเชื่อมต่อเรียบร้อย", "success");
+  closeClientSettingsModal();
+}
+
+// --------------------------------------------------------------------
+// PROTOCOL GUIDE MODAL
+// --------------------------------------------------------------------
+
+function openProtocolGuideModal() {
+  const modal = document.getElementById("protocol-guide-modal");
+  switchProtocolGuideTab("setup");
+  if (modal) modal.classList.remove("hidden");
+}
+
+function closeProtocolGuideModal() {
+  const modal = document.getElementById("protocol-guide-modal");
+  if (modal) modal.classList.add("hidden");
+}
+
+function switchProtocolGuideTab(tabName) {
+  const btnSetup = document.getElementById("protocol-tab-setup");
+  const btnTrouble = document.getElementById("protocol-tab-troubleshoot");
+  const panelSetup = document.getElementById("protocol-panel-setup");
+  const panelTrouble = document.getElementById("protocol-panel-troubleshoot");
+
+  if (tabName === "setup") {
+    if (btnSetup) btnSetup.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-white text-[#2491FA] shadow-xs transition-all";
+    if (btnTrouble) btnTrouble.className = "flex-1 py-2 text-xs font-bold rounded-lg text-[#6E6862] hover:text-[#201E1C] transition-all";
+    if (panelSetup) panelSetup.classList.remove("hidden");
+    if (panelTrouble) panelTrouble.classList.add("hidden");
+  } else {
+    if (btnTrouble) btnTrouble.className = "flex-1 py-2 text-xs font-bold rounded-lg bg-white text-[#2491FA] shadow-xs transition-all";
+    if (btnSetup) btnSetup.className = "flex-1 py-2 text-xs font-bold rounded-lg text-[#6E6862] hover:text-[#201E1C] transition-all";
+    if (panelTrouble) panelTrouble.classList.remove("hidden");
+    if (panelSetup) panelSetup.classList.add("hidden");
+  }
+}
+</script>

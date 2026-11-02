@@ -1,0 +1,1116 @@
+<script>
+/**
+ * ====================================================================
+ * ADMIN CENTER CLIENT-SIDE MODULE
+ * ====================================================================
+ * จัดการหน้าจอศูนย์รวมการตั้งค่าและกำหนดสิทธิ์ (Admin Center):
+ * - Screen 1: ผู้ใช้งานและกำหนดสิทธิ์ (Role, AllowedApps, WT Sites, RDP Sites, Password)
+ * - Screen 2: ตั้งค่าส่วนกลาง & OTP (Telegram Bot, Fallback Password, Expiry)
+ * - Screen 3: ตั้งค่าระบบติดตามงาน (Notification rules, Sites CRUD + Telegram Group IDs)
+ * - Screen 4: ตั้งค่าระบบรีโมต & กลุ่มงาน (Connection Defaults, RDP Groups CRUD, Installer)
+ * - Screen 5: ประวัติระบบ & โอนย้ายข้อมูล (Audit Logs, 1-Click Migration from legacy sheet)
+ */
+
+const adminState = {
+  currentScreen: 'users',
+  users: [],
+  settings: {},
+  wtSites: [],
+  wtSiteChatIds: {},
+  rdpGroups: [],
+  auditLogs: [],
+  spreadsheetUrl: "",
+  editingUsername: null,
+  editingGroupId: null,
+  isLoading: false,
+  bulkMode: false
+};
+
+/**
+ * เริ่มต้นทำงานเมื่อเปิดเข้าสู่หน้าจอ Admin Center
+ */
+function initAdminApp() {
+  const isAdmin = (state && state.currentUser && state.currentUser.role === 'Admin');
+  if (!isAdmin) {
+    showToast("คุณไม่มีสิทธิ์เข้าถึงระบบผู้ดูแลระบบ (Admin Only)", "error");
+    openAppLauncher();
+    return;
+  }
+
+  // ผูกตัวกรองค้นหา Audit Logs
+  const logSearch = document.getElementById("adminLogSearchInput");
+  if (logSearch && !logSearch.dataset.bound) {
+    logSearch.dataset.bound = "true";
+    logSearch.addEventListener("input", () => {
+      renderAdminAuditLogs();
+    });
+  }
+
+  // โหลดข้อมูลภาพรวมระบบ Admin
+  loadAdminData();
+}
+
+/**
+ * สลับหน้าจอย่อยในแถบเมนูข้าง (Sidebar)
+ */
+function switchAdminScreen(screenId) {
+  adminState.currentScreen = screenId;
+
+  // ปรับสไตล์ปุ่มนำทาง Sidebar
+  const navBtns = document.querySelectorAll(".admin-nav-btn");
+  navBtns.forEach(btn => {
+    btn.classList.remove("active");
+  });
+
+  const activeBtn = document.getElementById(`admin-nav-${screenId}`);
+  if (activeBtn) activeBtn.classList.add("active");
+
+  // สลับการแสดงผล Container
+  const screens = [
+    { id: 'users', el: document.getElementById('admin-screen-users') },
+    { id: 'global', el: document.getElementById('admin-screen-global') },
+    { id: 'worktracker', el: document.getElementById('admin-screen-worktracker') },
+    { id: 'rdp', el: document.getElementById('admin-screen-rdp') },
+    { id: 'migration', el: document.getElementById('admin-screen-migration') }
+  ];
+
+  screens.forEach(s => {
+    if (s.el) {
+      if (s.id === screenId) {
+        s.el.classList.remove("hidden");
+      } else {
+        s.el.classList.add("hidden");
+      }
+    }
+  });
+
+  // ถ้ายังไม่มีข้อมูล หรือต้องการ render หน้าที่เลือก
+  if (screenId === 'users') renderAdminUsersTable();
+  if (screenId === 'global') populateGlobalSettings();
+  if (screenId === 'worktracker') {
+    populateWtSettings();
+    renderAdminSitesList();
+  }
+  if (screenId === 'rdp') {
+    populateRdpSettings();
+    renderAdminGroupsTable();
+  }
+  if (screenId === 'migration') renderAdminAuditLogs();
+}
+
+/**
+ * โหลดข้อมูลภาพรวมระบบทั้งหมดสำหรับ Admin Center
+ */
+function loadAdminData(forceRefresh = false) {
+  if (adminState.isLoading) return;
+  adminState.isLoading = true;
+
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+
+  google.script.run
+    .withSuccessHandler(res => {
+      adminState.isLoading = false;
+
+      if (res && res.success) {
+        adminState.users = res.users || [];
+        adminState.settings = res.settings || {};
+        adminState.wtSites = res.wtSites || [];
+        adminState.wtSiteChatIds = (res.settings && res.settings.SITE_CHAT_IDS) ? res.settings.SITE_CHAT_IDS : {};
+        adminState.rdpGroups = res.rdpGroups || [];
+        adminState.auditLogs = res.auditLogs || [];
+        adminState.spreadsheetUrl = res.spreadsheetUrl || "";
+
+        // ปรับปรุง Link ไปยัง Google Sheet
+        const sheetLink = document.getElementById("adminSheetLinkBtn");
+        if (sheetLink && adminState.spreadsheetUrl) {
+          sheetLink.href = adminState.spreadsheetUrl;
+        }
+
+        // Render หน้าจอปัจจุบัน
+        switchAdminScreen(adminState.currentScreen);
+      } else {
+        showToast((res && res.message) || "ไม่สามารถโหลดข้อมูล Admin ได้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      adminState.isLoading = false;
+      showToast("โหลดข้อมูล Admin ไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .getAdminOverviewData(currentUsername);
+}
+
+// --------------------------------------------------------------------
+// SCREEN 1: USERS & PERMISSIONS MATRIX
+// --------------------------------------------------------------------
+
+function renderAdminUsersTable() {
+  const tbody = document.getElementById("adminUsersTableBody");
+  if (!tbody) return;
+
+  if (adminState.users.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="px-4 py-8 text-center text-[#6E6862] text-xs">
+          ยังไม่มีข้อมูลผู้ใช้งานในระบบ
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = adminState.users.map(u => {
+    const isCurrentUser = (state && state.currentUser && state.currentUser.username.toLowerCase() === u.username.toLowerCase());
+    
+    // Parse Allowed Apps
+    let allowedApps = [];
+    if (Array.isArray(u.allowedApps)) {
+      allowedApps = u.allowedApps;
+    } else if (typeof u.allowedApps === 'string') {
+      try { allowedApps = JSON.parse(u.allowedApps); } catch (e) { allowedApps = ['work_tracker', 'rdp_manager']; }
+    } else {
+      allowedApps = ['work_tracker', 'rdp_manager'];
+    }
+
+    // App Badges
+    const appBadges = [];
+    if (allowedApps.includes('work_tracker')) appBadges.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">WT</span>');
+    if (allowedApps.includes('rdp_manager')) appBadges.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">RDP</span>');
+    if (allowedApps.includes('admin') || u.role === 'Admin') appBadges.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">Admin</span>');
+
+    // Sites permissions summary
+    let wtSitesDesc = "ทุกไซต์งาน";
+    if (u.allowedSites && u.allowedSites !== 'ALL') {
+      try {
+        const arr = Array.isArray(u.allowedSites) ? u.allowedSites : JSON.parse(u.allowedSites);
+        wtSitesDesc = `${arr.length} ไซต์`;
+      } catch(e) {
+        wtSitesDesc = String(u.allowedSites);
+      }
+    }
+
+    let rdpSitesDesc = "ทุกไซต์งาน";
+    if (u.allowedRdpSites && u.allowedRdpSites !== 'ALL') {
+      try {
+        const arr = Array.isArray(u.allowedRdpSites) ? u.allowedRdpSites : JSON.parse(u.allowedRdpSites);
+        rdpSitesDesc = `${arr.length} ไซต์`;
+      } catch(e) {
+        rdpSitesDesc = String(u.allowedRdpSites);
+      }
+    }
+
+    return `
+      <tr class="hover:bg-[#FAF8F2] transition-colors">
+        <td class="px-4 py-3 align-middle font-mono font-bold text-[#201E1C]">
+          ${escapeHtml(u.username)}
+          ${isCurrentUser ? '<span class="ml-1 text-[10px] text-[#2491FA] font-sans font-bold">(คุณ)</span>' : ''}
+        </td>
+        <td class="px-4 py-3 align-middle">
+          <div class="font-bold text-[#201E1C]">${escapeHtml(u.fullName)}</div>
+          <div class="text-[10px] font-bold uppercase ${u.role === 'Admin' ? 'text-purple-600' : 'text-[#6E6862]'}">
+            ${escapeHtml(u.role)}
+          </div>
+        </td>
+        <td class="px-4 py-3 align-middle">
+          <div class="flex items-center gap-1 flex-wrap">
+            ${appBadges.join("")}
+          </div>
+        </td>
+        <td class="px-4 py-3 align-middle font-mono text-xs text-[#6E6862]">
+          ${escapeHtml(u.telegramChatId || '-')}
+        </td>
+        <td class="px-4 py-3 align-middle text-xs">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#EDE7DA] text-[#201E1C]">
+            ${escapeHtml(wtSitesDesc)}
+          </span>
+        </td>
+        <td class="px-4 py-3 align-middle text-xs">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-[#EDE7DA] text-[#201E1C]">
+            ${escapeHtml(rdpSitesDesc)}
+          </span>
+        </td>
+        <td class="px-4 py-3 align-middle">
+          <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${u.status === 'Active' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}">
+            ${u.status === 'Active' ? 'Active' : 'Inactive'}
+          </span>
+        </td>
+        <td class="px-4 py-3 align-middle text-right">
+          <div class="flex items-center justify-end gap-1">
+            <button type="button" onclick="editAdminUser('${escapeHtml(u.username)}')"
+                    class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-white rounded-lg transition-colors cursor-pointer" title="แก้ไขสิทธิ์">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            ${!isCurrentUser ? `
+            <button type="button" onclick="deleteAdminUserConfirm('${escapeHtml(u.username)}')"
+                    class="p-1.5 text-[#6E6862] hover:text-rose-600 hover:bg-white rounded-lg transition-colors cursor-pointer" title="ลบผู้ใช้">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openAdminUserForm(user = null) {
+  const container = document.getElementById("adminUserFormContainer");
+  const formTitle = document.getElementById("adminUserFormTitle");
+  const passHint = document.getElementById("admin-user-pass-hint");
+
+  adminState.editingUsername = user ? user.username : null;
+
+  if (user) {
+    if (formTitle) formTitle.textContent = `✏️ แก้ไขข้อมูลผู้ใช้: ${user.username}`;
+    document.getElementById("admin-user-username").value = user.username || "";
+    document.getElementById("admin-user-username").readOnly = true;
+    document.getElementById("admin-user-fullname").value = user.fullName || "";
+    document.getElementById("admin-user-role").value = user.role || "Member";
+    document.getElementById("admin-user-chatid").value = user.telegramChatId || "";
+    document.getElementById("admin-user-password").value = "";
+    document.getElementById("admin-user-status").value = user.status || "Active";
+    if (passHint) passHint.textContent = "เว้นว่างไว้หากต้องการใช้รหัสผ่านเดิม";
+
+    // Set Allowed Apps
+    let allowedApps = [];
+    if (Array.isArray(user.allowedApps)) allowedApps = user.allowedApps;
+    else if (typeof user.allowedApps === 'string') {
+      try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager']; }
+    } else allowedApps = ['work_tracker', 'rdp_manager'];
+
+    document.getElementById("perm-app-worktracker").checked = allowedApps.includes('work_tracker');
+    document.getElementById("perm-app-rdp").checked = allowedApps.includes('rdp_manager');
+    document.getElementById("perm-app-admin").checked = allowedApps.includes('admin') || user.role === 'Admin';
+
+    // Set WT Sites
+    renderWtSiteCheckboxes(user.allowedSites);
+
+    // Set RDP Sites
+    renderRdpSiteCheckboxes(user.allowedRdpSites);
+
+  } else {
+    if (formTitle) formTitle.textContent = "➕ เพิ่มผู้ใช้ใหม่และกำหนดสิทธิ์";
+    document.getElementById("admin-user-username").value = "";
+    document.getElementById("admin-user-username").readOnly = false;
+    document.getElementById("admin-user-fullname").value = "";
+    document.getElementById("admin-user-role").value = "Member";
+    document.getElementById("admin-user-chatid").value = "";
+    document.getElementById("admin-user-password").value = "";
+    document.getElementById("admin-user-status").value = "Active";
+    if (passHint) passHint.textContent = "สำหรับล็อกอินสำรองโดยไม่ใช้ OTP";
+
+    document.getElementById("perm-app-worktracker").checked = true;
+    document.getElementById("perm-app-rdp").checked = true;
+    document.getElementById("perm-app-admin").checked = false;
+
+    renderWtSiteCheckboxes('ALL');
+    renderRdpSiteCheckboxes('ALL');
+  }
+
+  if (container) container.classList.remove("hidden");
+  container?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeAdminUserForm() {
+  const container = document.getElementById("adminUserFormContainer");
+  if (container) container.classList.add("hidden");
+  adminState.editingUsername = null;
+}
+
+function renderWtSiteCheckboxes(allowedSitesVal) {
+  const wrapper = document.getElementById("wtSiteCheckboxesWrapper");
+  if (!wrapper) return;
+
+  const isAll = (!allowedSitesVal || allowedSitesVal === 'ALL');
+  const radios = document.getElementsByName("wtSiteAccessType");
+  radios.forEach(r => {
+    if (r.value === 'ALL') r.checked = isAll;
+    if (r.value === 'CUSTOM') r.checked = !isAll;
+  });
+
+  toggleWtSiteCheckboxes(!isAll);
+
+  let allowedList = [];
+  if (!isAll) {
+    if (Array.isArray(allowedSitesVal)) allowedList = allowedSitesVal;
+    else {
+      try { allowedList = JSON.parse(allowedSitesVal); } catch(e) { allowedList = [allowedSitesVal]; }
+    }
+  }
+
+  const allSites = adminState.wtSites || [];
+  if (allSites.length === 0) {
+    wrapper.innerHTML = '<p class="text-xs text-[#6E6862]">ยังไม่มีรายการไซต์งานในระบบ</p>';
+    return;
+  }
+
+  wrapper.innerHTML = allSites.map(s => {
+    const isChecked = isAll || allowedList.includes(s);
+    return `
+      <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer text-xs">
+        <input type="checkbox" class="chk-wt-site rounded text-[#2491FA]" value="${escapeHtml(s)}" ${isChecked ? 'checked' : ''}>
+        <span class="text-[#201E1C]">${escapeHtml(s)}</span>
+      </label>
+    `;
+  }).join("");
+}
+
+function toggleWtSiteCheckboxes(showCustom) {
+  const wrapper = document.getElementById("wtSiteCheckboxesWrapper");
+  if (wrapper) {
+    if (showCustom) wrapper.classList.remove("hidden");
+    else wrapper.classList.add("hidden");
+  }
+}
+
+function renderRdpSiteCheckboxes(allowedRdpSitesVal) {
+  const wrapper = document.getElementById("rdpSiteCheckboxesWrapper");
+  if (!wrapper) return;
+
+  const isAll = (!allowedRdpSitesVal || allowedRdpSitesVal === 'ALL');
+  const radios = document.getElementsByName("rdpSiteAccessType");
+  radios.forEach(r => {
+    if (r.value === 'ALL') r.checked = isAll;
+    if (r.value === 'CUSTOM') r.checked = !isAll;
+  });
+
+  toggleRdpSiteCheckboxes(!isAll);
+
+  let allowedList = [];
+  if (!isAll) {
+    if (Array.isArray(allowedRdpSitesVal)) allowedList = allowedRdpSitesVal;
+    else {
+      try { allowedList = JSON.parse(allowedRdpSitesVal); } catch(e) { allowedList = [allowedRdpSitesVal]; }
+    }
+  }
+
+  // ดึงรายชื่อไซต์งาน RDP
+  const rdpSites = rdpState.sites || [];
+  if (rdpSites.length === 0) {
+    wrapper.innerHTML = '<p class="text-xs text-[#6E6862]">ยังไม่มีรายการไซต์งาน RDP ในระบบ</p>';
+    return;
+  }
+
+  wrapper.innerHTML = rdpSites.map(s => {
+    const isChecked = isAll || allowedList.includes(s.site_id) || allowedList.includes(s.site_name);
+    return `
+      <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer text-xs">
+        <input type="checkbox" class="chk-rdp-site rounded text-[#2491FA]" value="${escapeHtml(s.site_id)}" ${isChecked ? 'checked' : ''}>
+        <span class="text-[#201E1C] font-semibold">${escapeHtml(s.site_name)}</span>
+        <span class="text-[10px] text-[#6E6862]">(${escapeHtml(s.group_name || 'ทั่วไป')})</span>
+      </label>
+    `;
+  }).join("");
+}
+
+function toggleRdpSiteCheckboxes(showCustom) {
+  const wrapper = document.getElementById("rdpSiteCheckboxesWrapper");
+  if (wrapper) {
+    if (showCustom) wrapper.classList.remove("hidden");
+    else wrapper.classList.add("hidden");
+  }
+}
+
+function handleAdminUserRoleChange() {
+  const role = document.getElementById("admin-user-role").value;
+  if (role === 'Admin') {
+    document.getElementById("perm-app-worktracker").checked = true;
+    document.getElementById("perm-app-rdp").checked = true;
+    document.getElementById("perm-app-admin").checked = true;
+
+    // Admin ได้สิทธิ์เข้าถึงทุกไซต์งานอัตโนมัติ
+    const wtRadios = document.getElementsByName("wtSiteAccessType");
+    wtRadios.forEach(r => { if (r.value === 'ALL') r.checked = true; });
+    toggleWtSiteCheckboxes(false);
+
+    const rdpRadios = document.getElementsByName("rdpSiteAccessType");
+    rdpRadios.forEach(r => { if (r.value === 'ALL') r.checked = true; });
+    toggleRdpSiteCheckboxes(false);
+  }
+}
+
+function editAdminUser(username) {
+  const u = adminState.users.find(x => x.username.toLowerCase() === username.toLowerCase());
+  if (u) openAdminUserForm(u);
+}
+
+function deleteAdminUserConfirm(username) {
+  if (!confirm(`คุณแน่ใจหรือไม่ว่าต้องการลบผู้ใช้งาน "${username}" ออกจากระบบ?`)) {
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast(res.message || "ลบผู้ใช้เรียบร้อยแล้ว", "success");
+        loadAdminData();
+      } else {
+        showToast((res && res.message) || "ไม่สามารถลบผู้ใช้ได้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("ลบผู้ใช้ไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .deleteUser(username);
+}
+
+function handleAdminUserSubmit(event) {
+  event.preventDefault();
+
+  const username = document.getElementById("admin-user-username").value.trim().toLowerCase();
+  const fullName = document.getElementById("admin-user-fullname").value.trim();
+  const role = document.getElementById("admin-user-role").value;
+  const telegramChatId = document.getElementById("admin-user-chatid").value.trim();
+  const password = document.getElementById("admin-user-password").value;
+  const status = document.getElementById("admin-user-status").value;
+
+  if (!username || !fullName) {
+    showToast("กรุณากรอก Username และชื่อ-นามสกุล", "warning");
+    return;
+  }
+
+  // Allowed Apps
+  const allowedApps = [];
+  if (document.getElementById("perm-app-worktracker").checked) allowedApps.push("work_tracker");
+  if (document.getElementById("perm-app-rdp").checked) allowedApps.push("rdp_manager");
+  if (document.getElementById("perm-app-admin").checked || role === 'Admin') allowedApps.push("admin");
+
+  if (allowedApps.length === 0) {
+    showToast("กรุณาเลือกสิทธิ์เข้าถึงระบบอย่างน้อย 1 ระบบ", "warning");
+    return;
+  }
+
+  // WT Allowed Sites
+  let allowedSites = "ALL";
+  const wtRadios = document.getElementsByName("wtSiteAccessType");
+  let isCustomWt = false;
+  wtRadios.forEach(r => { if (r.checked && r.value === 'CUSTOM') isCustomWt = true; });
+
+  if (isCustomWt) {
+    const selected = [];
+    document.querySelectorAll(".chk-wt-site:checked").forEach(cb => selected.push(cb.value));
+    allowedSites = selected;
+  }
+
+  // RDP Allowed Sites
+  let allowedRdpSites = "ALL";
+  const rdpRadios = document.getElementsByName("rdpSiteAccessType");
+  let isCustomRdp = false;
+  rdpRadios.forEach(r => { if (r.checked && r.value === 'CUSTOM') isCustomRdp = true; });
+
+  if (isCustomRdp) {
+    const selected = [];
+    document.querySelectorAll(".chk-rdp-site:checked").forEach(cb => selected.push(cb.value));
+    allowedRdpSites = selected;
+  }
+
+  const userData = {
+    username: username,
+    fullName: fullName,
+    role: role,
+    telegramChatId: telegramChatId,
+    password: password,
+    status: status,
+    allowedApps: allowedApps,
+    allowedSites: allowedSites,
+    allowedRdpSites: allowedRdpSites
+  };
+
+  const btnSubmit = document.getElementById("btnAdminSaveUser");
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = 'บันทึกข้อมูลผู้ใช้';
+      }
+
+      if (res && res.success) {
+        showToast(res.message || "บันทึกข้อมูลผู้ใช้สำเร็จ", "success");
+        closeAdminUserForm();
+        loadAdminData();
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึกผู้ใช้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.innerHTML = 'บันทึกข้อมูลผู้ใช้';
+      }
+      showToast("บันทึกข้อมูลผู้ใช้ไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveUser(userData);
+}
+
+// --------------------------------------------------------------------
+// SCREEN 2: GLOBAL & AUTH SETTINGS
+// --------------------------------------------------------------------
+
+function populateGlobalSettings() {
+  const s = adminState.settings || {};
+  const tokenInput = document.getElementById("admin-global-bot-token");
+  const allowPassCheck = document.getElementById("admin-allow-password-login");
+  const expireInput = document.getElementById("admin-pin-expire-minutes");
+  const attemptsInput = document.getElementById("admin-max-pin-attempts");
+
+  if (tokenInput) tokenInput.value = s.TELEGRAM_BOT_TOKEN || "";
+  if (allowPassCheck) allowPassCheck.checked = (s.ALLOW_PASSWORD_LOGIN !== "false");
+  if (expireInput) expireInput.value = s.PIN_EXPIRE_MINUTES || 5;
+  if (attemptsInput) attemptsInput.value = s.MAX_PIN_ATTEMPTS || 3;
+}
+
+function handleSaveGlobalSettings(event) {
+  event.preventDefault();
+
+  const token = document.getElementById("admin-global-bot-token").value.trim();
+  const allowPass = document.getElementById("admin-allow-password-login").checked ? "true" : "false";
+  const pinExpire = document.getElementById("admin-pin-expire-minutes").value.trim() || "5";
+  const pinAttempts = document.getElementById("admin-max-pin-attempts").value.trim() || "3";
+
+  const newSettings = {
+    TELEGRAM_BOT_TOKEN: token,
+    ALLOW_PASSWORD_LOGIN: allowPass,
+    PIN_EXPIRE_MINUTES: pinExpire,
+    MAX_PIN_ATTEMPTS: pinAttempts
+  };
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast("บันทึกการตั้งค่าระบบส่วนกลางเรียบร้อย", "success");
+        loadAdminData();
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึก", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("บันทึกการตั้งค่าไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveSettings(newSettings);
+}
+
+function testAdminTelegramBot() {
+  const token = document.getElementById("admin-global-bot-token").value.trim();
+  const currentChatId = (state && state.currentUser) ? state.currentUser.telegramChatId : "";
+  const statusSpan = document.getElementById("admin-bot-test-status");
+
+  if (!token) {
+    showToast("กรุณากรอก Telegram Bot Token ก่อนทดสอบ", "warning");
+    return;
+  }
+
+  if (!currentChatId) {
+    showToast("ผู้ใช้งานปัจจุบันไม่มี Telegram Chat ID ในโปรไฟล์ กรุณาระบุในหน้าผู้ใช้ก่อน", "warning");
+    return;
+  }
+
+  if (statusSpan) {
+    statusSpan.className = "text-xs font-semibold text-[#2491FA]";
+    statusSpan.textContent = "⏳ กำลังส่งข้อความทดสอบ...";
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        if (statusSpan) {
+          statusSpan.className = "text-xs font-semibold text-emerald-600";
+          statusSpan.textContent = "✅ เชื่อมต่อ Telegram Bot สำเร็จ!";
+        }
+        showToast("ทดสอบส่งข้อความไปยัง Telegram สำเร็จแล้ว กรุณาเช็กในแอป Telegram", "success");
+      } else {
+        if (statusSpan) {
+          statusSpan.className = "text-xs font-semibold text-rose-600";
+          statusSpan.textContent = "❌ เชื่อมต่อไม่สำเร็จ: " + (res.message || "Token ไม่ถูกต้อง");
+        }
+        showToast("เชื่อมต่อ Bot ไม่สำเร็จ: " + (res.message || ""), "error");
+      }
+    })
+    .withFailureHandler(err => {
+      if (statusSpan) {
+        statusSpan.className = "text-xs font-semibold text-rose-600";
+        statusSpan.textContent = "❌ ข้อผิดพลาด: " + (err.message || err);
+      }
+      showToast("ทดสอบบอทล้มเหลว: " + (err.message || err), "error");
+    })
+    .testTelegramConnection(token, currentChatId, "Admin Center Bot Test");
+}
+
+// --------------------------------------------------------------------
+// SCREEN 3: WORK TRACKER SETTINGS & SITES
+// --------------------------------------------------------------------
+
+function populateWtSettings() {
+  const s = adminState.settings || {};
+  const mainChatInput = document.getElementById("admin-wt-chatid");
+  const chkCreate = document.getElementById("admin-wt-notify-create");
+  const chkStatus = document.getElementById("admin-wt-notify-status");
+  const chkAssignee = document.getElementById("admin-wt-notify-assignee");
+  const chkMain = document.getElementById("admin-wt-notify-maingroup");
+
+  if (mainChatInput) mainChatInput.value = s.TELEGRAM_MAIN_GROUP_CHAT_ID || "";
+  if (chkCreate) chkCreate.checked = (s.NOTIFY_ON_TASK_CREATE !== "false");
+  if (chkStatus) chkStatus.checked = (s.NOTIFY_ON_STATUS_CHANGE !== "false");
+  if (chkAssignee) chkAssignee.checked = (s.NOTIFY_ASSIGNEE !== "false");
+  if (chkMain) chkMain.checked = (s.NOTIFY_MAIN_GROUP !== "false");
+}
+
+function saveAdminWtNotificationSettings() {
+  const mainChatId = document.getElementById("admin-wt-chatid").value.trim();
+  const chkCreate = document.getElementById("admin-wt-notify-create").checked ? "true" : "false";
+  const chkStatus = document.getElementById("admin-wt-notify-status").checked ? "true" : "false";
+  const chkAssignee = document.getElementById("admin-wt-notify-assignee").checked ? "true" : "false";
+  const chkMain = document.getElementById("admin-wt-notify-maingroup").checked ? "true" : "false";
+
+  const newSettings = {
+    TELEGRAM_MAIN_GROUP_CHAT_ID: mainChatId,
+    NOTIFY_ON_TASK_CREATE: chkCreate,
+    NOTIFY_ON_STATUS_CHANGE: chkStatus,
+    NOTIFY_ASSIGNEE: chkAssignee,
+    NOTIFY_MAIN_GROUP: chkMain
+  };
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast("บันทึกการตั้งค่าการแจ้งเตือนงานเรียบร้อย", "success");
+        loadAdminData();
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึก", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("บันทึกไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveSettings(newSettings);
+}
+
+function renderAdminSitesList() {
+  const container = document.getElementById("adminSitesListContainer");
+  const badge = document.getElementById("adminSitesCountBadge");
+  if (!container) return;
+
+  const sites = adminState.wtSites || [];
+  if (badge) badge.textContent = sites.length;
+
+  if (sites.length === 0) {
+    container.innerHTML = '<div class="p-4 text-center text-xs text-[#6E6862]">ยังไม่มีรายการไซต์งานในระบบ</div>';
+    return;
+  }
+
+  container.innerHTML = sites.map((sName, idx) => {
+    const siteChatId = (adminState.wtSiteChatIds && adminState.wtSiteChatIds[sName]) ? adminState.wtSiteChatIds[sName] : "";
+
+    return `
+      <div class="site-list-item flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2.5 bg-white hover:bg-[#FAF8F2] transition-colors" data-site="${escapeHtml(sName)}">
+        <div class="flex items-center gap-2 min-w-0 flex-1">
+          <span class="w-5 h-5 rounded-md bg-[#EDE7DA] text-[#6E6862] text-[10px] font-bold flex items-center justify-center shrink-0">${idx + 1}</span>
+          <span class="text-xs font-bold text-[#201E1C] truncate">${escapeHtml(sName)}</span>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 bg-[#FAF8F2] px-2 py-1 rounded-xl border border-[#EFE9DC]">
+            <i class="fa-brands fa-telegram text-[#2491FA] text-xs"></i>
+            <input type="text" class="site-chatid-input w-28 sm:w-36 text-xs bg-transparent outline-none font-mono text-[#201E1C]"
+                   placeholder="Group Chat ID" value="${escapeHtml(siteChatId)}" title="Telegram Group ID สำหรับไซต์นี้">
+          </div>
+
+          <button type="button" onclick="removeAdminSiteRow('${escapeHtml(sName)}')"
+                  class="p-1.5 text-[#6E6862] hover:text-rose-600 rounded-lg hover:bg-[#FAF8F2] transition-colors cursor-pointer" title="ลบไซต์นี้">
+            <i class="fa-solid fa-trash-can text-xs"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function addNewSiteFromAdmin() {
+  const input = document.getElementById("adminInputNewSiteName");
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) return;
+
+  if (adminState.wtSites.includes(name)) {
+    showToast("มีชื่อไซต์งานนี้ในระบบแล้ว", "warning");
+    return;
+  }
+
+  adminState.wtSites.push(name);
+  input.value = "";
+  renderAdminSitesList();
+}
+
+function removeAdminSiteRow(siteName) {
+  adminState.wtSites = adminState.wtSites.filter(s => s !== siteName);
+  if (adminState.wtSiteChatIds) delete adminState.wtSiteChatIds[siteName];
+  renderAdminSitesList();
+}
+
+function toggleAdminBulkSitesMode() {
+  adminState.bulkMode = !adminState.bulkMode;
+  const quick = document.getElementById("adminQuickAddSiteWrapper");
+  const bulk = document.getElementById("adminBulkSitesWrapper");
+  const toggleText = document.getElementById("adminBulkSitesToggleText");
+
+  if (adminState.bulkMode) {
+    if (quick) quick.classList.add("hidden");
+    if (bulk) bulk.classList.remove("hidden");
+    if (toggleText) toggleText.textContent = "โหมดพิมพ์ทีละไซต์";
+    const textarea = document.getElementById("adminBulkSitesTextarea");
+    if (textarea) textarea.value = (adminState.wtSites || []).join("\n");
+  } else {
+    if (quick) quick.classList.remove("hidden");
+    if (bulk) bulk.classList.add("hidden");
+    if (toggleText) toggleText.textContent = "โหมดพิมพ์หลายบรรทัด";
+  }
+}
+
+function applyAdminBulkSites() {
+  const textarea = document.getElementById("adminBulkSitesTextarea");
+  if (!textarea) return;
+
+  const lines = textarea.value.split("\n")
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  const unique = Array.from(new Set(lines));
+  adminState.wtSites = unique;
+  toggleAdminBulkSitesMode();
+  renderAdminSitesList();
+}
+
+function saveAdminSitesChanges() {
+  // Sync Chat IDs from DOM
+  const rows = document.querySelectorAll("#adminSitesListContainer .site-list-item");
+  const chatIds = {};
+  rows.forEach(r => {
+    const sName = r.dataset.site;
+    const cid = r.querySelector(".site-chatid-input").value.trim();
+    if (sName && cid) chatIds[sName] = cid;
+  });
+
+  const btn = document.getElementById("btnAdminSaveSites");
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังบันทึก...';
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกรายชื่อไซต์งาน';
+      }
+
+      if (res && res.success) {
+        showToast("บันทึกรายชื่อไซต์งานเรียบร้อย", "success");
+        loadAdminData();
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึกไซต์งาน", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = 'บันทึกรายชื่อไซต์งาน';
+      }
+      showToast("บันทึกไซต์งานไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveSitesList(adminState.wtSites, chatIds);
+}
+
+// --------------------------------------------------------------------
+// SCREEN 4: RDP MANAGER SETTINGS & GROUPS
+// --------------------------------------------------------------------
+
+function populateRdpSettings() {
+  const s = adminState.settings || {};
+  const modeSelect = document.getElementById("admin-rdp-default-mode");
+  const drivesCheck = document.getElementById("admin-rdp-default-sharedrives");
+
+  if (modeSelect) modeSelect.value = s.RDP_DEFAULT_CONN_MODE || "protocol";
+  if (drivesCheck) drivesCheck.checked = (s.RDP_DEFAULT_SHARE_DRIVES !== "false");
+}
+
+function saveAdminRdpPreferences() {
+  const mode = document.getElementById("admin-rdp-default-mode").value;
+  const shareDrives = document.getElementById("admin-rdp-default-sharedrives").checked ? "true" : "false";
+
+  const newSettings = {
+    RDP_DEFAULT_CONN_MODE: mode,
+    RDP_DEFAULT_SHARE_DRIVES: shareDrives
+  };
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast("บันทึกค่าเริ่มต้นการเชื่อมต่อ RDP เรียบร้อย", "success");
+        loadAdminData();
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึก", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("บันทึกไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveSettings(newSettings);
+}
+
+function renderAdminGroupsTable() {
+  const tbody = document.getElementById("adminGroupsTableBody");
+  if (!tbody) return;
+
+  const groups = adminState.rdpGroups || [];
+  if (groups.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="4" class="px-4 py-8 text-center text-[#6E6862] text-xs">
+          ยังไม่มีกลุ่มไซต์งานในระบบ
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = groups.map(g => {
+    // นับจำนวนไซต์ที่อยู่ในกลุ่มนี้
+    const sitesCount = (rdpState.sites || []).filter(s => (s.group_name || '').toLowerCase() === g.group_name.toLowerCase()).length;
+
+    return `
+      <tr class="hover:bg-[#FAF8F2] transition-colors">
+        <td class="px-4 py-3 align-middle font-bold text-[#201E1C]">
+          ${escapeHtml(g.group_name)}
+        </td>
+        <td class="px-4 py-3 align-middle text-xs text-[#6E6862]">
+          ${escapeHtml(g.description || '-')}
+        </td>
+        <td class="px-4 py-3 align-middle">
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-[#EDE7DA] text-[#2491FA]">
+            ${sitesCount} ไซต์
+          </span>
+        </td>
+        <td class="px-4 py-3 align-middle text-right">
+          <div class="flex items-center justify-end gap-1">
+            <button type="button" onclick="openAdminGroupForm('${escapeHtml(g.group_id)}')"
+                    class="p-1.5 text-[#6E6862] hover:text-[#2491FA] hover:bg-white rounded-lg transition-colors cursor-pointer" title="แก้ไขกลุ่ม">
+              <i class="fa-solid fa-pen-to-square"></i>
+            </button>
+            <button type="button" onclick="deleteAdminGroupConfirm('${escapeHtml(g.group_id)}', '${escapeHtml(g.group_name)}')"
+                    class="p-1.5 text-[#6E6862] hover:text-rose-600 hover:bg-white rounded-lg transition-colors cursor-pointer" title="ลบกลุ่ม">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openAdminGroupForm(groupId = null) {
+  const wrapper = document.getElementById("adminGroupFormWrapper");
+  const title = document.getElementById("adminGroupFormTitle");
+  adminState.editingGroupId = groupId;
+
+  if (groupId) {
+    const g = adminState.rdpGroups.find(x => String(x.group_id) === String(groupId));
+    if (!g) return;
+    if (title) title.textContent = "✏️ แก้ไขกลุ่มงาน";
+    document.getElementById("admin-group-name").value = g.group_name || "";
+    document.getElementById("admin-group-desc").value = g.description || "";
+  } else {
+    if (title) title.textContent = "➕ เพิ่มกลุ่มงานใหม่";
+    document.getElementById("admin-group-name").value = "";
+    document.getElementById("admin-group-desc").value = "";
+  }
+
+  if (wrapper) wrapper.classList.remove("hidden");
+}
+
+function closeAdminGroupForm() {
+  const wrapper = document.getElementById("adminGroupFormWrapper");
+  if (wrapper) wrapper.classList.add("hidden");
+  adminState.editingGroupId = null;
+}
+
+function handleAdminGroupSubmit(event) {
+  event.preventDefault();
+  const name = document.getElementById("admin-group-name").value.trim();
+  const desc = document.getElementById("admin-group-desc").value.trim();
+
+  if (!name) {
+    showToast("กรุณาระบุชื่อกลุ่มงาน", "warning");
+    return;
+  }
+
+  const groupData = {
+    group_id: adminState.editingGroupId || "",
+    group_name: name,
+    description: desc
+  };
+
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast(res.message || "บันทึกกลุ่มงานเรียบร้อย", "success");
+        closeAdminGroupForm();
+        loadAdminData();
+        loadRdpData(true);
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึกกลุ่มงาน", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("บันทึกกลุ่มงานไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveRdpGroup(groupData, currentUsername);
+}
+
+function deleteAdminGroupConfirm(groupId, groupName) {
+  if (!confirm(`คุณต้องการลบกลุ่มงาน "${groupName}" ใช่หรือไม่? (ไซต์งานในกลุ่มจะถูกย้ายเป็นกลุ่มทั่วไป)`)) {
+    return;
+  }
+
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        showToast(res.message || "ลบกลุ่มงานเรียบร้อย", "success");
+        loadAdminData();
+        loadRdpData(true);
+      } else {
+        showToast((res && res.message) || "ไม่สามารถลบกลุ่มงานได้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("ลบกลุ่มงานไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .deleteRdpGroup(groupId, currentUsername);
+}
+
+// --------------------------------------------------------------------
+// SCREEN 5: AUDIT LOGS & LEGACY DATA MIGRATION
+// --------------------------------------------------------------------
+
+function triggerLegacyRdpMigration() {
+  if (!confirm("คุณต้องการเริ่มการโอนย้าย/ซิงค์ข้อมูลจากสเปรดชีต RDP Manager เดิมใช่หรือไม่?\n(ระบบจะอ่านข้อมูลไซต์, เครื่อง, รหัสผ่าน, และสิทธิ์มารวมไว้ที่ฐานข้อมูลหลักให้อัตโนมัติ)")) {
+    return;
+  }
+
+  const btn = document.getElementById("btnTriggerMigration");
+  const callout = document.getElementById("migrationResultCallout");
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>กำลังโอนย้ายข้อมูล...';
+  }
+
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>ซิงค์ข้อมูลจาก RDP เดิม';
+      }
+
+      if (callout) {
+        callout.classList.remove("hidden");
+        if (res && res.success) {
+          const stats = res.stats || {};
+          callout.className = "p-3.5 bg-emerald-50 rounded-2xl border border-emerald-300 text-xs text-emerald-900 space-y-1";
+          callout.innerHTML = `
+            <div class="font-bold flex items-center gap-1.5"><i class="fa-solid fa-circle-check text-emerald-600"></i> โอนย้ายข้อมูลสำเร็จเรียบร้อย!</div>
+            <div>- ไซต์งานที่โอนย้าย/ซิงค์: <b>${stats.sitesMigrated || 0} ไซต์</b></div>
+            <div>- กลุ่มงานที่ซิงค์: <b>${stats.groupsMigrated || 0} กลุ่ม</b></div>
+            <div>- บัญชีผู้ใช้ที่อัปเดตสิทธิ์: <b>${stats.usersUpdated || 0} บัญชี</b></div>
+          `;
+          showToast("โอนย้ายข้อมูลจาก RDP Manager เดิมเรียบร้อยแล้ว!", "success");
+          loadAdminData();
+          loadRdpData(true);
+        } else {
+          callout.className = "p-3.5 bg-rose-50 rounded-2xl border border-rose-300 text-xs text-rose-900";
+          callout.innerHTML = `<b>เกิดข้อผิดพลาดในการโอนย้าย:</b> ${escapeHtml((res && res.message) || 'ไม่ทราบสาเหตุ')}`;
+          showToast((res && res.message) || "โอนย้ายข้อมูลไม่สำเร็จ", "error");
+        }
+      }
+    })
+    .withFailureHandler(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-down mr-1"></i>ซิงค์ข้อมูลจาก RDP เดิม';
+      }
+      if (callout) {
+        callout.classList.remove("hidden");
+        callout.className = "p-3.5 bg-rose-50 rounded-2xl border border-rose-300 text-xs text-rose-900";
+        callout.innerHTML = `<b>เกิดข้อผิดพลาดในการโอนย้าย:</b> ${escapeHtml(err.message || err)}`;
+      }
+      showToast("โอนย้ายข้อมูลไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .migrateFromLegacyRdpSpreadsheet(currentUsername);
+}
+
+function renderAdminAuditLogs() {
+  const tbody = document.getElementById("adminAuditLogsTableBody");
+  if (!tbody) return;
+
+  const term = (document.getElementById("adminLogSearchInput")?.value || "").toLowerCase().trim();
+  const logs = (adminState.auditLogs || []).filter(l => {
+    if (!term) return true;
+    return (l.username || "").toLowerCase().includes(term) ||
+           (l.action || "").toLowerCase().includes(term) ||
+           (l.targetId || "").toLowerCase().includes(term) ||
+           (l.details || "").toLowerCase().includes(term);
+  });
+
+  if (logs.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="px-4 py-8 text-center text-[#6E6862] text-xs">
+          ${term ? 'ไม่พบบันทึกที่ตรงกับคำค้นหา' : 'ยังไม่มีบันทึกประวัติการใช้งานในระบบ'}
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = logs.map(l => {
+    let actionBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-[#EDE7DA] text-[#201E1C]">${escapeHtml(l.action)}</span>`;
+    if (l.action === 'REMOTE_CONNECT') {
+      actionBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200"><i class="fa-solid fa-bolt mr-1"></i>REMOTE</span>`;
+    } else if (l.action === 'LOGIN_PASSWORD' || l.action === 'LOGIN_PIN') {
+      actionBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200"><i class="fa-solid fa-right-to-bracket mr-1"></i>LOGIN</span>`;
+    } else if (l.action.includes('SAVE') || l.action.includes('UPDATE')) {
+      actionBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">UPDATE</span>`;
+    } else if (l.action.includes('DELETE')) {
+      actionBadge = `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">DELETE</span>`;
+    }
+
+    return `
+      <tr class="hover:bg-[#FAF8F2] transition-colors">
+        <td class="px-4 py-3 align-middle text-[#6E6862] font-mono whitespace-nowrap">
+          ${escapeHtml(l.timestamp)}
+        </td>
+        <td class="px-4 py-3 align-middle font-bold text-[#201E1C] font-mono">
+          ${escapeHtml(l.username)}
+        </td>
+        <td class="px-4 py-3 align-middle">
+          ${actionBadge}
+        </td>
+        <td class="px-4 py-3 align-middle text-xs font-mono text-[#6E6862]">
+          ${escapeHtml(l.targetId || '-')}
+        </td>
+        <td class="px-4 py-3 align-middle text-xs text-[#201E1C]">
+          ${escapeHtml(l.details || '-')}
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+</script>

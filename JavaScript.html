@@ -44,6 +44,8 @@ const state = {
   draggedTaskId: null,
   currentUser: null,
   loginUsername: '',
+  loginMethod: 'pin',
+  currentApp: sessionStorage.getItem('current_active_app') || 'launcher',
   countdownInterval: null,
   archivedTasks: []
 };
@@ -58,6 +60,53 @@ const SITE_COLORS = [
   { bg: 'bg-indigo-100', text: 'text-indigo-800', border: 'border-indigo-300' },
   { bg: 'bg-teal-100', text: 'text-teal-800', border: 'border-teal-300' }
 ];
+
+// Toast Notifications System (Shared across Work Tracker, RDP Manager & Admin)
+const Toast = {
+  show(message, type = "info", duration = 3500) {
+    const container = document.getElementById("toast-container");
+    if (!container) return;
+
+    const toast = document.createElement("div");
+    toast.className = `toast p-3.5 sm:p-4 rounded-2xl shadow-lg border flex items-center space-x-3 text-xs sm:text-sm font-semibold pointer-events-auto ${
+      type === "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" :
+      type === "error" ? "bg-rose-50 border-rose-200 text-rose-800" :
+      type === "warning" ? "bg-amber-50 border-amber-200 text-amber-800" :
+      "bg-slate-900 border-slate-700 text-white"
+    }`;
+
+    const iconSvg = type === "success"
+      ? `<i class="fa-solid fa-circle-check text-emerald-500 text-base shrink-0"></i>`
+      : type === "error"
+      ? `<i class="fa-solid fa-circle-xmark text-rose-500 text-base shrink-0"></i>`
+      : type === "warning"
+      ? `<i class="fa-solid fa-triangle-exclamation text-amber-500 text-base shrink-0"></i>`
+      : `<i class="fa-solid fa-circle-info text-[#2491FA] text-base shrink-0"></i>`;
+
+    toast.innerHTML = `
+      ${iconSvg}
+      <span class="flex-1">${message}</span>
+      <button onclick="this.parentElement.remove()" class="text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer">
+        <i class="fa-solid fa-xmark text-sm"></i>
+      </button>
+    `;
+
+    container.appendChild(toast);
+    requestAnimationFrame(() => toast.classList.add("toast-show"));
+
+    setTimeout(() => {
+      toast.classList.remove("toast-show");
+      toast.classList.add("toast-hide");
+      setTimeout(() => toast.remove(), 350);
+    }, duration);
+  }
+};
+
+window.Toast = Toast;
+function showToast(message, type = "info", duration = 3500) {
+  Toast.show(message, type, duration);
+}
+
 
 // Document Ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -2526,11 +2575,11 @@ function updateOnlineUsersDisplay(count, users) {
     state.onlineUsers = users;
   }
 
-  // อัปเดตตัวเลขบน Navbar
+  // อัปเดตตัวเลขบน Navbar ทุกระบบ
   const countEl = document.getElementById('onlineUsersCount');
-  if (countEl) {
-    countEl.innerText = state.onlineCount || (state.onlineUsers ? state.onlineUsers.length : 1);
-  }
+  const currentCount = state.onlineCount || (state.onlineUsers ? state.onlineUsers.length : 1);
+  if (countEl) countEl.innerText = currentCount;
+  document.querySelectorAll('.online-users-count-badge').forEach(el => el.textContent = currentCount);
 
   // หากหน้าต่าง Modal เปิดอยู่ ให้รีเรนเดอร์รายชื่อด้วย
   const modal = document.getElementById('onlineUsersModal');
@@ -2557,7 +2606,9 @@ function sendHeartbeat() {
     .pingOnlineUser({
       username: state.currentUser.username,
       fullName: state.currentUser.fullName || state.currentUser.username,
-      role: state.currentUser.role || 'Member'
+      role: state.currentUser.role || 'Member',
+      currentApp: state.currentApp || 'launcher',
+      activeRemote: state.activeRemote || null
     });
 }
 
@@ -2669,6 +2720,22 @@ function renderOnlineUsersList() {
 
     const initial = (u.fullName || u.username || '?').charAt(0).toUpperCase();
 
+    let appBadge = '';
+    if (u.currentApp === 'work_tracker') {
+      appBadge = '<span class="text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">Work Tracker</span>';
+    } else if (u.currentApp === 'rdp_manager') {
+      appBadge = '<span class="text-[9px] font-bold text-blue-800 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">RDP Manager</span>';
+    } else if (u.currentApp === 'admin') {
+      appBadge = '<span class="text-[9px] font-bold text-purple-800 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">Admin</span>';
+    }
+
+    let remoteBadge = '';
+    if (u.activeRemote && u.activeRemote.siteName) {
+      const sName = u.activeRemote.siteName;
+      const mName = u.activeRemote.machineName ? ` (${u.activeRemote.machineName})` : '';
+      remoteBadge = `<div class="text-[10px] text-amber-800 bg-amber-50/90 px-1.5 py-0.5 rounded border border-amber-300 font-semibold mt-1 flex items-center gap-1"><i class="fa-solid fa-bolt text-amber-600"></i><span>รีโมต: ${escapeHtml(sName)}${escapeHtml(mName)}</span></div>`;
+    }
+
     return `
       <div class="flex items-center justify-between p-3 rounded-xl border ${isMe ? 'bg-blue-50/60 border-blue-200 ring-1 ring-[#2491FA]/20' : 'bg-[#FAF8F2] border-[#EFE9DC]'} transition-all">
         <div class="flex items-center gap-3 min-w-0 pr-2">
@@ -2685,7 +2752,9 @@ function renderOnlineUsersList() {
               <span class="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded-md border ${roleClass}">
                 ${escapeHtml(u.role || 'Member')}
               </span>
+              ${appBadge}
             </div>
+            ${remoteBadge}
             <div class="flex items-center gap-2 text-[11px] text-[#6E6862] mt-0.5">
               <span class="font-mono text-[10px] text-[#2491FA]/80">@${escapeHtml(u.username)}</span>
               <span>•</span>
@@ -2908,7 +2977,16 @@ function checkAuthSession() {
         updateNavbarUser();
         startHeartbeat();
         document.getElementById('loginScreen').classList.add('hidden');
-        loadInitialData();
+        
+        if (state.currentApp === 'rdp_manager') {
+          enterApp('rdp_manager');
+        } else if (state.currentApp === 'admin') {
+          enterApp('admin');
+        } else if (state.currentApp === 'work_tracker') {
+          enterApp('work_tracker');
+        } else {
+          openAppLauncher();
+        }
         return;
       }
     } catch (e) {
@@ -2920,7 +2998,12 @@ function checkAuthSession() {
   showLoading(false);
   const btnOnline = document.getElementById('btnOnlineUsers');
   if (btnOnline) btnOnline.classList.add('hidden');
+  document.getElementById('appLauncherScreen')?.classList.add('hidden');
+  document.getElementById('workTrackerApp')?.classList.add('hidden');
+  document.getElementById('rdpManagerApp')?.classList.add('hidden');
+  document.getElementById('adminCenterApp')?.classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
+  switchLoginMethod('pin');
   document.getElementById('loginStep1').classList.remove('hidden');
   document.getElementById('loginStep2').classList.add('hidden');
   setTimeout(() => {
@@ -2931,13 +3014,19 @@ function checkAuthSession() {
 
 function updateNavbarUser() {
   if (!state.currentUser) return;
+  const displayName = state.currentUser.fullName || state.currentUser.username;
+  const role = state.currentUser.role || 'Member';
+
+  document.querySelectorAll('.user-display-name-nav').forEach(el => el.textContent = displayName);
+  document.querySelectorAll('.user-role-badge-nav').forEach(el => el.textContent = role);
+
   const badge = document.getElementById('userProfileBadge');
   const nameSpan = document.getElementById('navUserFullName');
   const roleSpan = document.getElementById('navUserRole');
   const btnOnline = document.getElementById('btnOnlineUsers');
 
-  if (nameSpan) nameSpan.innerText = state.currentUser.fullName || state.currentUser.username;
-  if (roleSpan) roleSpan.innerText = state.currentUser.role || 'Member';
+  if (nameSpan) nameSpan.innerText = displayName;
+  if (roleSpan) roleSpan.innerText = role;
   if (badge) badge.classList.remove('hidden');
   if (btnOnline) btnOnline.classList.remove('hidden');
 }
@@ -3183,8 +3272,8 @@ function handleVerifyPin() {
         timer: 2500
       });
 
-      // โหลดข้อมูล Dashboard
-      loadInitialData();
+      // นำทางไปยังหน้าจอ App Launcher
+      openAppLauncher();
     })
     .withFailureHandler((err) => {
       btn.disabled = false;
@@ -3217,21 +3306,30 @@ function handleLogout() {
       }
 
       sessionStorage.removeItem('work_tracker_session');
+      sessionStorage.removeItem('current_active_app');
       state.currentUser = null;
       state.loginUsername = '';
+      state.currentApp = 'launcher';
       state.filters.dueDateInitialized = false;
       state.filters.dueDateFrom = '';
       state.filters.dueDateTo = '';
       state.filters.includeNoDueDate = false;
       if (state.countdownInterval) clearInterval(state.countdownInterval);
 
-      // รีเซ็ตหน้าจอ Login
+      // ซ่อนทุกหน้าจอและแสดงหน้าจอ Login
+      document.getElementById('appLauncherScreen')?.classList.add('hidden');
+      document.getElementById('workTrackerApp')?.classList.add('hidden');
+      document.getElementById('rdpManagerApp')?.classList.add('hidden');
+      document.getElementById('adminCenterApp')?.classList.add('hidden');
       document.getElementById('loginUsername').value = '';
+      if (document.getElementById('loginPassUsername')) document.getElementById('loginPassUsername').value = '';
+      if (document.getElementById('loginPassPassword')) document.getElementById('loginPassPassword').value = '';
       clearPinInputs();
       document.getElementById('loginStep2').classList.add('hidden');
       document.getElementById('loginStep1').classList.remove('hidden');
+      switchLoginMethod('pin');
       document.getElementById('loginScreen').classList.remove('hidden');
-      document.getElementById('userProfileBadge').classList.add('hidden');
+      document.getElementById('userProfileBadge')?.classList.add('hidden');
       const btnOnline = document.getElementById('btnOnlineUsers');
       if (btnOnline) btnOnline.classList.add('hidden');
     }
@@ -4353,4 +4451,199 @@ function handleRestoreArchivedTask(taskId, taskTitle) {
     }
   });
 }
+
+/**
+ * =========================================================================
+ * APP LAUNCHER & MULTI-SYSTEM PORTAL ROUTING
+ * =========================================================================
+ */
+
+function switchLoginMethod(method) {
+  state.loginMethod = method;
+  const tabPin = document.getElementById('tabLoginPin');
+  const tabPass = document.getElementById('tabLoginPassword');
+  const methodPin = document.getElementById('loginMethodPin');
+  const methodPass = document.getElementById('loginMethodPassword');
+
+  if (method === 'pin') {
+    if (tabPin) {
+      tabPin.className = 'flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+    }
+    if (tabPass) {
+      tabPass.className = 'flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+    }
+    if (methodPin) methodPin.classList.remove('hidden');
+    if (methodPass) methodPass.classList.add('hidden');
+  } else {
+    if (tabPass) {
+      tabPass.className = 'flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+    }
+    if (tabPin) {
+      tabPin.className = 'flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+    }
+    if (methodPass) methodPass.classList.remove('hidden');
+    if (methodPin) methodPin.classList.add('hidden');
+    setTimeout(() => {
+      const uInput = document.getElementById('loginPassUsername');
+      if (uInput && !uInput.value && document.getElementById('loginUsername')?.value) {
+        uInput.value = document.getElementById('loginUsername').value;
+      }
+      uInput?.focus();
+    }, 150);
+  }
+}
+
+function handlePasswordLogin(event) {
+  event.preventDefault();
+  const username = document.getElementById('loginPassUsername').value.trim().toLowerCase();
+  const password = document.getElementById('loginPassPassword').value;
+
+  if (!username || !password) {
+    Swal.fire({ icon: 'warning', title: 'กรุณากรอก Username และ Password' });
+    return;
+  }
+
+  const btn = document.getElementById('btnLoginPassword');
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบ...';
+  }
+
+  google.script.run
+    .withSuccessHandler((res) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs mr-1"></i> เข้าสู่ระบบด้วยรหัสผ่าน';
+      }
+
+      if (!res.success) {
+        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: res.message });
+        return;
+      }
+
+      state.currentUser = res.user;
+      sessionStorage.setItem('work_tracker_session', JSON.stringify(res.user));
+
+      updateNavbarUser();
+      startHeartbeat();
+      document.getElementById('loginScreen').classList.add('hidden');
+
+      Swal.fire({
+        toast: true,
+        position: 'top-end',
+        icon: 'success',
+        title: `ยินดีต้อนรับ ${res.user.fullName || res.user.username}`,
+        showConfirmButton: false,
+        timer: 2500
+      });
+
+      openAppLauncher();
+    })
+    .withFailureHandler((err) => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs mr-1"></i> เข้าสู่ระบบด้วยรหัสผ่าน';
+      }
+      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+    })
+    .loginWithPassword(username, password);
+}
+
+function openAppLauncher() {
+  state.currentApp = 'launcher';
+  sessionStorage.setItem('current_active_app', 'launcher');
+
+  document.getElementById('workTrackerApp')?.classList.add('hidden');
+  document.getElementById('rdpManagerApp')?.classList.add('hidden');
+  document.getElementById('adminCenterApp')?.classList.add('hidden');
+  document.getElementById('loginScreen')?.classList.add('hidden');
+
+  const launcher = document.getElementById('appLauncherScreen');
+  if (launcher) launcher.classList.remove('hidden');
+
+  renderAppLauncher();
+  updateNavbarUser();
+  sendHeartbeat();
+}
+
+function renderAppLauncher() {
+  if (!state.currentUser) return;
+  const user = state.currentUser;
+  const isAdmin = (user.role === 'Admin');
+
+  let allowedApps = [];
+  if (Array.isArray(user.allowedApps)) allowedApps = user.allowedApps;
+  else if (typeof user.allowedApps === 'string') {
+    try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager']; }
+  } else allowedApps = ['work_tracker', 'rdp_manager'];
+
+  const cardAdmin = document.getElementById('launcherCardAdmin');
+  if (cardAdmin) {
+    if (isAdmin || allowedApps.includes('admin')) {
+      cardAdmin.classList.remove('hidden');
+    } else {
+      cardAdmin.classList.add('hidden');
+    }
+  }
+
+  const cardWT = document.getElementById('launcherCardWorkTracker');
+  if (cardWT) {
+    if (allowedApps.includes('work_tracker') || isAdmin) {
+      cardWT.classList.remove('opacity-40', 'pointer-events-none');
+    } else {
+      cardWT.classList.add('opacity-40', 'pointer-events-none');
+    }
+  }
+
+  const cardRDP = document.getElementById('launcherCardRdp');
+  if (cardRDP) {
+    if (allowedApps.includes('rdp_manager') || isAdmin) {
+      cardRDP.classList.remove('opacity-40', 'pointer-events-none');
+    } else {
+      cardRDP.classList.add('opacity-40', 'pointer-events-none');
+    }
+  }
+}
+
+function enterApp(appKey) {
+  state.currentApp = appKey;
+  sessionStorage.setItem('current_active_app', appKey);
+
+  document.getElementById('appLauncherScreen')?.classList.add('hidden');
+  document.getElementById('loginScreen')?.classList.add('hidden');
+
+  const wtApp = document.getElementById('workTrackerApp');
+  const rdpApp = document.getElementById('rdpManagerApp');
+  const adminApp = document.getElementById('adminCenterApp');
+
+  if (appKey === 'work_tracker') {
+    if (wtApp) wtApp.classList.remove('hidden');
+    if (rdpApp) rdpApp.classList.add('hidden');
+    if (adminApp) adminApp.classList.add('hidden');
+
+    if (!state.tasks || state.tasks.length === 0) {
+      loadInitialData();
+    }
+  } else if (appKey === 'rdp_manager') {
+    if (rdpApp) rdpApp.classList.remove('hidden');
+    if (wtApp) wtApp.classList.add('hidden');
+    if (adminApp) adminApp.classList.add('hidden');
+
+    if (typeof initRdpApp === 'function') {
+      initRdpApp();
+    }
+  } else if (appKey === 'admin') {
+    if (adminApp) adminApp.classList.remove('hidden');
+    if (wtApp) wtApp.classList.add('hidden');
+    if (rdpApp) rdpApp.classList.add('hidden');
+
+    if (typeof initAdminApp === 'function') {
+      initAdminApp();
+    }
+  }
+
+  updateNavbarUser();
+  sendHeartbeat();
+}
+
 </script>

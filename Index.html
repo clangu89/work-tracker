@@ -53,7 +53,7 @@
     <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border border-[#EFE9DC]">
       
       <!-- Brand & Header -->
-      <div class="text-center mb-6">
+      <div class="text-center mb-5">
         <div class="w-14 h-14 rounded-2xl bg-[#2491FA] text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-500/25 p-2.5">
           <!-- Modern Work Tracker Logo SVG -->
           <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full text-white">
@@ -68,114 +68,313 @@
             <rect x="55" y="70.5" width="16" height="5" rx="2.5" fill="currentColor" fill-opacity="0.6" />
           </svg>
         </div>
-        <h2 class="text-xl font-bold text-[#201E1C]">ระบบติดตามงาน</h2>
-        <p class="text-xs text-[#6E6862] mt-1 font-medium">ระบบบริหารและติดตามสถานะงาน (Work Tracker)</p>
+        <h2 class="text-xl font-bold text-[#201E1C]">ระบบบริหารจัดการงานและไซต์งาน</h2>
+        <p class="text-xs text-[#6E6862] mt-1 font-medium">Work Tracker & Remote Desktop Portal</p>
       </div>
 
-      <!-- STEP 1: INPUT USERNAME -->
-      <div id="loginStep1" class="space-y-4">
-        <div>
-          <label class="block text-xs font-semibold text-[#201E1C] mb-1.5">ชื่อผู้ใช้ (Username)</label>
-          <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-              <i class="fa-regular fa-user"></i>
-            </div>
-            <input type="text" id="loginUsername" placeholder="กรอกชื่อผู้ใช้" autocomplete="username"
-                   class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
-          </div>
-          <p class="text-[11px] text-[#6E6862] mt-1.5 flex items-center gap-1">
-            <i class="fa-brands fa-telegram text-[#2491FA]"></i>
-            <span>ระบบจะสุ่มรหัส PIN 6 หลัก และส่งเข้า Telegram ของคุณ</span>
-          </p>
-        </div>
-
-        <button type="button" id="btnRequestPin" onclick="handleRequestPin()"
-                class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
-          <i class="fa-brands fa-telegram text-base"></i>
-          <span>ขอรหัส PIN ทาง Telegram</span>
+      <!-- LOGIN METHOD TABS -->
+      <div class="flex p-1 bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC] mb-5 text-xs font-bold">
+        <button type="button" id="tabLoginPin" onclick="switchLoginMethod('pin')"
+                class="flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+          <i class="fa-brands fa-telegram text-sm"></i>
+          <span>รหัส PIN (Telegram)</span>
+        </button>
+        <button type="button" id="tabLoginPassword" onclick="switchLoginMethod('password')"
+                class="flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-key text-xs"></i>
+          <span>รหัสผ่านสำรอง</span>
         </button>
       </div>
 
-      <!-- STEP 2: INPUT 6-DIGIT PIN -->
-      <div id="loginStep2" class="hidden space-y-5">
-        <div class="bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC] flex items-center justify-between">
-          <div class="flex items-center gap-2 text-xs text-[#201E1C]">
-            <div class="w-7 h-7 rounded-full bg-[#2491FA] text-white flex items-center justify-center text-xs">
-              <i class="fa-regular fa-user"></i>
+      <!-- METHOD 1: TELEGRAM OTP PIN -->
+      <div id="loginMethodPin" class="space-y-4">
+        <!-- STEP 1: INPUT USERNAME -->
+        <div id="loginStep1" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-[#201E1C] mb-1.5">ชื่อผู้ใช้ (Username)</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i class="fa-regular fa-user"></i>
+              </div>
+              <input type="text" id="loginUsername" placeholder="กรอกชื่อผู้ใช้" autocomplete="username"
+                     class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
             </div>
-            <div>
-              <div id="loginUserDisplay" class="font-bold">-</div>
-              <div id="loginUsernameDisplay" class="text-[10px] text-[#2491FA]">-</div>
-            </div>
+            <p class="text-[11px] text-[#6E6862] mt-1.5 flex items-center gap-1">
+              <i class="fa-brands fa-telegram text-[#2491FA]"></i>
+              <span>ระบบจะสุ่มรหัส PIN 6 หลัก และส่งเข้า Telegram ของคุณ</span>
+            </p>
           </div>
-          <button onclick="backToStep1()" class="text-xs text-[#6E6862] hover:text-[#2491FA] underline">
-            เปลี่ยนผู้ใช้
+
+          <button type="button" id="btnRequestPin" onclick="handleRequestPin()"
+                  class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+            <i class="fa-brands fa-telegram text-base"></i>
+            <span>ขอรหัส PIN ทาง Telegram</span>
           </button>
         </div>
 
-        <div>
-          <div class="flex items-center justify-between mb-2">
-            <label class="text-xs font-semibold text-[#201E1C]">กรอกรหัส PIN 6 หลัก</label>
-            <span id="pinCountdown" class="text-xs font-semibold text-rose-600 flex items-center gap-1">
-              <i class="fa-regular fa-clock text-[11px]"></i>
-              <span id="countdownTimerText">05:00</span>
-            </span>
+        <!-- STEP 2: INPUT 6-DIGIT PIN -->
+        <div id="loginStep2" class="hidden space-y-5">
+          <div class="bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC] flex items-center justify-between">
+            <div class="flex items-center gap-2 text-xs text-[#201E1C]">
+              <div class="w-7 h-7 rounded-full bg-[#2491FA] text-white flex items-center justify-center text-xs">
+                <i class="fa-regular fa-user"></i>
+              </div>
+              <div>
+                <div id="loginUserDisplay" class="font-bold">-</div>
+                <div id="loginUsernameDisplay" class="text-[10px] text-[#2491FA]">-</div>
+              </div>
+            </div>
+            <button onclick="backToStep1()" class="text-xs text-[#6E6862] hover:text-[#2491FA] underline">
+              เปลี่ยนผู้ใช้
+            </button>
           </div>
 
-          <!-- 6 PIN Digit Input Boxes -->
-          <div class="flex justify-between gap-1.5 sm:gap-2" id="pinInputsContainer">
-            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-0">
-            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-1">
-            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-2">
-            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-3">
-            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-4">
-            <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-5">
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <label class="text-xs font-semibold text-[#201E1C]">กรอกรหัส PIN 6 หลัก</label>
+              <span id="pinCountdown" class="text-xs font-semibold text-rose-600 flex items-center gap-1">
+                <i class="fa-regular fa-clock text-[11px]"></i>
+                <span id="countdownTimerText">05:00</span>
+              </span>
+            </div>
+
+            <!-- 6 PIN Digit Input Boxes -->
+            <div class="flex justify-between gap-1.5 sm:gap-2" id="pinInputsContainer">
+              <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-0">
+              <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-1">
+              <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-2">
+              <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-3">
+              <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-4">
+              <input type="text" maxlength="1" inputmode="numeric" pattern="[0-9]*" class="pin-digit" id="pin-5">
+            </div>
           </div>
-        </div>
 
-        <button type="button" id="btnVerifyPin" onclick="handleVerifyPin()"
-                class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
-          <i class="fa-solid fa-lock-open text-xs"></i>
-          <span>เข้าสู่ระบบ</span>
-        </button>
-
-        <div class="text-center">
-          <button type="button" id="btnResendPin" onclick="handleRequestPin()"
-                class="text-xs font-medium text-[#6E6862] hover:text-[#2491FA] transition-colors">
-            ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>
+          <button type="button" id="btnVerifyPin" onclick="handleVerifyPin()"
+                  class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-lock-open text-xs"></i>
+            <span>เข้าสู่ระบบด้วย PIN</span>
           </button>
+
+          <div class="text-center">
+            <button type="button" id="btnResendPin" onclick="handleRequestPin()"
+                  class="text-xs font-medium text-[#6E6862] hover:text-[#2491FA] transition-colors">
+              ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>
+            </button>
+          </div>
         </div>
+      </div>
+
+      <!-- METHOD 2: PASSWORD FALLBACK -->
+      <div id="loginMethodPassword" class="hidden space-y-4">
+        <form onsubmit="handlePasswordLogin(event)" class="space-y-4">
+          <div>
+            <label class="block text-xs font-semibold text-[#201E1C] mb-1.5">ชื่อผู้ใช้ (Username)</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i class="fa-regular fa-user"></i>
+              </div>
+              <input type="text" id="loginPassUsername" required placeholder="กรอกชื่อผู้ใช้" autocomplete="username"
+                     class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-[#201E1C] mb-1.5">รหัสผ่าน (Password)</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                <i class="fa-solid fa-lock text-xs"></i>
+              </div>
+              <input type="password" id="loginPassPassword" required placeholder="กรอกรหัสผ่าน" autocomplete="current-password"
+                     class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
+            </div>
+          </div>
+
+          <button type="submit" id="btnLoginPassword"
+                  class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-right-to-bracket text-xs"></i>
+            <span>เข้าสู่ระบบด้วยรหัสผ่าน</span>
+          </button>
+        </form>
       </div>
 
     </div>
   </div>
 
-  <!-- ================= TOP HEADER / NAVBAR ================= -->
-  <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      <div class="flex items-center justify-between h-16 gap-4">
-        
-        <!-- Logo & App Title -->
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-2xl bg-[#2491FA] flex items-center justify-center text-white shadow-md shadow-blue-500/25 p-1.5 flex-shrink-0">
-            <!-- Modern Work Tracker Logo SVG -->
-            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full text-white">
-              <rect x="18" y="20" width="64" height="68" rx="14" stroke="currentColor" stroke-width="6" fill="currentColor" fill-opacity="0.12" />
-              <rect x="36" y="11" width="28" height="15" rx="6" fill="currentColor" />
-              <rect x="43" y="16" width="14" height="4.5" rx="2" fill="#2491FA" />
-              <path d="M29 40L35.5 46.5L48 34" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-              <rect x="55" y="37.5" width="23" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
-              <path d="M29 57L35.5 63.5L48 51" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-              <rect x="55" y="54.5" width="20" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
-              <circle cx="38.5" cy="73" r="4.5" fill="currentColor" />
-              <rect x="55" y="70.5" width="16" height="5" rx="2.5" fill="currentColor" fill-opacity="0.6" />
-            </svg>
+  <!-- ================= APP LAUNCHER / PORTAL SCREEN ================= -->
+  <div id="appLauncherScreen" class="hidden min-h-screen flex flex-col bg-[#FAF8F2] text-[#201E1C]">
+    
+    <!-- Launcher Navbar -->
+    <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16 gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-[#2491FA] flex items-center justify-center text-white shadow-md shadow-blue-500/25">
+              <i class="fa-solid fa-grip text-lg"></i>
+            </div>
+            <div>
+              <h1 class="text-base sm:text-lg font-bold text-[#201E1C] leading-tight">ศูนย์รวมระบบงาน (App Portal)</h1>
+              <p class="text-[11px] text-[#6E6862] font-medium">Work Tracker & Remote Management Portal</p>
+            </div>
           </div>
-          <div>
-            <h1 class="text-base sm:text-lg font-bold text-[#201E1C] leading-tight">ระบบติดตามงาน</h1>
-            <p class="text-[11px] text-[#6E6862] font-medium">Work Tracker System</p>
+
+          <div class="flex items-center gap-2.5">
+            <!-- User Badge -->
+            <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC]">
+              <i class="fa-solid fa-circle-user text-[#2491FA] text-sm"></i>
+              <span class="user-display-name-nav font-semibold max-w-[140px] truncate">-</span>
+              <span class="user-role-badge-nav text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
+            </div>
+
+            <!-- Online Badge -->
+            <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
+                    class="flex items-center gap-1.5 px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span class="font-semibold text-xs text-[#201E1C]"><span class="online-users-count-badge">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
+            </button>
+
+            <!-- Logout -->
+            <button onclick="handleLogout()" title="ออกจากระบบ"
+                    class="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200 cursor-pointer">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            </button>
           </div>
         </div>
+      </div>
+    </header>
+
+    <!-- Main Launcher Area -->
+    <main class="flex-1 flex flex-col items-center justify-center max-w-5xl w-full mx-auto px-4 py-12 space-y-8">
+      
+      <div class="text-center space-y-2">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#EDE7DA] text-[#6E6862] border border-[#EFE9DC]">
+          <i class="fa-solid fa-layer-group text-[#2491FA]"></i> เลือกระบบเพื่อเข้าใช้งาน
+        </span>
+        <h2 class="text-2xl sm:text-3xl font-extrabold text-[#201E1C] tracking-tight">ยินดีต้อนรับสู่ระบบงานกลาง</h2>
+        <p class="text-sm text-[#6E6862] max-w-lg mx-auto">
+          เลือกโมดูลที่ต้องการทำงาน เพื่อเข้าสู่หน้าจอจัดการงาน ติดตามไซต์ หรือเปิดรีโมตเดสก์ท็อป
+        </p>
+      </div>
+
+      <!-- App Cards Grid -->
+      <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
+        
+        <!-- CARD 1: WORK TRACKER -->
+        <div id="launcherCardWorkTracker" onclick="enterApp('work_tracker')"
+             class="app-launcher-card bg-white rounded-3xl p-6 sm:p-7 border border-[#EFE9DC] shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group hover:-translate-y-1 relative overflow-hidden">
+          <div class="space-y-4">
+            <div class="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center text-2xl group-hover:bg-[#2491FA] group-hover:text-white transition-all duration-300 shadow-sm">
+              <i class="fa-solid fa-list-check"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบติดตามงาน</h3>
+                <span class="px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 rounded-md border border-amber-200">Work Tracker</span>
+              </div>
+              <p class="text-xs text-[#6E6862] mt-2 leading-relaxed">
+                บริหารและติดตามความคืบหน้างาน Kanban Board, Checklist รายการงานย่อย, ตารางสรุปงาน และแจ้งเตือนผ่าน Telegram
+              </p>
+            </div>
+          </div>
+          <div class="pt-6 mt-6 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
+            <span>เปิดระบบติดตามงาน</span>
+            <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </div>
+
+        <!-- CARD 2: RDP MANAGER -->
+        <div id="launcherCardRdp" onclick="enterApp('rdp_manager')"
+             class="app-launcher-card bg-white rounded-3xl p-6 sm:p-7 border border-[#EFE9DC] shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group hover:-translate-y-1 relative overflow-hidden">
+          <div class="space-y-4">
+            <div class="w-14 h-14 rounded-2xl bg-blue-500/10 text-[#2491FA] flex items-center justify-center text-2xl group-hover:bg-[#2491FA] group-hover:text-white transition-all duration-300 shadow-sm">
+              <i class="fa-solid fa-desktop"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบรีโมตไซต์งาน</h3>
+                <span class="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 rounded-md border border-blue-200">RDP Manager</span>
+              </div>
+              <p class="text-xs text-[#6E6862] mt-2 leading-relaxed">
+                เชื่อมต่อ Windows Remote Desktop ไปยังไซต์งาน 1-Click Zero Prompt รองรับหลายเครื่องต่อไซต์ พร้อม Copy ไฟล์และข้อความ
+              </p>
+            </div>
+          </div>
+          <div class="pt-6 mt-6 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
+            <span>เปิดระบบรีโมต</span>
+            <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </div>
+
+        <!-- CARD 3: ADMIN CENTER (Visible to Admins) -->
+        <div id="launcherCardAdmin" onclick="enterApp('admin')"
+             class="app-launcher-card hidden bg-white rounded-3xl p-6 sm:p-7 border border-purple-200/80 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between cursor-pointer group hover:-translate-y-1 relative overflow-hidden">
+          <div class="space-y-4">
+            <div class="w-14 h-14 rounded-2xl bg-purple-500/10 text-purple-600 flex items-center justify-center text-2xl group-hover:bg-purple-600 group-hover:text-white transition-all duration-300 shadow-sm">
+              <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-purple-600 transition-colors">ระบบผู้ดูแลระบบ</h3>
+                <span class="px-2 py-0.5 text-[10px] font-bold bg-purple-50 text-purple-700 rounded-md border border-purple-200">Admin Center</span>
+              </div>
+              <p class="text-xs text-[#6E6862] mt-2 leading-relaxed">
+                กำหนดสิทธิ์ผู้ใช้รายระบบและรายไซต์, ตั้งค่าระบบกลาง OTP, จัดการกลุ่ม RDP และโอนย้ายข้อมูลจากระบบเดิม
+              </p>
+            </div>
+          </div>
+          <div class="pt-6 mt-6 border-t border-purple-100 flex items-center justify-between text-xs font-bold text-purple-600">
+            <span>เข้าสู่ระบบ Admin</span>
+            <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ================= WORK TRACKER APPLICATION WRAPPER ================= -->
+  <div id="workTrackerApp" class="min-h-screen flex flex-col hidden">
+
+    <!-- ================= TOP HEADER / NAVBAR ================= -->
+    <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16 gap-4">
+          
+          <!-- App Switcher & Logo & Title -->
+          <div class="flex items-center gap-2.5 sm:gap-3.5">
+            <!-- App Switcher Button -->
+            <button onclick="openAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
+                    class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
+              <i class="fa-solid fa-grip text-[#2491FA] text-sm"></i>
+              <span class="hidden sm:inline">เลือกระบบ</span>
+            </button>
+
+            <div class="h-6 w-px bg-[#EFE9DC]"></div>
+
+            <div class="flex items-center gap-3">
+              <div class="w-10 h-10 rounded-2xl bg-[#2491FA] flex items-center justify-center text-white shadow-md shadow-blue-500/25 p-1.5 flex-shrink-0">
+                <!-- Modern Work Tracker Logo SVG -->
+                <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full text-white">
+                  <rect x="18" y="20" width="64" height="68" rx="14" stroke="currentColor" stroke-width="6" fill="currentColor" fill-opacity="0.12" />
+                  <rect x="36" y="11" width="28" height="15" rx="6" fill="currentColor" />
+                  <rect x="43" y="16" width="14" height="4.5" rx="2" fill="#2491FA" />
+                  <path d="M29 40L35.5 46.5L48 34" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+                  <rect x="55" y="37.5" width="23" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+                  <path d="M29 57L35.5 63.5L48 51" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+                  <rect x="55" y="54.5" width="20" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+                  <circle cx="38.5" cy="73" r="4.5" fill="currentColor" />
+                  <rect x="55" y="70.5" width="16" height="5" rx="2.5" fill="currentColor" fill-opacity="0.6" />
+                </svg>
+              </div>
+              <div>
+                <h1 class="text-base sm:text-lg font-bold text-[#201E1C] leading-tight">ระบบติดตามงาน</h1>
+                <p class="text-[11px] text-[#6E6862] font-medium">Work Tracker System</p>
+              </div>
+            </div>
+          </div>
 
         <!-- Action Buttons -->
         <div class="flex items-center gap-2 sm:gap-3">
@@ -1169,60 +1368,6 @@
     </div>
   </div>
 
-  <!-- ================= MODAL: ONLINE USERS (ผู้ใช้งานที่กำลังออนไลน์) ================= -->
-  <div id="onlineUsersModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
-    <div class="modal-backdrop fixed inset-0" onclick="closeOnlineUsersModal()"></div>
-    <div class="min-h-screen px-4 text-center flex items-center justify-center">
-      <div class="inline-block w-full max-w-md p-5 sm:p-6 my-8 text-left bg-white rounded-2xl shadow-2xl relative z-10 transform transition-all border border-[#EFE9DC]">
-        
-        <!-- Modal Header -->
-        <div class="flex items-center justify-between pb-3 border-b border-[#EFE9DC] mb-4">
-          <div class="flex items-center gap-2.5">
-            <span class="relative flex h-3 w-3">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-            </span>
-            <div>
-              <h3 class="text-base font-bold text-[#201E1C] flex items-center gap-2">
-                <span>ผู้ใช้งานที่กำลังออนไลน์</span>
-                <span id="onlineUsersModalBadge" class="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 font-semibold rounded-full border border-emerald-300/50">0 คน</span>
-              </h3>
-              <p class="text-[11px] text-[#6E6862]">รายชื่อผู้ใช้ที่กำลังเข้าใช้งานระบบอยู่ในขณะนี้</p>
-            </div>
-          </div>
-          <button onclick="closeOnlineUsersModal()" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-1.5 rounded-lg transition-colors cursor-pointer">
-            <i class="fa-solid fa-xmark text-lg"></i>
-          </button>
-        </div>
-
-        <!-- Online Users List Container -->
-        <div id="onlineUsersListContainer" class="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-          <!-- Rendered dynamically -->
-        </div>
-
-        <!-- Modal Footer -->
-        <div class="flex items-center justify-between pt-3.5 mt-4 border-t border-[#EFE9DC]">
-          <div class="text-[11px] text-[#6E6862] flex items-center gap-1.5">
-            <i class="fa-regular fa-clock text-[10px]"></i>
-            <span>อัปเดตอัตโนมัติทุก 45 วิ</span>
-          </div>
-          <div class="flex items-center gap-2">
-            <button type="button" id="btnRefreshOnlineUsers" onclick="refreshOnlineUsers()" title="รีเฟรชสถานะทันที"
-                    class="px-3 py-1.5 text-xs font-semibold text-[#2491FA] bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer">
-              <i class="fa-solid fa-arrows-rotate text-xs"></i>
-              <span>รีเฟรช</span>
-            </button>
-            <button type="button" onclick="closeOnlineUsersModal()"
-                    class="px-4 py-1.5 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
-              ปิด
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
   <!-- ================= MODAL: ARCHIVE (คลังงานถาวร) ================= -->
   <div id="archiveModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
     <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onclick="closeArchiveModal()"></div>
@@ -1397,6 +1542,60 @@
 
       </div>
     </div>
+  </div> <!-- ================= /#workTrackerApp ================= -->
+
+  <!-- ================= MODAL: ONLINE USERS (ผู้ใช้งานที่กำลังออนไลน์) ================= -->
+  <div id="onlineUsersModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="modal-backdrop fixed inset-0" onclick="closeOnlineUsersModal()"></div>
+    <div class="min-h-screen px-4 text-center flex items-center justify-center">
+      <div class="inline-block w-full max-w-md p-5 sm:p-6 my-8 text-left bg-white rounded-2xl shadow-2xl relative z-10 transform transition-all border border-[#EFE9DC]">
+        
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-[#EFE9DC] mb-4">
+          <div class="flex items-center gap-2.5">
+            <span class="relative flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+            </span>
+            <div>
+              <h3 class="text-base font-bold text-[#201E1C] flex items-center gap-2">
+                <span>ผู้ใช้งานที่กำลังออนไลน์</span>
+                <span id="onlineUsersModalBadge" class="text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 font-semibold rounded-full border border-emerald-300/50">0 คน</span>
+              </h3>
+              <p class="text-[11px] text-[#6E6862]">รายชื่อผู้ใช้ที่กำลังเข้าใช้งานระบบอยู่ในขณะนี้</p>
+            </div>
+          </div>
+          <button onclick="closeOnlineUsersModal()" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-1.5 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Online Users List Container -->
+        <div id="onlineUsersListContainer" class="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+          <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="flex items-center justify-between pt-3.5 mt-4 border-t border-[#EFE9DC]">
+          <div class="text-[11px] text-[#6E6862] flex items-center gap-1.5">
+            <i class="fa-regular fa-clock text-[10px]"></i>
+            <span>อัปเดตอัตโนมัติทุก 45 วิ</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" id="btnRefreshOnlineUsers" onclick="refreshOnlineUsers()" title="รีเฟรชสถานะทันที"
+                    class="px-3 py-1.5 text-xs font-semibold text-[#2491FA] bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer">
+              <i class="fa-solid fa-arrows-rotate text-xs"></i>
+              <span>รีเฟรช</span>
+            </button>
+            <button type="button" onclick="closeOnlineUsersModal()"
+                    class="px-4 py-1.5 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
+              ปิด
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
   </div>
 
   <!-- ================= GLOBAL LOADING SPINNER ================= -->
@@ -1407,7 +1606,16 @@
     </div>
   </div>
 
-  <!-- Client-side JavaScript -->
+  <!-- ================= TOAST NOTIFICATION CONTAINER ================= -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
+
+  <!-- ================= SUBMODULE VIEWS ================= -->
+  <?!= include('RdpView'); ?>
+  <?!= include('AdminView'); ?>
+
+  <!-- ================= CLIENT SCRIPTS ================= -->
   <?!= include('JavaScript'); ?>
+  <?!= include('RdpScript'); ?>
+  <?!= include('AdminScript'); ?>
 </body>
 </html>

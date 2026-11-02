@@ -126,6 +126,7 @@ function doPost(e) {
       testTelegramConnection: testTelegramConnection,
       requestLoginPin: requestLoginPin,
       verifyLoginPin: verifyLoginPin,
+      loginWithPassword: loginWithPassword,
       getUsersList: getUsersList,
       saveUser: saveUser,
       deleteUser: deleteUser,
@@ -133,7 +134,17 @@ function doPost(e) {
       getOnlineUsers: getOnlineUsers,
       logoutOnlineUser: logoutOnlineUser,
       uploadTaskAttachment: uploadTaskAttachment,
-      deleteTaskAttachment: deleteTaskAttachment
+      deleteTaskAttachment: deleteTaskAttachment,
+      getRdpInitialData: getRdpInitialData,
+      saveRdpSite: saveRdpSite,
+      deleteRdpSite: deleteRdpSite,
+      getRdpGroups: getRdpGroups,
+      saveRdpGroup: saveRdpGroup,
+      deleteRdpGroup: deleteRdpGroup,
+      logRdpRemoteAction: logRdpRemoteAction,
+      getRdpAuditLogs: getRdpAuditLogs,
+      getAdminOverviewData: getAdminOverviewData,
+      migrateFromLegacyRdpSpreadsheet: migrateFromLegacyRdpSpreadsheet
     };
 
     const targetFn = PUBLIC_API_ACTIONS[payload.action];
@@ -369,41 +380,52 @@ function setupDatabase() {
   let userSheet = ss.getSheetByName(SHEET_USERS);
   if (!userSheet) {
     userSheet = ss.insertSheet(SHEET_USERS);
-    const userHeaders = ['Username', 'FullName', 'TelegramChatId', 'Role', 'Status', 'LastLogin', 'AllowedSites'];
+    const userHeaders = ['Username', 'FullName', 'TelegramChatId', 'Role', 'Status', 'LastLogin', 'AllowedSites', 'PasswordHash', 'AllowedApps', 'AllowedRdpSites'];
     userSheet.getRange(1, 1, 1, userHeaders.length).setValues([userHeaders]);
-    userSheet.getRange(1, 1, 1, userHeaders.length)
-             .setBackground('#0f172a')
-             .setFontColor('#ffffff')
-             .setFontWeight('bold')
-             .setHorizontalAlignment('center')
-             .setVerticalAlignment('middle');
-    userSheet.setRowHeight(1, 35);
-    userSheet.setFrozenRows(1);
+    formatHeaderRow_(userSheet, '#0f172a');
 
+    const defaultAdminPass = (typeof hashPassword_ === 'function') ? hashPassword_('admin1234') : '';
     const defaultUsers = [
-      ['admin', 'ผู้ดูแลระบบ', '', 'Admin', 'Active', '', 'ALL'],
-      ['somchai', 'สมชาย ช่างไฟ', '', 'Member', 'Active', '', 'ALL'],
-      ['wichai', 'วิชัย โฟร์แมน', '', 'Member', 'Active', '', 'ALL']
+      ['admin', 'ผู้ดูแลระบบ', '', 'Admin', 'Active', '', 'ALL', defaultAdminPass, JSON.stringify(['work_tracker', 'rdp_manager', 'admin']), 'ALL'],
+      ['somchai', 'สมชาย ช่างไฟ', '', 'Member', 'Active', '', 'ALL', '', JSON.stringify(['work_tracker', 'rdp_manager']), 'ALL'],
+      ['wichai', 'วิชัย โฟร์แมน', '', 'Member', 'Active', '', 'ALL', '', JSON.stringify(['work_tracker', 'rdp_manager']), 'ALL']
     ];
     userSheet.getRange(2, 1, defaultUsers.length, userHeaders.length).setValues(defaultUsers);
     for (let c = 1; c <= userHeaders.length; c++) {
       userSheet.autoResizeColumn(c);
     }
   } else {
-    // หากตารางมีอยู่แล้วแต่ยังไม่มีคอลัมน์ AllowedSites ให้เพิ่มหัวตารางคอลัมน์ที่ 7
+    // หากตารางมีอยู่แล้วแต่ยังไม่มีคอลัมน์ใหม่ ให้เพิ่มหัวตาราง
     const lastCol = userSheet.getLastColumn();
-    if (lastCol < 7) {
-      userSheet.getRange(1, 7).setValue('AllowedSites')
-               .setBackground('#0f172a')
-               .setFontColor('#ffffff')
-               .setFontWeight('bold')
-               .setHorizontalAlignment('center')
-               .setVerticalAlignment('middle');
-      userSheet.autoResizeColumn(7);
-    }
+    if (lastCol < 7) userSheet.getRange(1, 7).setValue('AllowedSites');
+    if (lastCol < 8) userSheet.getRange(1, 8).setValue('PasswordHash');
+    if (lastCol < 9) userSheet.getRange(1, 9).setValue('AllowedApps');
+    if (lastCol < 10) userSheet.getRange(1, 10).setValue('AllowedRdpSites');
+    formatHeaderRow_(userSheet, '#0f172a');
+  }
+
+  // --- 4. เตรียมตารางระบบ RDP Manager ---
+  if (typeof setupRdpDatabase_ === 'function') {
+    setupRdpDatabase_(ss);
   }
 
   return { success: true, sheetUrl: ss.getUrl() };
+}
+
+/**
+ * ฟังก์ชันจัดฟอร์แมตหัวตารางมาตรฐาน (Header Styler)
+ */
+function formatHeaderRow_(sheet, bgColor) {
+  if (!sheet) return;
+  const lastCol = Math.max(1, sheet.getLastColumn());
+  const headerRange = sheet.getRange(1, 1, 1, lastCol);
+  headerRange.setBackground(bgColor || '#1e293b')
+             .setFontColor('#ffffff')
+             .setFontWeight('bold')
+             .setHorizontalAlignment('center')
+             .setVerticalAlignment('middle');
+  sheet.setRowHeight(1, 35);
+  sheet.setFrozenRows(1);
 }
 
 /**
@@ -426,7 +448,12 @@ function getSettings_() {
     NOTIFY_ASSIGNEE_ON_CREATE: true,
     NOTIFY_MAIN_GROUP_ALWAYS: false,
     SITE_TELEGRAM_CHAT_IDS: {},
-    SITES: DEFAULT_SITES
+    SITES: DEFAULT_SITES,
+    ALLOW_PASSWORD_LOGIN: true,
+    PIN_EXPIRE_MINUTES: '5',
+    MAX_PIN_ATTEMPTS: '3',
+    RDP_DEFAULT_CONN_MODE: 'protocol',
+    RDP_DEFAULT_SHARE_DRIVES: true
   };
 
   for (let i = 1; i < values.length; i++) {
@@ -438,6 +465,11 @@ function getSettings_() {
     if (key === 'NOTIFY_ON_STATUS_CHANGE') settings.NOTIFY_ON_STATUS_CHANGE = (val.toLowerCase() === 'true');
     if (key === 'NOTIFY_ASSIGNEE_ON_CREATE') settings.NOTIFY_ASSIGNEE_ON_CREATE = (val.toLowerCase() === 'true');
     if (key === 'NOTIFY_MAIN_GROUP_ALWAYS') settings.NOTIFY_MAIN_GROUP_ALWAYS = (val.toLowerCase() === 'true');
+    if (key === 'ALLOW_PASSWORD_LOGIN') settings.ALLOW_PASSWORD_LOGIN = (val.toLowerCase() !== 'false');
+    if (key === 'PIN_EXPIRE_MINUTES') settings.PIN_EXPIRE_MINUTES = val;
+    if (key === 'MAX_PIN_ATTEMPTS') settings.MAX_PIN_ATTEMPTS = val;
+    if (key === 'RDP_DEFAULT_CONN_MODE') settings.RDP_DEFAULT_CONN_MODE = val;
+    if (key === 'RDP_DEFAULT_SHARE_DRIVES') settings.RDP_DEFAULT_SHARE_DRIVES = (val.toLowerCase() !== 'false');
     if (key === 'SITE_TELEGRAM_CHAT_IDS') {
       try {
         const parsed = JSON.parse(val);
@@ -506,6 +538,21 @@ function saveSettings(newSettings) {
     }
     if (newSettings.NOTIFY_MAIN_GROUP_ALWAYS !== undefined) {
       updateOrAdd('NOTIFY_MAIN_GROUP_ALWAYS', String(newSettings.NOTIFY_MAIN_GROUP_ALWAYS), 'ส่งเข้ากลุ่มหลักส่วนกลางควบคู่ไปด้วยเสมอ');
+    }
+    if (newSettings.ALLOW_PASSWORD_LOGIN !== undefined) {
+      updateOrAdd('ALLOW_PASSWORD_LOGIN', String(newSettings.ALLOW_PASSWORD_LOGIN), 'อนุญาตเข้าสู่ระบบด้วยรหัสผ่านสำรอง');
+    }
+    if (newSettings.PIN_EXPIRE_MINUTES !== undefined) {
+      updateOrAdd('PIN_EXPIRE_MINUTES', String(newSettings.PIN_EXPIRE_MINUTES), 'อายุรหัส PIN เข้าสู่ระบบ (นาที)');
+    }
+    if (newSettings.MAX_PIN_ATTEMPTS !== undefined) {
+      updateOrAdd('MAX_PIN_ATTEMPTS', String(newSettings.MAX_PIN_ATTEMPTS), 'จำนวนครั้งที่อนุญาตให้กรอก PIN ผิด');
+    }
+    if (newSettings.RDP_DEFAULT_CONN_MODE !== undefined) {
+      updateOrAdd('RDP_DEFAULT_CONN_MODE', String(newSettings.RDP_DEFAULT_CONN_MODE), 'โหมดการเชื่อมต่อรีโมตเริ่มต้น');
+    }
+    if (newSettings.RDP_DEFAULT_SHARE_DRIVES !== undefined) {
+      updateOrAdd('RDP_DEFAULT_SHARE_DRIVES', String(newSettings.RDP_DEFAULT_SHARE_DRIVES), 'แชร์ไดรฟ์และ Clipboard เริ่มต้น');
     }
     if (newSettings.SITE_TELEGRAM_CHAT_IDS !== undefined && typeof newSettings.SITE_TELEGRAM_CHAT_IDS === 'object') {
       updateOrAdd('SITE_TELEGRAM_CHAT_IDS', JSON.stringify(newSettings.SITE_TELEGRAM_CHAT_IDS), 'Chat ID กลุ่ม Telegram แต่ละไซต์งาน (JSON Object)');
@@ -634,11 +681,33 @@ function getInitialData(requestUsername) {
 
       // ตรวจสอบผู้ใช้ที่ร้องขอข้อมูล
       if (requestUsername && uName.toLowerCase() === String(requestUsername).trim().toLowerCase()) {
+        let allowedApps = ['work_tracker', 'rdp_manager'];
+        if (uData[i][8] !== undefined && String(uData[i][8]).trim() !== '') {
+          try {
+            const parsedApps = JSON.parse(String(uData[i][8]));
+            if (Array.isArray(parsedApps)) allowedApps = parsedApps;
+          } catch (e) {}
+        }
+        if (role === 'Admin' && !allowedApps.includes('admin')) {
+          allowedApps.push('admin');
+        }
+
+        let allowedRdpSites = 'ALL';
+        if (uData[i][9] !== undefined && String(uData[i][9]).trim() !== '') {
+          const rawR = String(uData[i][9]).trim();
+          if (rawR !== 'ALL') {
+            try { allowedRdpSites = JSON.parse(rawR); } catch (e) { allowedRdpSites = 'ALL'; }
+          }
+        }
+
         currentUser = {
           username: uName,
           fullName: String(uData[i][1] || '').trim() || uName,
           role: role,
-          allowedSites: sitesPerm
+          allowedSites: sitesPerm,
+          allowedApps: allowedApps,
+          allowedRdpSites: allowedRdpSites,
+          hasPassword: Boolean(uData[i][7])
         };
         userRole = role;
         allowedSites = (role === 'Admin') ? 'ALL' : sitesPerm;
@@ -753,7 +822,11 @@ function getInitialData(requestUsername) {
         notifyAssigneeOnCreate: settings.NOTIFY_ASSIGNEE_ON_CREATE !== false,
         notifyMainGroupAlways: settings.NOTIFY_MAIN_GROUP_ALWAYS === true,
         siteTelegramChatIds: settings.SITE_TELEGRAM_CHAT_IDS || {},
-        sites: settings.SITES
+        sites: settings.SITES,
+        allowPasswordLogin: settings.ALLOW_PASSWORD_LOGIN !== false,
+        pinExpireMinutes: settings.PIN_EXPIRE_MINUTES || '5',
+        rdpDefaultConnMode: settings.RDP_DEFAULT_CONN_MODE || 'protocol',
+        rdpDefaultShareDrives: settings.RDP_DEFAULT_SHARE_DRIVES !== false
       },
       stats: stats,
       version: getTasksDataVersion_(),
@@ -2038,11 +2111,33 @@ function verifyLoginPin(username, pin) {
           }
         }
 
+        let allowedApps = ['work_tracker', 'rdp_manager'];
+        if (userData[i][8] !== undefined && String(userData[i][8]).trim() !== '') {
+          try {
+            const parsedApps = JSON.parse(String(userData[i][8]));
+            if (Array.isArray(parsedApps)) allowedApps = parsedApps;
+          } catch (e) {}
+        }
+        if (String(userData[i][3]).trim() === 'Admin' && !allowedApps.includes('admin')) {
+          allowedApps.push('admin');
+        }
+
+        let allowedRdpSites = 'ALL';
+        if (userData[i][9] !== undefined && String(userData[i][9]).trim() !== '') {
+          const rawR = String(userData[i][9]).trim();
+          if (rawR !== 'ALL') {
+            try { allowedRdpSites = JSON.parse(rawR); } catch (e) { allowedRdpSites = 'ALL'; }
+          }
+        }
+
         profile = {
           username: String(userData[i][0]).trim(),
           fullName: String(userData[i][1]).trim(),
           role: String(userData[i][3]).trim() || 'Member',
-          allowedSites: allowedSites
+          allowedSites: allowedSites,
+          allowedApps: allowedApps,
+          allowedRdpSites: allowedRdpSites,
+          hasPassword: Boolean(userData[i][7])
         };
         userSheet.getRange(i + 1, 6).setValue(nowStr);
         break;
@@ -2050,12 +2145,15 @@ function verifyLoginPin(username, pin) {
     }
 
     const sessionToken = Utilities.getUuid();
+    if (typeof writeRdpAuditLog_ === 'function') {
+      writeRdpAuditLog_(username, 'LOGIN_PIN', '-', `เข้าสู่ระบบด้วย Telegram OTP PIN 6 หลักสำเร็จ (${username})`);
+    }
 
     return {
       success: true,
       message: 'เข้าสู่ระบบสำเร็จ',
       token: sessionToken,
-      user: profile || { username: username, fullName: username, role: 'Member', allowedSites: 'ALL' }
+      user: profile || { username: username, fullName: username, role: 'Member', allowedSites: 'ALL', allowedApps: ['work_tracker', 'rdp_manager'], allowedRdpSites: 'ALL', hasPassword: false }
     };
   } catch (error) {
     return { success: false, message: 'เกิดข้อผิดพลาด: ' + error.message };
@@ -2063,7 +2161,110 @@ function verifyLoginPin(username, pin) {
 }
 
 /**
- * ดึงรายชื่อผู้ใช้ทั้งหมดในระบบ (สำหรับหน้าต่างตั้งค่า)
+ * เข้าสู่ระบบด้วยรหัสผ่านสำรอง (Password Fallback Login)
+ */
+function loginWithPassword(username, password) {
+  try {
+    if (!username || !password) {
+      return { success: false, message: 'กรุณากรอกทั้งชื่อผู้ใช้และรหัสผ่าน' };
+    }
+
+    username = String(username).trim().toLowerCase();
+    const ss = getDb_();
+    setupDatabase();
+    const userSheet = ss.getSheetByName(SHEET_USERS);
+    if (!userSheet) return { success: false, message: 'ไม่พบตาราง Users ในระบบ' };
+
+    const userData = userSheet.getDataRange().getValues();
+    const inputHash = (typeof hashPassword_ === 'function') ? hashPassword_(password) : '';
+    const nowStr = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+
+    for (let i = 1; i < userData.length; i++) {
+      const uName = String(userData[i][0] || '').trim().toLowerCase();
+      if (uName === username) {
+        const status = String(userData[i][4] || 'Active').trim();
+        if (status.toLowerCase() !== 'active') {
+          return { success: false, message: 'บัญชีผู้ใช้นี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ' };
+        }
+
+        const storedHash = String(userData[i][7] || '').trim();
+        const isMatch = (storedHash && inputHash && storedHash.toLowerCase() === inputHash.toLowerCase()) ||
+                        (!storedHash && (password === 'admin1234' && uName === 'admin'));
+
+        if (!isMatch) {
+          return { success: false, message: 'รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง' };
+        }
+
+        // หากรหัสผ่านเดิมยังไม่ได้แฮช ให้บันทึกแฮชทันที
+        if (!storedHash && inputHash) {
+          userSheet.getRange(i + 1, 8).setValue(inputHash);
+        }
+
+        // อ่านสิทธิ์ AllowedSites (col 7)
+        let allowedSites = 'ALL';
+        if (userData[i][6] !== undefined && String(userData[i][6]).trim() !== '') {
+          const raw = String(userData[i][6]).trim();
+          if (raw !== 'ALL') {
+            try { allowedSites = JSON.parse(raw); } catch (e) { allowedSites = 'ALL'; }
+          }
+        }
+
+        // อ่านสิทธิ์ AllowedApps (col 9)
+        let allowedApps = ['work_tracker', 'rdp_manager'];
+        if (userData[i][8] !== undefined && String(userData[i][8]).trim() !== '') {
+          try {
+            const parsedApps = JSON.parse(String(userData[i][8]));
+            if (Array.isArray(parsedApps)) allowedApps = parsedApps;
+          } catch (e) {}
+        }
+        if (String(userData[i][3]).trim() === 'Admin' && !allowedApps.includes('admin')) {
+          allowedApps.push('admin');
+        }
+
+        // อ่านสิทธิ์ AllowedRdpSites (col 10)
+        let allowedRdpSites = 'ALL';
+        if (userData[i][9] !== undefined && String(userData[i][9]).trim() !== '') {
+          const rawR = String(userData[i][9]).trim();
+          if (rawR !== 'ALL') {
+            try { allowedRdpSites = JSON.parse(rawR); } catch (e) { allowedRdpSites = 'ALL'; }
+          }
+        }
+
+        // อัปเดต LastLogin
+        userSheet.getRange(i + 1, 6).setValue(nowStr);
+
+        const profile = {
+          username: String(userData[i][0]).trim(),
+          fullName: String(userData[i][1] || userData[i][0]).trim(),
+          role: String(userData[i][3] || 'Member').trim(),
+          allowedSites: allowedSites,
+          allowedApps: allowedApps,
+          allowedRdpSites: allowedRdpSites,
+          hasPassword: true
+        };
+
+        const sessionToken = Utilities.getUuid();
+        if (typeof writeRdpAuditLog_ === 'function') {
+          writeRdpAuditLog_(username, 'LOGIN_PASSWORD', '-', `เข้าสู่ระบบด้วยรหัสผ่านสำรอง (${username})`);
+        }
+
+        return {
+          success: true,
+          message: 'เข้าสู่ระบบสำเร็จ',
+          token: sessionToken,
+          user: profile
+        };
+      }
+    }
+
+    return { success: false, message: `ไม่พบชื่อผู้ใช้ "${username}" ในระบบ` };
+  } catch (err) {
+    return { success: false, message: 'เข้าสู่ระบบไม่สำเร็จ: ' + err.message };
+  }
+}
+
+/**
+ * ดึงรายชื่อผู้ใช้ทั้งหมดในระบบ (สำหรับหน้าต่างตั้งค่าและ Admin Center)
  */
 function getUsersList() {
   try {
@@ -2092,6 +2293,25 @@ function getUsersList() {
         }
       }
 
+      let allowedApps = ['work_tracker', 'rdp_manager'];
+      if (rows[i][8] !== undefined && String(rows[i][8]).trim() !== '') {
+        try {
+          const parsedApps = JSON.parse(String(rows[i][8]));
+          if (Array.isArray(parsedApps)) allowedApps = parsedApps;
+        } catch (e) {}
+      }
+      if (String(rows[i][3]).trim() === 'Admin' && !allowedApps.includes('admin')) {
+        allowedApps.push('admin');
+      }
+
+      let allowedRdpSites = 'ALL';
+      if (rows[i][9] !== undefined && String(rows[i][9]).trim() !== '') {
+        const rawR = String(rows[i][9]).trim();
+        if (rawR !== 'ALL') {
+          try { allowedRdpSites = JSON.parse(rawR); } catch (e) { allowedRdpSites = 'ALL'; }
+        }
+      }
+
       users.push({
         username: String(rows[i][0]).trim(),
         fullName: String(rows[i][1]).trim(),
@@ -2099,7 +2319,10 @@ function getUsersList() {
         role: String(rows[i][3]).trim() || 'Member',
         status: String(rows[i][4]).trim() || 'Active',
         lastLogin: rows[i][5] ? String(rows[i][5]) : '-',
-        allowedSites: allowedSites
+        allowedSites: allowedSites,
+        hasPassword: Boolean(rows[i][7]),
+        allowedApps: allowedApps,
+        allowedRdpSites: allowedRdpSites
       });
     }
 
@@ -2110,7 +2333,7 @@ function getUsersList() {
 }
 
 /**
- * บันทึกผู้ใช้ (เพิ่มผู้ใช้ใหม่ หรือแก้ไขผู้ใช้เดิม)
+ * บันทึกผู้ใช้ (เพิ่มผู้ใช้ใหม่ หรือแก้ไขผู้ใช้เดิม รองรับสิทธิ์รายระบบและรหัสผ่าน)
  */
 function saveUser(userData) {
   try {
@@ -2128,10 +2351,12 @@ function saveUser(userData) {
 
     const data = sheet.getDataRange().getValues();
     let targetRow = -1;
+    let oldPasswordHash = '';
 
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]).trim().toLowerCase() === username) {
         targetRow = i + 1;
+        oldPasswordHash = String(data[i][7] || '');
         break;
       }
     }
@@ -2145,6 +2370,25 @@ function saveUser(userData) {
       }
     }
 
+    let allowedAppsVal = JSON.stringify(['work_tracker', 'rdp_manager']);
+    if (userData.allowedApps && Array.isArray(userData.allowedApps)) {
+      allowedAppsVal = JSON.stringify(userData.allowedApps);
+    }
+
+    let allowedRdpSitesVal = 'ALL';
+    if (userData.allowedRdpSites && userData.allowedRdpSites !== 'ALL') {
+      if (Array.isArray(userData.allowedRdpSites)) {
+        allowedRdpSitesVal = JSON.stringify(userData.allowedRdpSites);
+      } else {
+        allowedRdpSitesVal = String(userData.allowedRdpSites);
+      }
+    }
+
+    let passHashToSave = oldPasswordHash;
+    if (userData.password && String(userData.password).trim() !== '') {
+      passHashToSave = (typeof hashPassword_ === 'function') ? hashPassword_(String(userData.password).trim()) : '';
+    }
+
     const rowValues = [
       username,
       String(userData.fullName).trim(),
@@ -2154,12 +2398,12 @@ function saveUser(userData) {
     ];
 
     if (targetRow > 0) {
-      // แก้ไขข้อมูลเดิม: อัปเดตคอลัมน์ 1-5 และคอลัมน์ 7 (AllowedSites) โดยคงคอลัมน์ 6 (LastLogin) ไว้
+      // แก้ไขข้อมูลเดิม: อัปเดตคอลัมน์ 1-5 และคอลัมน์ 7-10 โดยคงคอลัมน์ 6 (LastLogin) ไว้
       sheet.getRange(targetRow, 1, 1, 5).setValues([rowValues]);
-      sheet.getRange(targetRow, 7).setValue(allowedSitesVal);
+      sheet.getRange(targetRow, 7, 1, 4).setValues([[allowedSitesVal, passHashToSave, allowedAppsVal, allowedRdpSitesVal]]);
     } else {
-      // เพิ่มผู้ใช้ใหม่: [username, fullName, chatId, role, status, lastLogin='', allowedSites]
-      sheet.appendRow([...rowValues, '', allowedSitesVal]);
+      // เพิ่มผู้ใช้ใหม่: [username, fullName, chatId, role, status, lastLogin='', allowedSites, passHash, allowedApps, allowedRdpSites]
+      sheet.appendRow([...rowValues, '', allowedSitesVal, passHashToSave, allowedAppsVal, allowedRdpSitesVal]);
     }
 
     return { success: true, message: 'บันทึกข้อมูลผู้ใช้เรียบร้อย' };
@@ -2218,6 +2462,7 @@ function pingOnlineUser(userData) {
     const username = String(userData.username).trim().toLowerCase();
     const fullName = String(userData.fullName || userData.username).trim();
     const role = String(userData.role || 'Member').trim();
+    const currentApp = String(userData.currentApp || 'work_tracker').trim();
 
     const lock = LockService.getScriptLock();
     try {
@@ -2244,11 +2489,20 @@ function pingOnlineUser(userData) {
       }
     }
 
+    const prevActiveRemote = (usersMap[username] && usersMap[username].activeRemote) ? usersMap[username].activeRemote : null;
+    let activeRemote = userData.activeRemote !== undefined ? userData.activeRemote : prevActiveRemote;
+    // เคลียร์ activeRemote ถ้าเกิน 30 นาที
+    if (activeRemote && activeRemote.connectedAt && (now - activeRemote.connectedAt > 30 * 60 * 1000)) {
+      activeRemote = null;
+    }
+
     // เพิ่มหรืออัปเดตผู้ใช้ปัจจุบัน
     usersMap[username] = {
       username: username,
       fullName: fullName,
       role: role,
+      currentApp: currentApp,
+      activeRemote: activeRemote,
       lastActive: now
     };
 
