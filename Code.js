@@ -144,7 +144,9 @@ function doPost(e) {
       logRdpRemoteAction: logRdpRemoteAction,
       getRdpAuditLogs: getRdpAuditLogs,
       getAdminOverviewData: getAdminOverviewData,
-      migrateFromLegacyRdpSpreadsheet: migrateFromLegacyRdpSpreadsheet
+      migrateFromLegacyRdpSpreadsheet: migrateFromLegacyRdpSpreadsheet,
+      saveSettings: saveSettings,
+      saveSitesList: saveSitesList
     };
 
     const targetFn = PUBLIC_API_ACTIONS[payload.action];

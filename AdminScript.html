@@ -356,7 +356,9 @@ function renderWtSiteCheckboxes(allowedSitesVal) {
 
   const allSites = (adminState.wtSites && adminState.wtSites.length > 0)
     ? adminState.wtSites
-    : ((window.state && state.sites && state.sites.length > 0) ? state.sites : []);
+    : ((window.state && state.allSites && state.allSites.length > 0)
+      ? state.allSites
+      : ((window.state && state.sites && state.sites.length > 0) ? state.sites : []));
 
   if (allSites.length === 0) {
     listContainer.innerHTML = '<p class="text-xs text-[#6E6862] p-2 text-center">ยังไม่มีรายการไซต์งานในระบบ</p>';

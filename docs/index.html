@@ -499,18 +499,8 @@
     </header>
 
     <!-- Main Launcher Area -->
-    <main class="flex-1 flex flex-col items-center justify-center max-w-5xl w-full mx-auto px-4 py-12 space-y-8">
+    <main class="flex-1 flex flex-col items-center justify-center max-w-5xl w-full mx-auto px-4 py-12">
       
-      <div class="text-center space-y-2">
-        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#EDE7DA] text-[#6E6862] border border-[#EFE9DC]">
-          <i class="fa-solid fa-layer-group text-[#2491FA]"></i> เลือกระบบเพื่อเข้าใช้งาน
-        </span>
-        <h2 class="text-2xl sm:text-3xl font-extrabold text-[#201E1C] tracking-tight">ยินดีต้อนรับสู่ระบบงานกลาง</h2>
-        <p class="text-sm text-[#6E6862] max-w-lg mx-auto">
-          เลือกโมดูลที่ต้องการทำงาน เพื่อเข้าสู่หน้าจอจัดการงาน ติดตามไซต์ หรือเปิดรีโมตเดสก์ท็อป
-        </p>
-      </div>
-
       <!-- App Cards Grid -->
       <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full">
         
@@ -526,12 +516,9 @@
                 <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบติดตามงาน</h3>
                 <span class="px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 rounded-md border border-amber-200">Work Tracker</span>
               </div>
-              <p class="text-xs text-[#6E6862] mt-2 leading-relaxed">
-                บริหารและติดตามความคืบหน้างาน Kanban Board, Checklist รายการงานย่อย, ตารางสรุปงาน และแจ้งเตือนผ่าน Telegram
-              </p>
             </div>
           </div>
-          <div class="pt-6 mt-6 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
+          <div class="pt-5 mt-5 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
             <span>เปิดระบบติดตามงาน</span>
             <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
           </div>
@@ -549,12 +536,9 @@
                 <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-[#2491FA] transition-colors">ระบบรีโมตไซต์งาน</h3>
                 <span class="px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 rounded-md border border-blue-200">RDP Manager</span>
               </div>
-              <p class="text-xs text-[#6E6862] mt-2 leading-relaxed">
-                เชื่อมต่อ Windows Remote Desktop ไปยังไซต์งาน 1-Click Zero Prompt รองรับหลายเครื่องต่อไซต์ พร้อม Copy ไฟล์และข้อความ
-              </p>
             </div>
           </div>
-          <div class="pt-6 mt-6 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
+          <div class="pt-5 mt-5 border-t border-[#EFE9DC] flex items-center justify-between text-xs font-bold text-[#2491FA]">
             <span>เปิดระบบรีโมต</span>
             <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
           </div>
@@ -572,12 +556,9 @@
                 <h3 class="text-lg font-bold text-[#201E1C] group-hover:text-purple-600 transition-colors">ระบบผู้ดูแลระบบ</h3>
                 <span class="px-2 py-0.5 text-[10px] font-bold bg-purple-50 text-purple-700 rounded-md border border-purple-200">Admin Center</span>
               </div>
-              <p class="text-xs text-[#6E6862] mt-2 leading-relaxed">
-                กำหนดสิทธิ์ผู้ใช้รายระบบและรายไซต์, ตั้งค่าระบบกลาง OTP, จัดการกลุ่ม RDP และโอนย้ายข้อมูลจากระบบเดิม
-              </p>
             </div>
           </div>
-          <div class="pt-6 mt-6 border-t border-purple-100 flex items-center justify-between text-xs font-bold text-purple-600">
+          <div class="pt-5 mt-5 border-t border-purple-100 flex items-center justify-between text-xs font-bold text-purple-600">
             <span>เข้าสู่ระบบ Admin</span>
             <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition-transform"></i>
           </div>
@@ -9140,7 +9121,9 @@ function renderWtSiteCheckboxes(allowedSitesVal) {
 
   const allSites = (adminState.wtSites && adminState.wtSites.length > 0)
     ? adminState.wtSites
-    : ((window.state && state.sites && state.sites.length > 0) ? state.sites : []);
+    : ((window.state && state.allSites && state.allSites.length > 0)
+      ? state.allSites
+      : ((window.state && state.sites && state.sites.length > 0) ? state.sites : []));
 
   if (allSites.length === 0) {
     listContainer.innerHTML = '<p class="text-xs text-[#6E6862] p-2 text-center">ยังไม่มีรายการไซต์งานในระบบ</p>';
