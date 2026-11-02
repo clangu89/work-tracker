@@ -173,7 +173,90 @@
     animation: subtlePulse 2s infinite ease-in-out;
   }
 
-  /* 6-Digit PIN Inputs */
+  /* ================= LIQUID GLASS DESIGN (FROSTED MILK GLASS) ================= */
+  @keyframes floatOrb1 {
+    0% { transform: translate(0px, 0px) scale(1); }
+    50% { transform: translate(70px, 50px) scale(1.15); }
+    100% { transform: translate(-35px, 80px) scale(0.95); }
+  }
+  @keyframes floatOrb2 {
+    0% { transform: translate(0px, 0px) scale(1); }
+    50% { transform: translate(-60px, -45px) scale(1.2); }
+    100% { transform: translate(45px, -70px) scale(0.9); }
+  }
+  @keyframes floatOrb3 {
+    0% { transform: translate(0px, 0px) scale(0.95); }
+    50% { transform: translate(50px, -35px) scale(1.1); }
+    100% { transform: translate(-45px, 25px) scale(1.05); }
+  }
+  @keyframes floatOrb4 {
+    0% { transform: translate(0px, 0px) scale(1.1); }
+    50% { transform: translate(-35px, 45px) scale(0.95); }
+    100% { transform: translate(35px, -25px) scale(1.15); }
+  }
+  @keyframes liquidShine {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .orb-1 { animation: floatOrb1 16s ease-in-out infinite alternate; }
+  .orb-2 { animation: floatOrb2 20s ease-in-out infinite alternate; }
+  .orb-3 { animation: floatOrb3 18s ease-in-out infinite alternate; }
+  .orb-4 { animation: floatOrb4 22s ease-in-out infinite alternate; }
+
+  /* Login Liquid Backdrop */
+  .liquid-login-backdrop {
+    background: radial-gradient(circle at 50% 20%, #f7f4ea 0%, #ebe3d3 100%);
+  }
+
+  /* Liquid Frosted Milk Glass Card */
+  .liquid-card-milk {
+    backdrop-filter: blur(24px) saturate(190%);
+    -webkit-backdrop-filter: blur(24px) saturate(190%);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.76) 0%, rgba(255, 255, 255, 0.48) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.88);
+    box-shadow: inset 0 1px 2px 0 rgba(255, 255, 255, 0.95),
+                0 24px 50px -12px rgba(32, 30, 28, 0.12),
+                0 4px 16px rgba(36, 145, 250, 0.1);
+  }
+
+  /* Liquid Glass Inputs */
+  .glass-input-milk {
+    background: rgba(255, 255, 255, 0.65);
+    border: 1px solid rgba(239, 233, 220, 0.95);
+    color: var(--ch-text-main);
+    transition: all 0.2s ease;
+  }
+  .glass-input-milk:focus {
+    background: #ffffff;
+    border-color: var(--ch-blue);
+    box-shadow: 0 0 0 3px rgba(36, 145, 250, 0.25);
+    outline: none;
+  }
+  .glass-input-milk::placeholder {
+    color: #8c827a;
+  }
+
+  /* Liquid Glass Tabs */
+  .glass-tab-container-milk {
+    background: rgba(239, 233, 220, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+  }
+  .glass-tab-active-milk {
+    background: #ffffff;
+    color: var(--ch-blue);
+    border: 1px solid rgba(239, 233, 220, 0.9);
+    box-shadow: 0 2px 8px rgba(32, 30, 28, 0.08);
+  }
+  .glass-tab-inactive-milk {
+    color: var(--ch-text-muted);
+  }
+  .glass-tab-inactive-milk:hover {
+    color: var(--ch-text-main);
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  /* 6-Digit PIN Inputs (Frosted Glass) */
   .pin-digit {
     width: 2.75rem;
     height: 3.5rem;
@@ -181,18 +264,48 @@
     font-size: 1.5rem;
     font-weight: 700;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    border-radius: 0.75rem;
-    border: 2px solid var(--ch-border);
-    background-color: var(--ch-col-bg);
-    transition: all 0.15s ease;
+    border-radius: 0.85rem;
+    border: 1.5px solid #EFE9DC;
+    background: rgba(255, 255, 255, 0.72);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
     color: var(--ch-text-main);
   }
   .pin-digit:focus {
     border-color: var(--ch-blue);
     background-color: #ffffff;
-    box-shadow: 0 0 0 3px rgba(36, 145, 250, 0.2);
+    box-shadow: 0 0 0 3px rgba(36, 145, 250, 0.25);
     outline: none;
-    transform: scale(1.05);
+    transform: scale(1.06);
+  }
+
+  /* Liquid Glow Action Button */
+  .liquid-btn-primary {
+    position: relative;
+    overflow: hidden;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .liquid-btn-primary::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(60deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    transform: rotate(25deg);
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  .liquid-btn-primary:hover::after {
+    opacity: 1;
+    animation: liquidShine 1.5s infinite;
+  }
+  .liquid-btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 24px -6px rgba(36, 145, 250, 0.45);
+  }
+  .liquid-btn-primary:active {
+    transform: translateY(0) scale(0.98);
   }
 
   /* Flatpickr Custom Theme (Clubhouse & Prompt font) */
@@ -301,39 +414,52 @@
 </head>
 <body class="bg-white min-h-screen text-[#201E1C] flex flex-col">
 
-  <!-- ================= LOGIN SCREEN OVERLAY ================= -->
-  <div id="loginScreen" class="fixed inset-0 z-50 bg-[#201E1C]/90 backdrop-blur-md flex items-center justify-center p-4">
-    <div class="w-full max-w-md bg-white rounded-3xl shadow-2xl p-6 sm:p-8 border border-[#EFE9DC]">
+  <!-- ================= LOGIN SCREEN OVERLAY (LIQUID GLASS - FROSTED MILK) ================= -->
+  <div id="loginScreen" class="fixed inset-0 z-50 liquid-login-backdrop flex items-center justify-center p-4 overflow-hidden">
+    
+    <!-- Fluid Floating Orbs Background (Liquid Engine) -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden z-0">
+      <div class="absolute -top-24 -left-24 w-96 h-96 rounded-full bg-sky-300/45 blur-3xl orb-1"></div>
+      <div class="absolute top-1/3 -right-20 w-[28rem] h-[28rem] rounded-full bg-amber-200/50 blur-3xl orb-2"></div>
+      <div class="absolute -bottom-28 left-1/4 w-[32rem] h-[32rem] rounded-full bg-rose-200/45 blur-3xl orb-3"></div>
+      <div class="absolute top-2/3 right-1/3 w-80 h-80 rounded-full bg-teal-200/40 blur-3xl orb-4"></div>
+    </div>
+
+    <!-- Main Liquid Glass Card -->
+    <div class="relative z-10 w-full max-w-md liquid-card-milk rounded-[2.5rem] p-6 sm:p-8 my-auto">
       
-      <!-- Brand & Header -->
-      <div class="text-center mb-5">
-        <div class="w-14 h-14 rounded-2xl bg-[#2491FA] text-white flex items-center justify-center mx-auto mb-3 shadow-lg shadow-blue-500/25 p-2.5">
-          <!-- Modern Work Tracker Logo SVG -->
-          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full text-white">
-            <rect x="18" y="20" width="64" height="68" rx="14" stroke="currentColor" stroke-width="6" fill="currentColor" fill-opacity="0.12" />
-            <rect x="36" y="11" width="28" height="15" rx="6" fill="currentColor" />
-            <rect x="43" y="16" width="14" height="4.5" rx="2" fill="#2491FA" />
-            <path d="M29 40L35.5 46.5L48 34" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-            <rect x="55" y="37.5" width="23" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
-            <path d="M29 57L35.5 63.5L48 51" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
-            <rect x="55" y="54.5" width="20" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
-            <circle cx="38.5" cy="73" r="4.5" fill="currentColor" />
-            <rect x="55" y="70.5" width="16" height="5" rx="2.5" fill="currentColor" fill-opacity="0.6" />
-          </svg>
+      <!-- Brand & Header with Ambient Glow -->
+      <div class="text-center mb-6">
+        <div class="relative w-16 h-16 mx-auto mb-3.5 group">
+          <div class="absolute inset-0 rounded-2xl bg-gradient-to-tr from-[#2491FA] to-sky-400 blur-md opacity-40 group-hover:opacity-70 transition-opacity"></div>
+          <div class="relative w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#2491FA] to-sky-500 border border-white/50 text-white flex items-center justify-center p-3 shadow-lg shadow-blue-500/25">
+            <!-- Modern Work Tracker Logo SVG -->
+            <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-full h-full text-white">
+              <rect x="18" y="20" width="64" height="68" rx="14" stroke="currentColor" stroke-width="6" fill="currentColor" fill-opacity="0.12" />
+              <rect x="36" y="11" width="28" height="15" rx="6" fill="currentColor" />
+              <rect x="43" y="16" width="14" height="4.5" rx="2" fill="#2491FA" />
+              <path d="M29 40L35.5 46.5L48 34" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+              <rect x="55" y="37.5" width="23" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+              <path d="M29 57L35.5 63.5L48 51" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+              <rect x="55" y="54.5" width="20" height="5" rx="2.5" fill="currentColor" fill-opacity="0.9" />
+              <circle cx="38.5" cy="73" r="4.5" fill="currentColor" />
+              <rect x="55" y="70.5" width="16" height="5" rx="2.5" fill="currentColor" fill-opacity="0.6" />
+            </svg>
+          </div>
         </div>
-        <h2 class="text-xl font-bold text-[#201E1C]">ระบบบริหารจัดการงานและไซต์งาน</h2>
+        <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-[#201E1C]">ระบบบริหารจัดการงานและไซต์งาน</h2>
         <p class="text-xs text-[#6E6862] mt-1 font-medium">Work Tracker & Remote Desktop Portal</p>
       </div>
 
-      <!-- LOGIN METHOD TABS -->
-      <div class="flex p-1 bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC] mb-5 text-xs font-bold">
+      <!-- LOGIN METHOD TABS (LIQUID GLASS) -->
+      <div class="flex p-1.5 glass-tab-container-milk rounded-2xl mb-6 text-xs font-bold">
         <button type="button" id="tabLoginPin" onclick="switchLoginMethod('pin')"
-                class="flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                class="flex-1 py-2.5 rounded-xl glass-tab-active-milk transition-all flex items-center justify-center gap-2 cursor-pointer">
           <i class="fa-brands fa-telegram text-sm"></i>
           <span>รหัส PIN (Telegram)</span>
         </button>
         <button type="button" id="tabLoginPassword" onclick="switchLoginMethod('password')"
-                class="flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                class="flex-1 py-2.5 rounded-xl glass-tab-inactive-milk transition-all flex items-center justify-center gap-2 cursor-pointer">
           <i class="fa-solid fa-key text-xs"></i>
           <span>รหัสผ่านสำรอง</span>
         </button>
@@ -349,17 +475,17 @@
               <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                 <i class="fa-regular fa-user"></i>
               </div>
-              <input type="text" id="loginUsername" placeholder="กรอกชื่อผู้ใช้" autocomplete="username"
-                     class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
+              <input type="text" id="loginUsername" placeholder="กรอกชื่อผู้ใช้ เช่น admin, notlido" autocomplete="username"
+                     class="w-full pl-10 pr-4 py-3.5 text-sm glass-input-milk rounded-xl font-medium">
             </div>
-            <p class="text-[11px] text-[#6E6862] mt-1.5 flex items-center gap-1">
-              <i class="fa-brands fa-telegram text-[#2491FA]"></i>
+            <div class="mt-2 p-2.5 rounded-xl flex items-center gap-2 text-[11px] bg-white/50 border border-[#EFE9DC]/80 text-[#6E6862]">
+              <i class="fa-brands fa-telegram text-[#2491FA] text-sm"></i>
               <span>ระบบจะสุ่มรหัส PIN 6 หลัก และส่งเข้า Telegram ของคุณ</span>
-            </p>
+            </div>
           </div>
 
           <button type="button" id="btnRequestPin" onclick="handleRequestPin()"
-                  class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  class="liquid-btn-primary w-full py-3.5 text-sm font-bold text-white bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer">
             <i class="fa-brands fa-telegram text-base"></i>
             <span>ขอรหัส PIN ทาง Telegram</span>
           </button>
@@ -367,25 +493,25 @@
 
         <!-- STEP 2: INPUT 6-DIGIT PIN -->
         <div id="loginStep2" class="hidden space-y-5">
-          <div class="bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC] flex items-center justify-between">
-            <div class="flex items-center gap-2 text-xs text-[#201E1C]">
-              <div class="w-7 h-7 rounded-full bg-[#2491FA] text-white flex items-center justify-center text-xs">
-                <i class="fa-regular fa-user"></i>
+          <div class="bg-white/60 p-3 rounded-xl border border-[#EFE9DC] flex items-center justify-between">
+            <div class="flex items-center gap-2.5 text-xs text-[#201E1C]">
+              <div class="w-8 h-8 rounded-full bg-gradient-to-tr from-sky-400 to-[#2491FA] text-white flex items-center justify-center text-xs shadow-sm font-bold">
+                <i class="fa-solid fa-user-check"></i>
               </div>
               <div>
-                <div id="loginUserDisplay" class="font-bold">-</div>
-                <div id="loginUsernameDisplay" class="text-[10px] text-[#2491FA]">-</div>
+                <div id="loginUserDisplay" class="font-bold leading-tight">-</div>
+                <div id="loginUsernameDisplay" class="text-[10px] text-[#2491FA] font-medium">-</div>
               </div>
             </div>
-            <button onclick="backToStep1()" class="text-xs text-[#6E6862] hover:text-[#2491FA] underline">
+            <button onclick="backToStep1()" class="text-xs text-[#6E6862] hover:text-[#2491FA] underline transition-colors cursor-pointer">
               เปลี่ยนผู้ใช้
             </button>
           </div>
 
           <div>
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between mb-2.5">
               <label class="text-xs font-semibold text-[#201E1C]">กรอกรหัส PIN 6 หลัก</label>
-              <span id="pinCountdown" class="text-xs font-semibold text-rose-600 flex items-center gap-1">
+              <span id="pinCountdown" class="text-xs font-bold text-rose-600 flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-rose-50 border border-rose-200">
                 <i class="fa-regular fa-clock text-[11px]"></i>
                 <span id="countdownTimerText">05:00</span>
               </span>
@@ -403,14 +529,14 @@
           </div>
 
           <button type="button" id="btnVerifyPin" onclick="handleVerifyPin()"
-                  class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  class="liquid-btn-primary w-full py-3.5 text-sm font-bold text-white bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-600 rounded-xl shadow-lg shadow-teal-500/25 flex items-center justify-center gap-2 cursor-pointer">
             <i class="fa-solid fa-lock-open text-xs"></i>
             <span>เข้าสู่ระบบด้วย PIN</span>
           </button>
 
           <div class="text-center">
             <button type="button" id="btnResendPin" onclick="handleRequestPin()"
-                  class="text-xs font-medium text-[#6E6862] hover:text-[#2491FA] transition-colors">
+                  class="text-xs font-medium text-[#6E6862] hover:text-[#2491FA] transition-colors cursor-pointer">
               ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>
             </button>
           </div>
@@ -427,7 +553,7 @@
                 <i class="fa-regular fa-user"></i>
               </div>
               <input type="text" id="loginPassUsername" required placeholder="กรอกชื่อผู้ใช้" autocomplete="username"
-                     class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
+                     class="w-full pl-10 pr-4 py-3.5 text-sm glass-input-milk rounded-xl font-medium">
             </div>
           </div>
 
@@ -438,16 +564,25 @@
                 <i class="fa-solid fa-lock text-xs"></i>
               </div>
               <input type="password" id="loginPassPassword" required placeholder="กรอกรหัสผ่าน" autocomplete="current-password"
-                     class="w-full pl-10 pr-4 py-3 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none font-medium text-[#201E1C]">
+                     class="w-full pl-10 pr-4 py-3.5 text-sm glass-input-milk rounded-xl font-medium">
             </div>
           </div>
 
           <button type="submit" id="btnLoginPassword"
-                  class="w-full py-3 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer">
+                  class="liquid-btn-primary w-full py-3.5 text-sm font-bold text-white bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 rounded-xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 cursor-pointer">
             <i class="fa-solid fa-right-to-bracket text-xs"></i>
             <span>เข้าสู่ระบบด้วยรหัสผ่าน</span>
           </button>
         </form>
+      </div>
+
+      <!-- Security Micro Badge -->
+      <div class="mt-6 pt-4 border-t border-black/5 flex items-center justify-between text-[11px] text-[#6E6862]">
+        <span class="flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span>Secure 256-bit TLS</span>
+        </span>
+        <span>Liquid Glass UI</span>
       </div>
 
     </div>
@@ -7728,19 +7863,19 @@ function switchLoginMethod(method) {
 
   if (method === 'pin') {
     if (tabPin) {
-      tabPin.className = 'flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPin.className = 'flex-1 py-2.5 rounded-xl glass-tab-active-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (tabPass) {
-      tabPass.className = 'flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPass.className = 'flex-1 py-2.5 rounded-xl glass-tab-inactive-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (methodPin) methodPin.classList.remove('hidden');
     if (methodPass) methodPass.classList.add('hidden');
   } else {
     if (tabPass) {
-      tabPass.className = 'flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPass.className = 'flex-1 py-2.5 rounded-xl glass-tab-active-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (tabPin) {
-      tabPin.className = 'flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPin.className = 'flex-1 py-2.5 rounded-xl glass-tab-inactive-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (methodPass) methodPass.classList.remove('hidden');
     if (methodPin) methodPin.classList.add('hidden');

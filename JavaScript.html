@@ -4677,19 +4677,19 @@ function switchLoginMethod(method) {
 
   if (method === 'pin') {
     if (tabPin) {
-      tabPin.className = 'flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPin.className = 'flex-1 py-2.5 rounded-xl glass-tab-active-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (tabPass) {
-      tabPass.className = 'flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPass.className = 'flex-1 py-2.5 rounded-xl glass-tab-inactive-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (methodPin) methodPin.classList.remove('hidden');
     if (methodPass) methodPass.classList.add('hidden');
   } else {
     if (tabPass) {
-      tabPass.className = 'flex-1 py-2 rounded-xl bg-white text-[#2491FA] shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPass.className = 'flex-1 py-2.5 rounded-xl glass-tab-active-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (tabPin) {
-      tabPin.className = 'flex-1 py-2 rounded-xl text-[#6E6862] hover:text-[#201E1C] transition-all flex items-center justify-center gap-1.5 cursor-pointer';
+      tabPin.className = 'flex-1 py-2.5 rounded-xl glass-tab-inactive-milk transition-all flex items-center justify-center gap-2 cursor-pointer';
     }
     if (methodPass) methodPass.classList.remove('hidden');
     if (methodPin) methodPin.classList.add('hidden');
