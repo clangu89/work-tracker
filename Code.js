@@ -928,6 +928,18 @@ function checkTasksUpdate(clientVersion, username) {
     }
 
     const initialData = getInitialData(username);
+
+    // กรอง meta ตามสิทธิ์ไซต์งานของผู้ใช้ (Site Permission Isolation)
+    if (meta && meta.site && initialData && initialData.currentUserProfile) {
+      const userProfile = initialData.currentUserProfile;
+      if (userProfile.role !== 'Admin' && Array.isArray(userProfile.allowedSites)) {
+        const allowedSet = new Set(userProfile.allowedSites);
+        if (!allowedSet.has(meta.site)) {
+          meta = null; // ตัด meta ทิ้งสำหรับผู้ใช้ที่ไม่มีสิทธิ์ในไซต์นี้
+        }
+      }
+    }
+
     return {
       hasUpdate: true,
       version: serverVersion,
@@ -1150,6 +1162,7 @@ function saveTask(taskData) {
     notifyDataChanged_({
       type: 'TASK_SAVED',
       taskId: finalTaskId,
+      site: String(savedTask.site || '').trim(),
       isNew: isNew,
       title: savedTask.title,
       status: savedTask.status
@@ -1214,6 +1227,7 @@ function updateTaskStatus(taskId, newStatus) {
     notifyDataChanged_({
       type: 'STATUS_CHANGE',
       taskId: taskId,
+      site: String(currentTask.site || '').trim(),
       oldStatus: currentTask.oldStatus,
       newStatus: newStatus,
       title: currentTask.title
@@ -1263,7 +1277,9 @@ function deleteTask(taskId) {
 
     notifyDataChanged_({
       type: 'TASK_DELETED',
-      taskId: taskId
+      taskId: taskId,
+      site: targetRow[1] ? String(targetRow[1]).trim() : '',
+      title: targetRow[2] ? String(targetRow[2]).trim() : ''
     });
 
     return { success: true, taskId: taskId };
@@ -1490,7 +1506,9 @@ function archiveSingleTask(taskId) {
 
     notifyDataChanged_({
       type: 'TASK_ARCHIVED',
-      taskId: taskId
+      taskId: taskId,
+      site: targetRow[1] ? String(targetRow[1]).trim() : '',
+      title: targetRow[2] ? String(targetRow[2]).trim() : ''
     });
 
     return { success: true, taskId: taskId };
@@ -1705,6 +1723,7 @@ function restoreArchivedTask(taskId) {
     notifyDataChanged_({
       type: 'TASK_RESTORED',
       taskId: taskId,
+      site: String(restoredTask.site || '').trim(),
       title: restoredTask.title
     });
 

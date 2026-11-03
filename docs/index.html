@@ -6396,8 +6396,16 @@ function handleRealtimeSyncResponse(res) {
     // ตรวจสอบว่าเป็นการกระทำของตนเองหรือไม่ (หากเพิ่งทำใน 5 วินาทีที่แล้ว ไม่ต้องเด้ง Toast แจ้งเตือนตัวเอง)
     const isSelfAction = (res.meta && res.meta.taskId && res.meta.taskId === state.lastOwnTaskId && (Date.now() - state.lastOwnActionTime) < 5000);
 
+    // ตรวจสอบสิทธิ์การเข้าถึงไซต์งานของเหตุการณ์ เพื่อป้องกันการแจ้งเตือนรั่วไหลข้ามไซต์ (Defense-in-Depth)
+    const userRole = state.currentUser ? state.currentUser.role : 'Member';
+    const userAllowedSites = state.currentUser ? state.currentUser.allowedSites : 'ALL';
+    const isAllowedForUser = !res.meta || !res.meta.site || 
+      userRole === 'Admin' || 
+      userAllowedSites === 'ALL' || 
+      (Array.isArray(userAllowedSites) && userAllowedSites.includes(res.meta.site));
+
     let changedTaskId = null;
-    if (res.meta) {
+    if (res.meta && isAllowedForUser) {
       changedTaskId = res.meta.taskId;
 
       // ถ้าไม่ใช่การกระทำของตนเอง ให้แสดง SweetAlert Toast และเอฟเฟกต์การ์ดเด้ง
@@ -6414,8 +6422,8 @@ function handleRealtimeSyncResponse(res) {
       }
     }
 
-    // กำหนด Highlight ให้การ์ดที่เปลี่ยนสถานะหรืออัปเดต เพื่อให้มีคลาสเด้ง (task-card-bounce)
-    if (changedTaskId) {
+    // กำหนด Highlight ให้การ์ดที่เปลี่ยนสถานะหรืออัปเดต เฉพาะเมื่อการ์ดนั้นมีอยู่ในรายการงานของผู้ใช้
+    if (changedTaskId && state.tasks.some(t => t.id === changedTaskId)) {
       state.highlightTaskId = changedTaskId;
     }
 
