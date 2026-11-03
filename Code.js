@@ -621,6 +621,8 @@ function saveSitesList(sitesArray, siteChatIds) {
       updateOrAdd('SITE_TELEGRAM_CHAT_IDS', JSON.stringify(cleanChatIds), 'Chat ID กลุ่ม Telegram แต่ละไซต์งาน (JSON Object)');
     }
 
+    notifyDataChanged_({ type: 'SITES_UPDATED', desc: 'อัปเดตรายชื่อไซต์งาน' });
+
     return { 
       success: true, 
       message: 'บันทึกรายชื่อไซต์งานสำเร็จ', 
@@ -2434,6 +2436,8 @@ function saveUser(userData) {
       sheet.appendRow([...rowValues, '', allowedSitesVal, passHashToSave, allowedAppsVal, allowedRdpSitesVal]);
     }
 
+    notifyDataChanged_({ type: 'USERS_UPDATED', desc: 'อัปเดตข้อมูลผู้ใช้งาน' });
+
     return { success: true, message: 'บันทึกข้อมูลผู้ใช้เรียบร้อย' };
   } catch (error) {
     return { success: false, message: error.message };
@@ -2458,6 +2462,7 @@ function deleteUser(username) {
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][0]).trim().toLowerCase() === username) {
         sheet.deleteRow(i + 1);
+        notifyDataChanged_({ type: 'USERS_UPDATED', desc: 'ลบผู้ใช้งาน' });
         return { success: true, message: 'ลบผู้ใช้เรียบร้อยแล้ว' };
       }
     }

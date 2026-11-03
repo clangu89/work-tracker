@@ -1051,7 +1051,7 @@
 
         <!-- Clear All Filters Button -->
         <button id="btnClearAllFilters" type="button" onclick="clearAllFilters()" title="ล้างตัวกรองทั้งหมด (แสดงงานทั้งหมด)"
-                class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#6E6862] hover:text-rose-600 bg-white hover:bg-rose-50 border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs">
+                class="hidden items-center gap-1.5 px-3 py-2 text-xs font-semibold text-[#6E6862] hover:text-rose-600 bg-white hover:bg-rose-50 border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs">
           <i class="fa-solid fa-filter-circle-xmark text-xs text-rose-500"></i>
           <span>ล้างตัวกรอง</span>
         </button>
@@ -3302,8 +3302,11 @@ const state = {
   loginMethod: 'pin',
   currentApp: sessionStorage.getItem('current_active_app') || 'launcher',
   countdownInterval: null,
-  archivedTasks: []
+  archivedTasks: [],
+  wtInitialized: false,
+  wtLoadedForUser: ''
 };
+window.state = state;
 
 // Site Color Palettes for visual differentiation
 const SITE_COLORS = [
@@ -3455,12 +3458,11 @@ function onDataLoaded(response) {
     sheetLinkBtn.classList.remove('hidden');
   }
 
-  // อัปเดตตัวเลือก Dropdown ไซต์งาน และ ผู้รับผิดชอบ
-  renderSiteFilterOptions();
-  renderAssigneeFilterOptions();
-  renderSiteFormOptions();
-  renderAssigneeFormOptions();
-  renderUserReportersList();
+  state.wtInitialized = true;
+  state.wtLoadedForUser = state.currentUser ? state.currentUser.username : '';
+
+  // อัปเดตตัวเลือก Dropdown ไซต์งาน และ ผู้รับผิดชอบ ทั้งหมด
+  syncWorkTrackerDropdowns();
 
   // กำหนดค่าเริ่มต้นช่วงวันครบกำหนดส่ง (ดีฟอลต์เป็นทั้งหมดทุกช่วงเวลา)
   initDueDateFilter(false);
@@ -5396,6 +5398,16 @@ function getAssigneeTasksCount(assigneeName) {
   }).length;
 }
 
+function syncWorkTrackerDropdowns() {
+  renderSiteFilterOptions();
+  renderAssigneeFilterOptions();
+  renderSiteFormOptions();
+  renderAssigneeFormOptions();
+  renderUserReportersList();
+  updateClearFilterBtnVisibility();
+}
+window.syncWorkTrackerDropdowns = syncWorkTrackerDropdowns;
+
 function renderSiteFilterOptions() {
   const select = document.getElementById('siteFilter');
   if (!select) return;
@@ -5405,14 +5417,32 @@ function renderSiteFilterOptions() {
 
   let optionsHtml = `<option value="ALL" ${currentVal === 'ALL' ? 'selected' : ''}>🏢 ทุกไซต์งานทั้งหมด (${totalTasks})</option>`;
   
-  const sitesList = (state.sites && state.sites.length > 0) ? state.sites : (state.allSites || []);
+  // รวบรวมรายชื่อไซต์งานจาก state.sites, state.allSites และจากงานจริงใน state.tasks
+  const sitesList = [];
+  const sourceSites = (state.sites && state.sites.length > 0) ? state.sites : (state.allSites || []);
+  sourceSites.forEach(s => {
+    const clean = String(s || '').trim();
+    if (clean && !sitesList.includes(clean)) sitesList.push(clean);
+  });
+  if (state.tasks && state.tasks.length > 0) {
+    state.tasks.forEach(t => {
+      const clean = String(t.site || '').trim();
+      if (clean && clean !== 'ไม่ระบุไซต์งาน' && !sitesList.includes(clean)) {
+        sitesList.push(clean);
+      }
+    });
+  }
+
   sitesList.forEach(site => {
     const count = getSiteTasksCount(site);
     optionsHtml += `<option value="${escapeHtml(site)}" ${site === currentVal ? 'selected' : ''}>${escapeHtml(site)} (${count})</option>`;
   });
 
   select.innerHTML = optionsHtml;
-  if (currentVal && select.value !== currentVal) {
+  if (currentVal !== 'ALL' && !sitesList.includes(currentVal)) {
+    state.filters.site = 'ALL';
+    select.value = 'ALL';
+  } else if (currentVal && select.value !== currentVal) {
     select.value = currentVal;
   }
 }
@@ -6341,6 +6371,18 @@ function handleRealtimeSyncResponse(res) {
       state.highlightTaskId = changedTaskId;
     }
 
+    if (data.currentUserProfile && state.currentUser) {
+      state.currentUser = { ...state.currentUser, ...data.currentUserProfile };
+      sessionStorage.setItem('work_tracker_session', JSON.stringify(state.currentUser));
+      updateNavbarUser();
+    }
+
+    state.wtInitialized = true;
+    state.wtLoadedForUser = state.currentUser ? state.currentUser.username : '';
+
+    // ซิงค์ตัวเลือก Dropdown ทั้งหมด (ไซต์งาน, ผู้รับผิดชอบ, ฯลฯ)
+    syncWorkTrackerDropdowns();
+
     // เรนเดอร์แดชบอร์ดใหม่ โดยไม่รีเซ็ตฟิลเตอร์ที่ผู้ใช้กำลังดูอยู่
     renderDashboard();
 
@@ -6775,6 +6817,17 @@ function handleLogout() {
       state.currentUser = null;
       state.loginUsername = '';
       state.currentApp = 'launcher';
+      state.tasks = [];
+      state.sites = [];
+      state.allSites = [];
+      state.users = [];
+      state.tasksVersion = '0';
+      state.wtInitialized = false;
+      state.wtLoadedForUser = '';
+      state.filters.site = 'ALL';
+      state.filters.assignee = 'ALL';
+      state.filters.priority = 'ALL';
+      state.filters.search = '';
       state.filters.dueDateInitialized = false;
       state.filters.dueDateFrom = '';
       state.filters.dueDateTo = '';
@@ -8086,8 +8139,21 @@ function enterApp(appKey) {
     if (rdpApp) rdpApp.classList.add('hidden');
     if (adminApp) adminApp.classList.add('hidden');
 
-    if (!state.tasks || state.tasks.length === 0) {
+    const curUser = state.currentUser ? state.currentUser.username : '';
+    const needsLoad = !state.wtInitialized || 
+                      state.wtLoadedForUser !== curUser || 
+                      !state.tasks || 
+                      state.tasks.length === 0 || 
+                      !state.sites || 
+                      state.sites.length === 0;
+
+    if (needsLoad) {
       loadInitialData();
+    } else {
+      syncWorkTrackerDropdowns();
+      renderDashboard();
+      startRealtimeSync();
+      checkRealtimeUpdates();
     }
   } else if (appKey === 'rdp_manager') {
     if (rdpApp) rdpApp.classList.remove('hidden');
@@ -8374,6 +8440,7 @@ const rdpState = {
   editingSiteMachines: [],
   isLoading: false
 };
+window.rdpState = rdpState;
 
 /**
  * เริ่มต้นทำงานเมื่อเปิดเข้าสู่หน้าจอ RDP Manager
@@ -9183,6 +9250,7 @@ const adminState = {
   isLoading: false,
   bulkMode: false
 };
+window.adminState = adminState;
 
 /**
  * เริ่มต้นทำงานเมื่อเปิดเข้าสู่หน้าจอ Admin Center
@@ -9281,7 +9349,14 @@ function loadAdminData(forceRefresh = false) {
 
         // ซิงค์ข้อมูลกับ Global States เพื่อให้ทั้งระบบมองเห็นข้อมูลไซต์ร่วมกัน
         if (window.state) {
-          state.sites = adminState.wtSites;
+          state.allSites = adminState.wtSites;
+          if (state.currentUser && state.currentUser.role === 'Admin') {
+            state.sites = adminState.wtSites;
+          }
+          state.users = adminState.users;
+          if (typeof syncWorkTrackerDropdowns === 'function') {
+            syncWorkTrackerDropdowns();
+          }
         }
         if (window.rdpState) {
           if (!rdpState.sites || rdpState.sites.length === 0) rdpState.sites = adminState.rdpSites;
@@ -10053,7 +10128,13 @@ function saveAdminSitesChanges() {
     adminState.settings.SITES = adminState.wtSites;
   }
   if (window.state) {
-    state.sites = adminState.wtSites;
+    state.allSites = adminState.wtSites;
+    if (state.currentUser && state.currentUser.role === 'Admin') {
+      state.sites = adminState.wtSites;
+    }
+    if (typeof syncWorkTrackerDropdowns === 'function') {
+      syncWorkTrackerDropdowns();
+    }
   }
 
   const btn = document.getElementById("btnAdminSaveSites");

@@ -25,6 +25,7 @@ const adminState = {
   isLoading: false,
   bulkMode: false
 };
+window.adminState = adminState;
 
 /**
  * เริ่มต้นทำงานเมื่อเปิดเข้าสู่หน้าจอ Admin Center
@@ -123,7 +124,14 @@ function loadAdminData(forceRefresh = false) {
 
         // ซิงค์ข้อมูลกับ Global States เพื่อให้ทั้งระบบมองเห็นข้อมูลไซต์ร่วมกัน
         if (window.state) {
-          state.sites = adminState.wtSites;
+          state.allSites = adminState.wtSites;
+          if (state.currentUser && state.currentUser.role === 'Admin') {
+            state.sites = adminState.wtSites;
+          }
+          state.users = adminState.users;
+          if (typeof syncWorkTrackerDropdowns === 'function') {
+            syncWorkTrackerDropdowns();
+          }
         }
         if (window.rdpState) {
           if (!rdpState.sites || rdpState.sites.length === 0) rdpState.sites = adminState.rdpSites;
@@ -895,7 +903,13 @@ function saveAdminSitesChanges() {
     adminState.settings.SITES = adminState.wtSites;
   }
   if (window.state) {
-    state.sites = adminState.wtSites;
+    state.allSites = adminState.wtSites;
+    if (state.currentUser && state.currentUser.role === 'Admin') {
+      state.sites = adminState.wtSites;
+    }
+    if (typeof syncWorkTrackerDropdowns === 'function') {
+      syncWorkTrackerDropdowns();
+    }
   }
 
   const btn = document.getElementById("btnAdminSaveSites");
