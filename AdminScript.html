@@ -1161,6 +1161,84 @@ function deleteAdminGroupConfirm(groupId, groupName) {
 // SCREEN 5: AUDIT LOGS & LEGACY DATA MIGRATION
 // --------------------------------------------------------------------
 
+/**
+ * แปลงวันเวลาดิบเป็นเวลาท้องถิ่นของประเทศไทย (Asia/Bangkok, UTC+07:00)
+ * รูปแบบ 3: YYYY-MM-DD HH:mm:ss (ปี ค.ศ. เวลาไทย 24 ชม.)
+ * @param {string|Date|number} raw
+ * @returns {string}
+ */
+function formatThaiDateTime(raw) {
+  if (!raw) return '-';
+  try {
+    let d = null;
+    if (raw instanceof Date) {
+      d = raw;
+    } else if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (!trimmed) return '-';
+      // ถ้าเป็นรูปแบบ YYYY-MM-DD HH:mm:ss อยู่แล้ว
+      if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(trimmed)) {
+        return trimmed;
+      }
+      // ทำความสะอาดข้อความในวงเล็บ เช่น (เวลาอินโดจีน)
+      const cleaned = trimmed.replace(/\([^)]*\)/g, '').trim();
+      d = new Date(cleaned);
+    } else if (typeof raw === 'number') {
+      d = new Date(raw);
+    }
+
+    if (!d || isNaN(d.getTime())) return String(raw);
+
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(d).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+
+    return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
+  } catch (e) {
+    return String(raw);
+  }
+}
+window.formatThaiDateTime = formatThaiDateTime;
+
+/**
+ * ดึงและรีเฟรชประวัติกิจกรรมในระบบ (Audit Logs) ล่าสุด
+ */
+function loadAdminAuditLogs() {
+  const tbody = document.getElementById("adminAuditLogsTableBody");
+  if (tbody) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="5" class="px-4 py-8 text-center text-[#6E6862] text-xs">
+          <i class="fa-solid fa-spinner fa-spin mr-2 text-[#2491FA]"></i>กำลังโหลดประวัติการใช้งานล่าสุด...
+        </td>
+      </tr>
+    `;
+  }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success && Array.isArray(res.logs)) {
+        adminState.auditLogs = res.logs;
+      } else if (res && res.success && Array.isArray(res.auditLogs)) {
+        adminState.auditLogs = res.auditLogs;
+      }
+      renderAdminAuditLogs();
+    })
+    .withFailureHandler(err => {
+      console.warn("loadAdminAuditLogs failed:", err);
+      renderAdminAuditLogs();
+    })
+    .getRdpAuditLogs(100);
+}
+window.loadAdminAuditLogs = loadAdminAuditLogs;
+
 function triggerLegacyRdpMigration() {
   if (!confirm("คุณต้องการเริ่มการโอนย้าย/ซิงค์ข้อมูลจากสเปรดชีต RDP Manager เดิมใช่หรือไม่?\n(ระบบจะอ่านข้อมูลไซต์, เครื่อง, รหัสผ่าน, และสิทธิ์มารวมไว้ที่ฐานข้อมูลหลักให้อัตโนมัติ)")) {
     return;
@@ -1258,7 +1336,7 @@ function renderAdminAuditLogs() {
     return `
       <tr class="hover:bg-[#FAF8F2] transition-colors">
         <td class="px-4 py-3 align-middle text-[#6E6862] font-mono whitespace-nowrap">
-          ${escapeHtml(l.timestamp)}
+          ${escapeHtml(formatThaiDateTime(l.timestamp))}
         </td>
         <td class="px-4 py-3 align-middle font-bold text-[#201E1C] font-mono">
           ${escapeHtml(l.username)}

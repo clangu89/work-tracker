@@ -118,8 +118,14 @@ function getRdpAuditLogs(limit = 100) {
     for (let i = data.length - 1; i >= data.length - maxRows; i--) {
       const row = data[i];
       if (!row[0] && !row[1]) continue;
+      let ts = row[0];
+      if (ts instanceof Date) {
+        ts = Utilities.formatDate(ts, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+      } else {
+        ts = String(ts || '');
+      }
       logs.push({
-        timestamp: row[0] ? String(row[0]) : '',
+        timestamp: ts,
         username: String(row[1] || ''),
         action: String(row[2] || ''),
         targetId: String(row[3] || ''),
