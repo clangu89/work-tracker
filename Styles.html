@@ -159,6 +159,15 @@
   .orb-4 { animation: floatOrb4 22s ease-in-out infinite alternate; }
 
   /* ================= LIQUID GLASS CONTROL CENTER (LIGHT THEME) ================= */
+  @property --lg-angle {
+    syntax: '<angle>';
+    initial-value: 0deg;
+    inherits: false;
+  }
+  @keyframes lgBorderSpin {
+    to { --lg-angle: 360deg; }
+  }
+
   .lg-wallpaper {
     background: radial-gradient(120% 90% at 20% 10%, #fdf8ee 0%, #efe6d6 60%, #e4d8c4 100%);
   }
@@ -166,10 +175,11 @@
   /* Liquid Glass Core (Translucent Apple Glass) */
   .lg-glass {
     position: relative;
-    background: linear-gradient(145deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.22) 100%);
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0.18) 100%);
     backdrop-filter: blur(28px) saturate(180%);
     -webkit-backdrop-filter: blur(28px) saturate(180%);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90),
+    box-shadow: 0 0 0 1px rgba(110, 90, 65, 0.10),
+                inset 0 1px 0 rgba(255, 255, 255, 0.60),
                 0 18px 50px -12px rgba(60, 40, 20, 0.18);
     color: #1d1b19;
   }
@@ -178,16 +188,67 @@
     position: absolute;
     inset: 0;
     border-radius: inherit;
-    padding: 1.2px;
+    padding: 1px;
     pointer-events: none;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.15) 35%, rgba(255, 255, 255, 0.05) 65%, rgba(255, 255, 255, 0.55));
+    background: rgba(255, 255, 255, 0.28);
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
   }
 
+  /* Thin White Border Beam (Single Comet Style) */
+  .lg-beam-card,
+  .lg-beam-icon {
+    position: relative;
+  }
+  .lg-beam-card::after,
+  .lg-beam-icon::after {
+    content: '';
+    position: absolute;
+    inset: -0.5px;
+    border-radius: inherit;
+    padding: 1.8px;
+    pointer-events: none;
+    z-index: 2;
+    --lg-angle: 0deg;
+    background: conic-gradient(
+      from var(--lg-angle),
+      transparent 0deg,
+      transparent 265deg,
+      rgba(255, 255, 255, 0.30) 300deg,
+      rgba(255, 255, 255, 0.90) 335deg,
+      #ffffff 355deg,
+      rgba(255, 255, 255, 0.45) 360deg
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    filter: drop-shadow(0 0 4px #ffffff) drop-shadow(0 0 8px rgba(255, 255, 255, 0.85));
+    animation: lgBorderSpin var(--beam-dur, 5.5s) linear infinite;
+    animation-delay: var(--beam-delay, 0s);
+  }
+
+  .lg-beam-icon::after {
+    inset: -1.5px;
+    padding: 2px;
+    --beam-dur: 3.8s;
+  }
+
+  .lg-beam-card:hover::after,
+  .lg-beam-icon:hover::after {
+    filter: drop-shadow(0 0 6px #ffffff) drop-shadow(0 0 12px rgba(255, 255, 255, 0.95));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lg-beam-card::after,
+    .lg-beam-icon::after {
+      animation: none;
+    }
+  }
+
   /* Apple Control Center Circular Filled Buttons / Badges */
   .lg-circle {
+    position: relative;
     border-radius: 9999px;
     display: grid;
     place-items: center;

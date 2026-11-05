@@ -60,11 +60,11 @@
     </div>
 
     <!-- Main Liquid Glass Card (iOS Control Center Style) -->
-    <div class="relative z-10 w-full max-w-md lg-glass rounded-[44px] p-7 sm:p-9 my-auto overflow-hidden text-[#1d1b19]">
+    <div class="relative z-10 w-full max-w-md lg-glass lg-beam-card rounded-[44px] p-7 sm:p-9 my-auto text-[#1d1b19]">
       
       <!-- Brand & Header -->
       <div class="text-center mb-6">
-        <div class="w-16 h-16 mx-auto mb-3.5 lg-circle lg-fill-blue text-2xl shadow-lg">
+        <div class="w-16 h-16 mx-auto mb-3.5 lg-circle lg-fill-blue lg-beam-icon text-2xl shadow-lg">
           <i class="fa-solid fa-list-check"></i>
         </div>
         <h2 class="text-xl sm:text-2xl font-bold tracking-tight text-[#1d1b19]">ระบบบริหารจัดการงานและไซต์งาน</h2>
@@ -115,7 +115,7 @@
         <div id="loginStep2" class="hidden space-y-5">
           <div class="lg-glass p-3.5 rounded-2xl flex items-center justify-between">
             <div class="flex items-center gap-2.5 text-xs text-[#1d1b19]">
-              <div class="w-8 h-8 lg-circle lg-fill-blue text-xs font-bold">
+              <div class="w-8 h-8 lg-circle lg-fill-blue lg-beam-icon text-xs font-bold">
                 <i class="fa-solid fa-user-check"></i>
               </div>
               <div>
@@ -224,8 +224,8 @@
       <div class="max-w-6xl mx-auto flex items-center justify-between gap-3">
         
         <!-- Left Brand Pill -->
-        <div class="flex items-center gap-3 lg-glass rounded-full px-4 py-2 shadow-sm">
-          <div class="w-10 h-10 lg-circle lg-fill-blue text-sm shadow-md">
+        <div class="flex items-center gap-3 lg-glass lg-beam-card rounded-full px-4 py-2 shadow-sm">
+          <div class="w-10 h-10 lg-circle lg-fill-blue lg-beam-icon text-sm shadow-md">
             <i class="fa-solid fa-grip"></i>
           </div>
           <div>
@@ -237,8 +237,8 @@
         <!-- Right Action Controls (iOS Capsule + Circular Buttons) -->
         <div class="flex items-center gap-2.5">
           <!-- User Profile Pill -->
-          <div class="flex items-center gap-2.5 lg-glass rounded-full px-3.5 py-1.5 shadow-sm text-xs text-[#1d1b19]">
-            <div class="w-7 h-7 lg-circle lg-fill-purple text-xs">
+          <div class="flex items-center gap-2.5 lg-glass lg-beam-card rounded-full px-3.5 py-1.5 shadow-sm text-xs text-[#1d1b19]">
+            <div class="w-7 h-7 lg-circle lg-fill-purple lg-beam-icon text-xs">
               <i class="fa-solid fa-user"></i>
             </div>
             <span class="user-display-name-nav font-semibold max-w-[130px] truncate">-</span>
@@ -247,14 +247,14 @@
 
           <!-- Online Users Circular Button -->
           <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
-                  class="relative w-10 h-10 lg-circle lg-glass hover:bg-white text-sm text-[#1d1b19] cursor-pointer shadow-sm active:scale-95 transition-all">
+                  class="relative w-10 h-10 lg-circle lg-glass lg-beam-icon hover:bg-white text-sm text-[#1d1b19] cursor-pointer shadow-sm active:scale-95 transition-all">
             <i class="fa-solid fa-users"></i>
-            <span class="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-[#30d158] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-2xs online-users-count-badge">1</span>
+            <span class="absolute -top-1 -right-1 z-10 min-w-[20px] h-5 px-1 rounded-full bg-[#30d158] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-2xs online-users-count-badge">1</span>
           </button>
 
           <!-- Logout Circular Button -->
           <button onclick="handleLogout()" title="ออกจากระบบ"
-                  class="w-10 h-10 lg-circle lg-fill-red text-sm cursor-pointer shadow-md active:scale-95 transition-all">
+                  class="w-10 h-10 lg-circle lg-fill-red lg-beam-icon text-sm cursor-pointer shadow-md active:scale-95 transition-all">
             <i class="fa-solid fa-power-off"></i>
           </button>
         </div>
@@ -269,9 +269,9 @@
         
         <!-- CARD 1: WORK TRACKER -->
         <div id="launcherCardWorkTracker" onclick="enterApp('work_tracker')"
-             class="lg-glass lg-tile p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
+             class="lg-glass lg-tile lg-beam-card p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
           <div>
-            <div class="w-16 h-16 lg-circle lg-fill-orange text-2xl shadow-lg group-hover:scale-105 transition-transform">
+            <div class="w-16 h-16 lg-circle lg-fill-orange lg-beam-icon text-2xl shadow-lg group-hover:scale-105 transition-transform">
               <i class="fa-solid fa-list-check"></i>
             </div>
             <h3 class="text-xl font-bold text-[#1d1b19] group-hover:text-[#ff9f0a] transition-colors mt-5">ระบบติดตามงาน</h3>
@@ -279,17 +279,17 @@
           </div>
           <div class="pt-5 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#ff9f0a]">
             <span>เปิดระบบ</span>
-            <div class="w-9 h-9 lg-circle lg-glass text-xs group-hover:translate-x-1 transition-transform">
+            <div class="w-9 h-9 lg-circle lg-glass lg-beam-icon text-xs group-hover:translate-x-1 transition-transform">
               <i class="fa-solid fa-arrow-right"></i>
             </div>
           </div>
         </div>
 
         <!-- CARD 2: RDP MANAGER -->
-        <div id="launcherCardRdp" onclick="enterApp('rdp_manager')"
-             class="lg-glass lg-tile p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
+        <div id="launcherCardRdp" onclick="enterApp('rdp_manager')" style="--beam-delay: -1.8s;"
+             class="lg-glass lg-tile lg-beam-card p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
           <div>
-            <div class="w-16 h-16 lg-circle lg-fill-blue text-2xl shadow-lg group-hover:scale-105 transition-transform">
+            <div class="w-16 h-16 lg-circle lg-fill-blue lg-beam-icon text-2xl shadow-lg group-hover:scale-105 transition-transform">
               <i class="fa-solid fa-desktop"></i>
             </div>
             <h3 class="text-xl font-bold text-[#1d1b19] group-hover:text-[#0a84ff] transition-colors mt-5">ระบบรีโมตไซต์งาน</h3>
@@ -297,17 +297,17 @@
           </div>
           <div class="pt-5 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0a84ff]">
             <span>เปิดระบบ</span>
-            <div class="w-9 h-9 lg-circle lg-glass text-xs group-hover:translate-x-1 transition-transform">
+            <div class="w-9 h-9 lg-circle lg-glass lg-beam-icon text-xs group-hover:translate-x-1 transition-transform">
               <i class="fa-solid fa-arrow-right"></i>
             </div>
           </div>
         </div>
 
         <!-- CARD 3: ADMIN CENTER (Visible to Admins) -->
-        <div id="launcherCardAdmin" onclick="enterApp('admin')"
-             class="lg-glass lg-tile hidden p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
+        <div id="launcherCardAdmin" onclick="enterApp('admin')" style="--beam-delay: -3.6s;"
+             class="lg-glass lg-tile lg-beam-card hidden p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
           <div>
-            <div class="w-16 h-16 lg-circle lg-fill-purple text-2xl shadow-lg group-hover:scale-105 transition-transform">
+            <div class="w-16 h-16 lg-circle lg-fill-purple lg-beam-icon text-2xl shadow-lg group-hover:scale-105 transition-transform">
               <i class="fa-solid fa-shield-halved"></i>
             </div>
             <h3 class="text-xl font-bold text-[#1d1b19] group-hover:text-[#bf5af2] transition-colors mt-5">ระบบผู้ดูแลระบบ</h3>
@@ -315,7 +315,7 @@
           </div>
           <div class="pt-5 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#bf5af2]">
             <span>เข้าสู่ระบบ Admin</span>
-            <div class="w-9 h-9 lg-circle lg-glass text-xs group-hover:translate-x-1 transition-transform">
+            <div class="w-9 h-9 lg-circle lg-glass lg-beam-icon text-xs group-hover:translate-x-1 transition-transform">
               <i class="fa-solid fa-arrow-right"></i>
             </div>
           </div>
@@ -324,31 +324,31 @@
         <!-- COLUMN 4: CONTROL CENTER WIDGETS (Clock + Quick Actions) -->
         <div class="flex flex-col gap-6">
           <!-- Live Clock Tile -->
-          <div class="lg-glass rounded-[32px] p-5 text-center flex flex-col justify-center min-h-[115px]">
+          <div style="--beam-delay: -1.2s;" class="lg-glass lg-beam-card rounded-[32px] p-5 text-center flex flex-col justify-center min-h-[115px]">
             <div id="launcherClockTime" class="lg-clock-time">--:--</div>
             <div id="launcherClockDate" class="lg-clock-date">กำลังโหลดวันเวลา...</div>
           </div>
 
           <!-- Quick Actions 2x2 Tile -->
-          <div class="lg-glass rounded-[32px] p-4 grid grid-cols-2 gap-3 place-items-center flex-1">
+          <div style="--beam-delay: -2.4s;" class="lg-glass lg-beam-card rounded-[32px] p-4 grid grid-cols-2 gap-3 place-items-center flex-1">
             <button onclick="Swal.fire({ icon:'success', title:'ระบบพร้อมใช้งาน', text:'เชื่อมต่อกับเซิร์ฟเวอร์เรียบร้อย', timer:2000, showConfirmButton:false })"
                     title="สถานะระบบ: ปกติ"
-                    class="w-12 h-12 lg-circle lg-fill-green text-base cursor-pointer shadow-md active:scale-90 transition-transform">
+                    class="w-12 h-12 lg-circle lg-fill-green lg-beam-icon text-base cursor-pointer shadow-md active:scale-90 transition-transform">
               <i class="fa-solid fa-signal"></i>
             </button>
             <button onclick="openOnlineUsersModal()"
                     title="ผู้ใช้งานออนไลน์"
-                    class="w-12 h-12 lg-circle lg-glass hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
+                    class="w-12 h-12 lg-circle lg-glass lg-beam-icon hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
               <i class="fa-solid fa-users"></i>
             </button>
             <button onclick="renderAppLauncher()"
                     title="รีเฟรชข้อมูลสิทธิ์ระบบ"
-                    class="w-12 h-12 lg-circle lg-glass hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
+                    class="w-12 h-12 lg-circle lg-glass lg-beam-icon hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
               <i class="fa-solid fa-rotate"></i>
             </button>
             <button onclick="handleLogout()"
                     title="ออกจากระบบ"
-                    class="w-12 h-12 lg-circle lg-fill-red text-base cursor-pointer shadow-md active:scale-90 transition-transform">
+                    class="w-12 h-12 lg-circle lg-fill-red lg-beam-icon text-base cursor-pointer shadow-md active:scale-90 transition-transform">
               <i class="fa-solid fa-power-off"></i>
             </button>
           </div>
