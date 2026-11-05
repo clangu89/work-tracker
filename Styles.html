@@ -127,7 +127,7 @@
     animation: subtlePulse 2s infinite ease-in-out;
   }
 
-  /* ================= LIQUID GLASS DESIGN (FROSTED MILK GLASS) ================= */
+  /* ================= LIQUID GLASS DESIGN (iOS CONTROL CENTER) ================= */
   @keyframes floatOrb1 {
     0% { transform: translate(0px, 0px) scale(1); }
     50% { transform: translate(70px, 50px) scale(1.15); }
@@ -158,95 +158,137 @@
   .orb-3 { animation: floatOrb3 18s ease-in-out infinite alternate; }
   .orb-4 { animation: floatOrb4 22s ease-in-out infinite alternate; }
 
-  /* Login Liquid Backdrop */
-  .liquid-login-backdrop {
-    background: radial-gradient(circle at 50% 20%, #f7f4ea 0%, #ebe3d3 100%);
+  /* ================= LIQUID GLASS CONTROL CENTER (LIGHT THEME) ================= */
+  .lg-wallpaper {
+    background: radial-gradient(120% 90% at 20% 10%, #fdf8ee 0%, #efe6d6 60%, #e4d8c4 100%);
   }
 
-  /* Liquid Frosted Milk Glass Card (High Transparency / Crystal Frosted) */
-  .liquid-card-milk {
-    backdrop-filter: blur(20px) saturate(190%);
-    -webkit-backdrop-filter: blur(20px) saturate(190%);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.38) 0%, rgba(255, 255, 255, 0.14) 100%);
-    border: 1.5px solid rgba(255, 255, 255, 0.88);
-    box-shadow: inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.95),
-                0 24px 50px -12px rgba(32, 30, 28, 0.10),
-                0 4px 20px rgba(36, 145, 250, 0.08);
+  /* Liquid Glass Core (Translucent Apple Glass) */
+  .lg-glass {
     position: relative;
-    overflow: hidden;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.22) 100%);
+    backdrop-filter: blur(28px) saturate(180%);
+    -webkit-backdrop-filter: blur(28px) saturate(180%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.90),
+                0 18px 50px -12px rgba(60, 40, 20, 0.18);
+    color: #1d1b19;
   }
-  .liquid-card-milk::before {
+  .lg-glass::before {
     content: '';
     position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1.5px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
+    inset: 0;
+    border-radius: inherit;
+    padding: 1.2px;
+    pointer-events: none;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.15) 35%, rgba(255, 255, 255, 0.05) 65%, rgba(255, 255, 255, 0.55));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
   }
 
-  /* Liquid Glass Inputs */
-  .glass-input-milk {
-    background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+  /* Apple Control Center Circular Filled Buttons / Badges */
+  .lg-circle {
+    border-radius: 9999px;
+    display: grid;
+    place-items: center;
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
+  }
+  .lg-fill-blue {
+    background: #0a84ff;
+    color: #ffffff;
+    box-shadow: 0 6px 20px rgba(10, 132, 255, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  .lg-fill-orange {
+    background: #ff9f0a;
+    color: #ffffff;
+    box-shadow: 0 6px 20px rgba(255, 159, 10, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  .lg-fill-purple {
+    background: #bf5af2;
+    color: #ffffff;
+    box-shadow: 0 6px 20px rgba(191, 90, 242, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  .lg-fill-red {
+    background: #ff453a;
+    color: #ffffff;
+    box-shadow: 0 6px 20px rgba(255, 69, 58, 0.40), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+  .lg-fill-green {
+    background: #30d158;
+    color: #ffffff;
+    box-shadow: 0 6px 20px rgba(48, 209, 88, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.45);
+  }
+
+  /* Segmented Control (Pill Tabs) */
+  .lg-seg-on {
+    background: rgba(255, 255, 255, 0.95);
+    color: #0a84ff !important;
+    box-shadow: 0 3px 12px rgba(60, 40, 20, 0.12);
+  }
+  .lg-seg-off {
+    color: #6e6862 !important;
+    background: transparent;
+  }
+  .lg-seg-off:hover {
+    color: #1d1b19 !important;
+    background: rgba(255, 255, 255, 0.35);
+  }
+
+  /* Translucent Pill Inputs */
+  .lg-input {
+    background: rgba(255, 255, 255, 0.50);
     border: 1.5px solid rgba(255, 255, 255, 0.85);
-    color: var(--ch-text-main);
+    color: #1d1b19;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     transition: all 0.2s ease;
   }
-  .glass-input-milk:focus {
+  .lg-input:focus {
     background: #ffffff;
-    border-color: var(--ch-blue);
-    box-shadow: 0 0 0 3px rgba(36, 145, 250, 0.25);
+    border-color: #0a84ff;
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
     outline: none;
   }
-  .glass-input-milk::placeholder {
+  .lg-input::placeholder {
     color: #8c827a;
   }
 
-  /* Liquid Glass Tabs */
-  .glass-tab-container-milk {
-    background: rgba(239, 233, 220, 0.40);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.80);
-  }
-  .glass-tab-active-milk {
-    background: #ffffff;
-    color: var(--ch-blue);
-    border: 1px solid rgba(239, 233, 220, 0.9);
-    box-shadow: 0 2px 8px rgba(32, 30, 28, 0.08);
-  }
-  .glass-tab-inactive-milk {
-    color: var(--ch-text-muted);
-  }
-  .glass-tab-inactive-milk:hover {
-    color: var(--ch-text-main);
-    background: rgba(255, 255, 255, 0.4);
-  }
-
-  /* 6-Digit PIN Inputs (Frosted Glass) */
+  /* Circular 6-Digit PIN Inputs */
   .pin-digit {
-    width: 2.75rem;
-    height: 3.5rem;
+    width: 3.125rem;
+    height: 3.125rem;
     text-align: center;
-    font-size: 1.5rem;
+    font-size: 1.35rem;
     font-weight: 700;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    border-radius: 0.85rem;
+    border-radius: 9999px;
     border: 1.5px solid rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.45);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(255, 255, 255, 0.50);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-    color: var(--ch-text-main);
+    color: #1d1b19;
   }
   .pin-digit:focus {
-    border-color: var(--ch-blue);
+    border-color: #0a84ff;
     background-color: #ffffff;
-    box-shadow: 0 0 0 3px rgba(36, 145, 250, 0.25);
+    box-shadow: 0 0 0 3.5px rgba(10, 132, 255, 0.30);
     outline: none;
-    transform: scale(1.06);
+    transform: scale(1.08);
+  }
+
+  /* Portal Glass Tiles */
+  .lg-tile {
+    border-radius: 2.5rem;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .lg-tile:hover {
+    transform: translateY(-6px) scale(1.015);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 1),
+                0 24px 50px -10px rgba(60, 40, 20, 0.20);
+  }
+  .lg-tile:active {
+    transform: scale(0.97);
   }
 
   /* Liquid Glow Action Button */
@@ -312,107 +354,20 @@
   .flatpickr-current-month .flatpickr-monthDropdown-months {
     font-weight: 700 !important;
   }
-  /* App Launcher Card Animations & Liquid Frosted Glass Portal */
-  .portal-liquid-bg {
-    background: radial-gradient(circle at 50% 20%, #f7f4ea 0%, #ebe3d3 100%);
+  /* Clock Widget in Portal */
+  .lg-clock-time {
+    font-size: 2.5rem;
+    font-weight: 600;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: #1d1b19;
   }
-
-  /* Frosted Glass Navbar */
-  .glass-nav-milk {
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
-    background: rgba(255, 255, 255, 0.74);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 4px 20px -2px rgba(32, 30, 28, 0.05);
-  }
-
-  /* Translucent Liquid Glass Portal Card */
-    .portal-card-milk {
-      backdrop-filter: blur(20px) saturate(190%);
-      -webkit-backdrop-filter: blur(20px) saturate(190%);
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.48) 0%, rgba(255, 255, 255, 0.22) 100%);
-      border: 1.5px solid rgba(255, 255, 255, 0.88);
-      box-shadow: inset 0 1.5px 2px 0 rgba(255, 255, 255, 0.95),
-                  0 20px 45px -10px rgba(32, 30, 28, 0.08),
-                  0 4px 20px rgba(36, 145, 250, 0.06);
-      border-radius: 2.25rem;
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-      position: relative;
-      overflow: hidden;
-    }
-    .portal-card-milk::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.95), transparent);
-    }
-    .portal-card-milk:hover {
-      transform: translateY(-6px) scale(1.015);
-      background: linear-gradient(135deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 255, 255, 0.32) 100%);
-      border-color: rgba(255, 255, 255, 1);
-      box-shadow: inset 0 1.5px 2px 0 rgba(255, 255, 255, 1),
-                  0 28px 56px -12px rgba(32, 30, 28, 0.14),
-                  0 0 28px rgba(36, 145, 250, 0.2);
-    }
-
-    /* Option 3: Neon Aura Liquid Glass Icons */
-    .glass-icon-opt3 {
-      backdrop-filter: blur(16px) saturate(180%);
-      -webkit-backdrop-filter: blur(16px) saturate(180%);
-      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    .glass-icon-opt3-amber {
-      background: linear-gradient(135deg, rgba(251, 191, 36, 0.24) 0%, rgba(245, 158, 11, 0.12) 100%);
-      border: 1.5px solid rgba(251, 191, 36, 0.75);
-      box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 0.9),
-                  0 0 22px rgba(245, 158, 11, 0.35);
-      color: #d97706;
-    }
-    .glass-icon-opt3-sky {
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.24) 0%, rgba(36, 145, 250, 0.12) 100%);
-      border: 1.5px solid rgba(56, 189, 248, 0.75);
-      box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 0.9),
-                  0 0 22px rgba(36, 145, 250, 0.35);
-      color: #0284c7;
-    }
-    .glass-icon-opt3-purple {
-      background: linear-gradient(135deg, rgba(168, 85, 247, 0.24) 0%, rgba(147, 51, 234, 0.12) 100%);
-      border: 1.5px solid rgba(168, 85, 247, 0.75);
-      box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 0.9),
-                  0 0 22px rgba(168, 85, 247, 0.35);
-      color: #7e22ce;
-    }
-
-    .group:hover .glass-icon-opt3-amber {
-      box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 1),
-                  0 0 30px rgba(245, 158, 11, 0.55);
-      transform: scale(1.05);
-    }
-    .group:hover .glass-icon-opt3-sky {
-      box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 1),
-                  0 0 30px rgba(36, 145, 250, 0.55);
-      transform: scale(1.05);
-    }
-    .group:hover .glass-icon-opt3-purple {
-      box-shadow: inset 0 1.5px 2px rgba(255, 255, 255, 1),
-                  0 0 30px rgba(168, 85, 247, 0.55);
-      transform: scale(1.05);
-    }
-
-  /* Glass Badges in Portal */
-  .glass-badge {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    background: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.85);
-    box-shadow: 0 2px 6px rgba(32, 30, 28, 0.04);
-  }
-
-  .app-launcher-card {
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  .lg-clock-date {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #6e6862;
+    margin-top: 0.35rem;
   }
 
   /* Remote Button Pulse & Hover */
