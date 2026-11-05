@@ -43,6 +43,9 @@
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/th.js"></script>
 
+  <!-- xlsx-js-style (Excel Export with cell styles) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+
   <!-- Custom Styles -->
   <style>
   /* ฟอนต์ภาษาไทย Prompt & Clubhouse Color Variables */
@@ -920,6 +923,13 @@
                   class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
             <i class="fa-solid fa-box-archive text-amber-700 text-xs"></i>
             <span class="font-semibold hidden sm:inline">คลังงาน</span>
+          </button>
+
+          <!-- Task Report Modal Button -->
+          <button id="btnOpenReportModal" onclick="openReportModal()" title="ออกรายงานสถานะงาน (PDF / Excel)"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <i class="fa-solid fa-chart-column text-indigo-600 text-xs"></i>
+            <span class="font-semibold hidden sm:inline">รายงาน</span>
           </button>
 
           <!-- Link to Google Sheet -->
@@ -2070,6 +2080,242 @@
       </div>
     </div>
   </div> <!-- /#viewArchivedTaskModal -->
+
+  <!-- ================= MODAL: TASK STATUS REPORT (รายงานสถานะงาน) ================= -->
+  <div id="reportModal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+    <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity" onclick="closeReportModal()"></div>
+    <div class="flex min-h-full items-center justify-center p-3 sm:p-4">
+      <div class="relative w-full max-w-5xl rounded-3xl bg-[#FAF8F2] p-5 sm:p-6 shadow-2xl border border-[#EFE9DC] transition-all my-8 max-h-[92vh] flex flex-col">
+        
+        <!-- Modal Header -->
+        <div class="flex items-center justify-between pb-3 border-b border-[#EFE9DC]">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center text-lg shadow-md shadow-indigo-500/20">
+              <i class="fa-solid fa-chart-column"></i>
+            </div>
+            <div>
+              <h3 class="text-base sm:text-lg font-bold text-[#201E1C]">ออกรายงานสถานะงาน (Task Status Report)</h3>
+              <p class="text-xs text-[#6E6862]">กำหนดช่วงไซต์งานและช่วงวันที่เสร็จสิ้น พร้อมส่งออก PDF (A4 แนวนอน) และ Excel (.xlsx)</p>
+            </div>
+          </div>
+          <button onclick="closeReportModal()" class="text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] p-1.5 rounded-lg transition-colors cursor-pointer">
+            <i class="fa-solid fa-xmark text-lg"></i>
+          </button>
+        </div>
+
+        <!-- Filter Criteria Panel -->
+        <div class="py-3.5 space-y-3 border-b border-[#EFE9DC]/70">
+          <div class="bg-white/90 rounded-2xl p-3.5 sm:p-4 border border-[#E8E1D1] space-y-3.5 shadow-2xs">
+            
+            <!-- Row 1: Site From -> Site To -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div class="sm:col-span-5">
+                <label for="reportSiteFrom" class="block text-xs font-bold text-[#4A4540] mb-1">
+                  <i class="fa-solid fa-building text-indigo-600 mr-1"></i> ตั้งแต่ไซต์งาน (Site From)
+                </label>
+                <select id="reportSiteFrom"
+                        class="w-full px-3 py-2 text-xs font-semibold bg-[#FAF8F2] border border-[#DCD4C2] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none cursor-pointer">
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+
+              <div class="sm:col-span-2 flex items-center justify-center pb-1 text-xs font-bold text-[#8C857B]">
+                <span class="px-3 py-1 rounded-lg bg-[#F3EFE4] border border-[#E5DEC9]">ถึง</span>
+              </div>
+
+              <div class="sm:col-span-5">
+                <label for="reportSiteTo" class="block text-xs font-bold text-[#4A4540] mb-1">
+                  <i class="fa-solid fa-building-circle-check text-indigo-600 mr-1"></i> ถึงไซต์งาน (Site To)
+                </label>
+                <select id="reportSiteTo"
+                        class="w-full px-3 py-2 text-xs font-semibold bg-[#FAF8F2] border border-[#DCD4C2] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 outline-none cursor-pointer">
+                  <!-- Dynamically populated -->
+                </select>
+              </div>
+            </div>
+
+            <!-- Row 2: Completed Date From -> Completed Date To -->
+            <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+              <div class="sm:col-span-5">
+                <label for="reportCompletedFrom" class="block text-xs font-bold text-[#4A4540] mb-1">
+                  <i class="fa-solid fa-calendar-check text-emerald-600 mr-1"></i> วันที่เสร็จสิ้น (ตั้งแต่)
+                </label>
+                <div class="relative">
+                  <input type="text" id="reportCompletedFrom" placeholder="วว/ดด/ปปปป"
+                         class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-white border border-[#DCD4C2] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none" />
+                  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-emerald-600">
+                    <i class="fa-regular fa-calendar text-xs"></i>
+                  </div>
+                  <button type="button" id="btnReportCompletedFromPicker" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-emerald-600 cursor-pointer">
+                    <i class="fa-regular fa-calendar-days text-xs"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="sm:col-span-2 flex items-center justify-center pb-1 text-xs font-bold text-[#8C857B]">
+                <span class="px-3 py-1 rounded-lg bg-[#F3EFE4] border border-[#E5DEC9]">ถึง</span>
+              </div>
+
+              <div class="sm:col-span-5">
+                <label for="reportCompletedTo" class="block text-xs font-bold text-[#4A4540] mb-1">
+                  <i class="fa-solid fa-calendar-check text-emerald-600 mr-1"></i> ถึงวันที่เสร็จสิ้น
+                </label>
+                <div class="relative">
+                  <input type="text" id="reportCompletedTo" placeholder="วว/ดด/ปปปป"
+                         class="w-full pl-9 pr-8 py-2 text-xs font-medium bg-white border border-[#DCD4C2] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 outline-none" />
+                  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-emerald-600">
+                    <i class="fa-regular fa-calendar text-xs"></i>
+                  </div>
+                  <button type="button" id="btnReportCompletedToPicker" class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-emerald-600 cursor-pointer">
+                    <i class="fa-regular fa-calendar-days text-xs"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Date Presets & Options -->
+            <div class="pt-2.5 border-t border-[#EFE9DC] flex flex-wrap items-center justify-between gap-3 text-xs">
+              <!-- Quick Date Presets -->
+              <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-[11px] font-semibold text-[#6E6862] mr-1">ช่วงด่วน:</span>
+                <button type="button" onclick="setReportDatePreset('today')" class="px-2.5 py-1 text-[11px] rounded-lg bg-[#F3EFE4] hover:bg-[#EDE7DA] text-[#4A4540] font-semibold transition-colors cursor-pointer border border-[#E5DEC9]">วันนี้</button>
+                <button type="button" onclick="setReportDatePreset('thisMonth')" class="px-2.5 py-1 text-[11px] rounded-lg bg-[#F3EFE4] hover:bg-[#EDE7DA] text-[#4A4540] font-semibold transition-colors cursor-pointer border border-[#E5DEC9]">เดือนนี้</button>
+                <button type="button" onclick="setReportDatePreset('lastMonth')" class="px-2.5 py-1 text-[11px] rounded-lg bg-[#F3EFE4] hover:bg-[#EDE7DA] text-[#4A4540] font-semibold transition-colors cursor-pointer border border-[#E5DEC9]">เดือนก่อน</button>
+                <button type="button" onclick="setReportDatePreset('clear')" class="px-2.5 py-1 text-[11px] rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold transition-colors cursor-pointer border border-rose-200">ล้างวันที่</button>
+              </div>
+
+              <!-- Options Checkboxes (Option A) -->
+              <div class="flex flex-wrap items-center gap-4 text-[11px] font-semibold text-[#4A4540]">
+                <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" id="reportIncludeArchive" checked class="rounded border-[#DCD4C2] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                  <span>รวมงานในคลังถาวร (Archive)</span>
+                </label>
+                <label class="inline-flex items-center gap-1.5 cursor-pointer" title="เมื่อระบุช่วงวันที่เสร็จ ให้รวมงานสถานะอื่นๆ ที่ยังค้างอยู่ด้วย">
+                  <input type="checkbox" id="reportIncludePending" checked class="rounded border-[#DCD4C2] text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+                  <span>รวมงานค้างที่ยังไม่เสร็จ</span>
+                </label>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Mini KPI Strip -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-2.5 my-3">
+          <div class="bg-white rounded-xl p-2.5 border border-[#E8E1D1] text-center shadow-2xs">
+            <div class="text-[11px] text-[#6E6862] font-medium">รวมทั้งหมด</div>
+            <div id="reportKpiTotal" class="text-base font-bold text-[#201E1C]">0</div>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-2.5 border border-slate-200 text-center shadow-2xs">
+            <div class="text-[11px] text-slate-600 font-medium">รอดำเนินการ</div>
+            <div id="reportKpiTodo" class="text-base font-bold text-slate-800">0</div>
+          </div>
+          <div class="bg-blue-50/70 rounded-xl p-2.5 border border-blue-200 text-center shadow-2xs">
+            <div class="text-[11px] text-blue-700 font-medium">กำลังทำ</div>
+            <div id="reportKpiInProgress" class="text-base font-bold text-blue-800">0</div>
+          </div>
+          <div class="bg-amber-50/70 rounded-xl p-2.5 border border-amber-200 text-center shadow-2xs">
+            <div class="text-[11px] text-amber-700 font-medium">รอตรวจสอบ</div>
+            <div id="reportKpiReview" class="text-base font-bold text-amber-800">0</div>
+          </div>
+          <div class="bg-emerald-50/80 rounded-xl p-2.5 border border-emerald-200 text-center shadow-2xs col-span-2 sm:col-span-1">
+            <div class="text-[11px] text-emerald-700 font-medium">เสร็จสิ้น</div>
+            <div id="reportKpiDone" class="text-base font-bold text-emerald-800">0 <span id="reportKpiPercent" class="text-xs font-normal text-emerald-600">(0%)</span></div>
+          </div>
+        </div>
+
+        <!-- Preview Tabs: 1. สรุปรายไซต์งาน | 2. รายการงานละเอียด -->
+        <div class="flex items-center justify-between mt-1 mb-2">
+          <div class="flex items-center gap-2 text-xs font-bold">
+            <button type="button" id="tabBtnReportSummary" onclick="switchReportTab('summary')"
+                    class="px-3 py-1.5 rounded-xl bg-indigo-600 text-white shadow-2xs cursor-pointer transition-all">
+              <i class="fa-solid fa-chart-pie mr-1"></i> 1. สรุปรายไซต์งาน (<span id="reportSiteCount">0</span> ไซต์)
+            </button>
+            <button type="button" id="tabBtnReportDetails" onclick="switchReportTab('details')"
+                    class="px-3 py-1.5 rounded-xl bg-[#EDE7DA] text-[#6E6862] hover:text-[#201E1C] cursor-pointer transition-all">
+              <i class="fa-solid fa-list-check mr-1"></i> 2. รายการงานละเอียด (<span id="reportTaskCount">0</span> รายการ)
+            </button>
+          </div>
+          <button type="button" onclick="fetchReportData()" title="ดึงข้อมูลรายงานใหม่"
+                  class="px-2.5 py-1 text-xs font-semibold text-[#6E6862] hover:text-indigo-600 bg-white hover:bg-[#EDE7DA] border border-[#E8E1D1] rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer">
+            <i class="fa-solid fa-arrows-rotate text-xs" id="btnRefreshReportIcon"></i>
+            <span>รีเฟรช</span>
+          </button>
+        </div>
+
+        <!-- Table Container (Scrollable) -->
+        <div class="flex-1 overflow-y-auto min-h-[220px] max-h-[360px] rounded-2xl border border-[#EFE9DC] bg-white">
+          <!-- View 1: Summary Table by Site -->
+          <div id="reportSummaryView">
+            <table class="w-full text-left text-xs text-[#201E1C]">
+              <thead class="bg-[#FAF8F2] text-[#6E6862] border-b border-[#EFE9DC] sticky top-0 font-semibold z-10">
+                <tr>
+                  <th class="px-3 py-2 text-center w-12">ลำดับ</th>
+                  <th class="px-3 py-2">ไซต์งาน</th>
+                  <th class="px-3 py-2 text-center">รอดำเนินการ</th>
+                  <th class="px-3 py-2 text-center">กำลังดำเนินการ</th>
+                  <th class="px-3 py-2 text-center">รอตรวจสอบ</th>
+                  <th class="px-3 py-2 text-center">เสร็จสิ้น</th>
+                  <th class="px-3 py-2 text-center">รวมทั้งหมด</th>
+                  <th class="px-3 py-2 text-center">% ความสำเร็จ</th>
+                </tr>
+              </thead>
+              <tbody id="reportSummaryTableBody" class="divide-y divide-[#EFE9DC]">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- View 2: Detailed Tasks Table -->
+          <div id="reportDetailsView" class="hidden">
+            <table class="w-full text-left text-xs text-[#201E1C]">
+              <thead class="bg-[#FAF8F2] text-[#6E6862] border-b border-[#EFE9DC] sticky top-0 font-semibold z-10">
+                <tr>
+                  <th class="px-3 py-2 text-center w-12">ลำดับ</th>
+                  <th class="px-3 py-2">รหัสงาน</th>
+                  <th class="px-3 py-2">ไซต์งาน</th>
+                  <th class="px-3 py-2">ชื่องาน / รายละเอียด</th>
+                  <th class="px-3 py-2">ผู้รับผิดชอบ</th>
+                  <th class="px-3 py-2 text-center">สถานะ</th>
+                  <th class="px-3 py-2">วันครบกำหนด</th>
+                  <th class="px-3 py-2">วันที่เสร็จสิ้น</th>
+                </tr>
+              </thead>
+              <tbody id="reportDetailsTableBody" class="divide-y divide-[#EFE9DC]">
+                <!-- Rendered dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Modal Footer & Export Actions -->
+        <div class="flex flex-wrap items-center justify-between pt-3 mt-3 border-t border-[#EFE9DC] gap-3">
+          <div class="text-[11px] text-[#6E6862]">
+            <i class="fa-solid fa-shield-halved text-emerald-600 mr-1"></i>
+            <span>กรองไซต์งานตามสิทธิ์ของผู้ใช้งานอัตโนมัติ</span>
+          </div>
+
+          <div class="flex items-center gap-2.5">
+            <button type="button" onclick="closeReportModal()"
+                    class="px-4 py-2 text-xs font-semibold text-[#6E6862] hover:text-[#201E1C] bg-[#EDE7DA] hover:bg-[#E2DACB] rounded-xl transition-colors cursor-pointer">
+              ปิด
+            </button>
+            <button type="button" onclick="exportReportToPdf()" id="btnExportPdf"
+                    class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-md shadow-rose-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer">
+              <i class="fa-solid fa-file-pdf text-sm"></i>
+              <span>ส่งออก PDF (A4 แนวนอน)</span>
+            </button>
+            <button type="button" onclick="exportReportToExcel()" id="btnExportExcel"
+                    class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md shadow-emerald-500/20 flex items-center gap-2 transition-all active:scale-95 cursor-pointer">
+              <i class="fa-solid fa-file-excel text-sm"></i>
+              <span>ส่งออก Excel (.xlsx)</span>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div> <!-- /#reportModal -->
 
 </div> <!-- ================= /#workTrackerApp ================= -->
 
@@ -3610,6 +3856,53 @@ function setupEventListeners() {
   // เริ่มต้น Date Pickers และ Auto-masking สำหรับช่องใน Modal เพิ่ม/แก้ไขงาน
   initDatePickerInput('taskReportDate', 'btnPickerReportDate');
   initDatePickerInput('taskDueDate', 'btnPickerDueDate');
+
+  // เริ่มต้น Date Pickers และ Auto-masking สำหรับ Modal ออกรายงานสถานะงาน
+  initDatePickerInput('reportCompletedFrom', 'btnReportCompletedFromPicker');
+  initDatePickerInput('reportCompletedTo', 'btnReportCompletedToPicker');
+
+  // ผูก Event Listeners สำหรับ Modal ออกรายงานสถานะงาน
+  const repSiteFrom = document.getElementById('reportSiteFrom');
+  const repSiteTo = document.getElementById('reportSiteTo');
+  const repCompFrom = document.getElementById('reportCompletedFrom');
+  const repCompTo = document.getElementById('reportCompletedTo');
+  const repIncArch = document.getElementById('reportIncludeArchive');
+  const repIncPend = document.getElementById('reportIncludePending');
+
+  if (repSiteFrom) {
+    repSiteFrom.addEventListener('change', () => {
+      handleReportSiteRangeChange('from');
+      fetchReportData();
+    });
+  }
+  if (repSiteTo) {
+    repSiteTo.addEventListener('change', () => {
+      handleReportSiteRangeChange('to');
+      fetchReportData();
+    });
+  }
+  if (repCompFrom) {
+    repCompFrom.addEventListener('change', () => {
+      handleReportDateRangeChange('from');
+      fetchReportData();
+    });
+  }
+  if (repCompTo) {
+    repCompTo.addEventListener('change', () => {
+      handleReportDateRangeChange('to');
+      fetchReportData();
+    });
+  }
+  if (repIncArch) {
+    repIncArch.addEventListener('change', () => {
+      fetchReportData();
+    });
+  }
+  if (repIncPend) {
+    repIncPend.addEventListener('change', () => {
+      fetchReportData();
+    });
+  }
 
   if (fromEl) {
     fromEl.addEventListener('change', (e) => {
@@ -5486,6 +5779,7 @@ function syncWorkTrackerDropdowns() {
   renderSiteFormOptions();
   renderAssigneeFormOptions();
   renderUserReportersList();
+  syncReportSiteDropdowns();
   updateClearFilterBtnVisibility();
 }
 window.syncWorkTrackerDropdowns = syncWorkTrackerDropdowns;
@@ -8059,6 +8353,866 @@ function handleRestoreArchivedTask(taskId, taskTitle) {
     }
   });
 }
+
+/**
+ * =========================================================================
+ * TASK STATUS REPORT CONTROLLER (ระบบออกรายงานสถานะงาน PDF & Excel)
+ * =========================================================================
+ */
+
+let reportDataState = null;
+let reportActiveTab = 'summary';
+
+/**
+ * เปิด Modal ออกรายงานสถานะงาน
+ */
+function openReportModal() {
+  const modal = document.getElementById('reportModal');
+  if (!modal) return;
+
+  syncReportSiteDropdowns();
+  modal.classList.remove('hidden');
+
+  // ดึงข้อมูลรายงานตามค่าเริ่มต้นทันที
+  fetchReportData();
+}
+
+/**
+ * ปิด Modal ออกรายงานสถานะงาน
+ */
+function closeReportModal() {
+  const modal = document.getElementById('reportModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * อัปเดตรายการไซต์งานใน Dropdown ตั้งแต่ไซต์งาน - ถึงไซต์งาน ให้ตรงตามสิทธิ์ของผู้ใช้
+ */
+function syncReportSiteDropdowns() {
+  const fromEl = document.getElementById('reportSiteFrom');
+  const toEl = document.getElementById('reportSiteTo');
+  if (!fromEl || !toEl) return;
+
+  // ใช้ state.sites ซึ่งถูกกรองตามสิทธิ์ของผู้ใช้แล้ว
+  let sitesList = (state.sites && state.sites.length > 0) ? [...state.sites] : [];
+  if (sitesList.length === 0 && state.allSites && state.allSites.length > 0) {
+    sitesList = [...state.allSites];
+  }
+
+  // เรียงลำดับตัวอักษรไทย A-Z
+  sitesList.sort((a, b) => a.localeCompare(b, 'th'));
+
+  const savedFrom = fromEl.value;
+  const savedTo = toEl.value;
+
+  let optionsHtml = '';
+  sitesList.forEach(s => {
+    optionsHtml += `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`;
+  });
+
+  fromEl.innerHTML = optionsHtml;
+  toEl.innerHTML = optionsHtml;
+
+  if (savedFrom && sitesList.includes(savedFrom)) {
+    fromEl.value = savedFrom;
+  } else if (sitesList.length > 0) {
+    fromEl.value = sitesList[0];
+  }
+
+  if (savedTo && sitesList.includes(savedTo)) {
+    toEl.value = savedTo;
+  } else if (sitesList.length > 0) {
+    toEl.value = sitesList[sitesList.length - 1];
+  }
+}
+
+/**
+ * ปรับช่วงไซต์งานอัตโนมัติหากเลือก From มากกว่า To
+ */
+function handleReportSiteRangeChange(trigger) {
+  const fromEl = document.getElementById('reportSiteFrom');
+  const toEl = document.getElementById('reportSiteTo');
+  if (!fromEl || !toEl) return;
+
+  const sitesList = (state.sites && state.sites.length > 0) ? [...state.sites] : [];
+  sitesList.sort((a, b) => a.localeCompare(b, 'th'));
+
+  const fromIdx = sitesList.indexOf(fromEl.value);
+  const toIdx = sitesList.indexOf(toEl.value);
+
+  if (fromIdx !== -1 && toIdx !== -1) {
+    if (trigger === 'from' && fromIdx > toIdx) {
+      toEl.value = fromEl.value;
+    } else if (trigger === 'to' && toIdx < fromIdx) {
+      fromEl.value = toEl.value;
+    }
+  }
+}
+
+/**
+ * ปรับช่วงวันที่เสร็จสิ้นอัตโนมัติหากเลือก From มากกว่า To
+ */
+function handleReportDateRangeChange(trigger) {
+  const fromEl = document.getElementById('reportCompletedFrom');
+  const toEl = document.getElementById('reportCompletedTo');
+  if (!fromEl || !toEl) return;
+
+  const fromIso = parseDmyToIso(fromEl.value);
+  const toIso = parseDmyToIso(toEl.value);
+
+  if (fromIso && toIso) {
+    if (trigger === 'from' && fromIso > toIso) {
+      setDateInputValue('reportCompletedTo', fromEl.value);
+    } else if (trigger === 'to' && toIso < fromIso) {
+      setDateInputValue('reportCompletedFrom', toEl.value);
+    }
+  }
+}
+
+/**
+ * ปุ่มลัดกำหนดช่วงวันที่ด่วน
+ */
+function setReportDatePreset(preset) {
+  const now = new Date();
+  if (preset === 'today') {
+    const todayStr = formatDateObjToDmy(now);
+    setDateInputValue('reportCompletedFrom', todayStr);
+    setDateInputValue('reportCompletedTo', todayStr);
+  } else if (preset === 'thisMonth') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    setDateInputValue('reportCompletedFrom', formatDateObjToDmy(firstDay));
+    setDateInputValue('reportCompletedTo', formatDateObjToDmy(lastDay));
+  } else if (preset === 'lastMonth') {
+    const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastDay = new Date(now.getFullYear(), now.getMonth(), 0);
+    setDateInputValue('reportCompletedFrom', formatDateObjToDmy(firstDay));
+    setDateInputValue('reportCompletedTo', formatDateObjToDmy(lastDay));
+  } else if (preset === 'clear') {
+    setDateInputValue('reportCompletedFrom', '');
+    setDateInputValue('reportCompletedTo', '');
+  }
+  fetchReportData();
+}
+
+/**
+ * สลับแท็บตัวอย่างข้อมูล: 'summary' (สรุปรายไซต์) หรือ 'details' (รายการงานละเอียด)
+ */
+function switchReportTab(tab) {
+  reportActiveTab = tab;
+  const btnSummary = document.getElementById('tabBtnReportSummary');
+  const btnDetails = document.getElementById('tabBtnReportDetails');
+  const viewSummary = document.getElementById('reportSummaryView');
+  const viewDetails = document.getElementById('reportDetailsView');
+
+  if (tab === 'summary') {
+    if (btnSummary) btnSummary.className = 'px-3 py-1.5 rounded-xl bg-indigo-600 text-white shadow-2xs cursor-pointer transition-all';
+    if (btnDetails) btnDetails.className = 'px-3 py-1.5 rounded-xl bg-[#EDE7DA] text-[#6E6862] hover:text-[#201E1C] cursor-pointer transition-all';
+    if (viewSummary) viewSummary.classList.remove('hidden');
+    if (viewDetails) viewDetails.classList.add('hidden');
+  } else {
+    if (btnSummary) btnSummary.className = 'px-3 py-1.5 rounded-xl bg-[#EDE7DA] text-[#6E6862] hover:text-[#201E1C] cursor-pointer transition-all';
+    if (btnDetails) btnDetails.className = 'px-3 py-1.5 rounded-xl bg-indigo-600 text-white shadow-2xs cursor-pointer transition-all';
+    if (viewSummary) viewSummary.classList.add('hidden');
+    if (viewDetails) viewDetails.classList.remove('hidden');
+  }
+}
+
+/**
+ * ส่งคำขอดึงข้อมูลรายงานสถานะงานจากเซิร์ฟเวอร์
+ */
+function fetchReportData() {
+  const icon = document.getElementById('btnRefreshReportIcon');
+  if (icon) icon.classList.add('fa-spin');
+
+  const siteFrom = document.getElementById('reportSiteFrom')?.value || '';
+  const siteTo = document.getElementById('reportSiteTo')?.value || '';
+  const completedFrom = parseDmyToIso(document.getElementById('reportCompletedFrom')?.value || '');
+  const completedTo = parseDmyToIso(document.getElementById('reportCompletedTo')?.value || '');
+  const includeArchive = document.getElementById('reportIncludeArchive')?.checked !== false;
+  const includePending = document.getElementById('reportIncludePending')?.checked === true;
+  const username = state.currentUser ? state.currentUser.username : '';
+
+  const params = {
+    username: username,
+    siteFrom: siteFrom,
+    siteTo: siteTo,
+    completedFrom: completedFrom,
+    completedTo: completedTo,
+    includeArchive: includeArchive,
+    includePending: includePending,
+    statusFilter: 'ALL'
+  };
+
+  google.script.run
+    .withSuccessHandler(onReportDataLoaded)
+    .withFailureHandler(onReportDataError)
+    .getReportTasksData(params);
+}
+
+function onReportDataLoaded(response) {
+  const icon = document.getElementById('btnRefreshReportIcon');
+  if (icon) icon.classList.remove('fa-spin');
+
+  if (!response || !response.success) {
+    showToast(response ? (response.message || response.error) : 'ไม่สามารถดึงข้อมูลรายงานได้', 'error');
+    return;
+  }
+
+  reportDataState = response;
+  renderReportPreview(response);
+}
+
+function onReportDataError(error) {
+  const icon = document.getElementById('btnRefreshReportIcon');
+  if (icon) icon.classList.remove('fa-spin');
+  showToast('เกิดข้อผิดพลาดในการดึงรายงาน: ' + error.message, 'error');
+}
+
+/**
+ * เรนเดอร์ข้อมูลตัวอย่างใน Modal ออกรายงาน
+ */
+function renderReportPreview(data) {
+  const total = data.totalSummary || { total: 0, todo: 0, inProgress: 0, review: 0, done: 0, donePercent: 0 };
+  const tasks = data.tasks || [];
+  const summaryBySite = data.summaryBySite || [];
+
+  // 1. KPI Cards
+  const kpiTotal = document.getElementById('reportKpiTotal');
+  const kpiTodo = document.getElementById('reportKpiTodo');
+  const kpiProg = document.getElementById('reportKpiInProgress');
+  const kpiRev = document.getElementById('reportKpiReview');
+  const kpiDone = document.getElementById('reportKpiDone');
+  const siteCount = document.getElementById('reportSiteCount');
+  const taskCount = document.getElementById('reportTaskCount');
+
+  if (kpiTotal) kpiTotal.innerText = total.total;
+  if (kpiTodo) kpiTodo.innerText = total.todo;
+  if (kpiProg) kpiProg.innerText = total.inProgress;
+  if (kpiRev) kpiRev.innerText = total.review;
+  if (kpiDone) {
+    kpiDone.innerHTML = `${total.done} <span class="text-xs font-normal text-emerald-600">(${total.donePercent}%)</span>`;
+  }
+  if (siteCount) siteCount.innerText = summaryBySite.length;
+  if (taskCount) taskCount.innerText = tasks.length;
+
+  // 2. View 1: Summary by Site
+  const tbodySummary = document.getElementById('reportSummaryTableBody');
+  if (tbodySummary) {
+    if (summaryBySite.length === 0) {
+      tbodySummary.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center py-8 text-[#6E6862] italic">
+            ไม่พบข้อมูลไซต์งานตามเงื่อนไขที่เลือก
+          </td>
+        </tr>
+      `;
+    } else {
+      let rowsHtml = '';
+      summaryBySite.forEach((sm, idx) => {
+        const pctColor = sm.donePercent === 100 ? 'text-emerald-700 bg-emerald-50 border-emerald-200' :
+                         sm.donePercent >= 50 ? 'text-blue-700 bg-blue-50 border-blue-200' :
+                         'text-slate-600 bg-slate-50 border-slate-200';
+        rowsHtml += `
+          <tr class="hover:bg-[#FAF8F2] transition-colors">
+            <td class="px-3 py-2 text-center font-mono text-[#6E6862]">${idx + 1}</td>
+            <td class="px-3 py-2 font-bold text-[#201E1C]">${escapeHtml(sm.site)}</td>
+            <td class="px-3 py-2 text-center ${sm.todo > 0 ? 'font-bold text-slate-800' : 'text-[#8C857B]'}">${sm.todo}</td>
+            <td class="px-3 py-2 text-center ${sm.inProgress > 0 ? 'font-bold text-blue-700' : 'text-[#8C857B]'}">${sm.inProgress}</td>
+            <td class="px-3 py-2 text-center ${sm.review > 0 ? 'font-bold text-amber-700' : 'text-[#8C857B]'}">${sm.review}</td>
+            <td class="px-3 py-2 text-center ${sm.done > 0 ? 'font-bold text-emerald-700' : 'text-[#8C857B]'}">${sm.done}</td>
+            <td class="px-3 py-2 text-center font-bold text-[#201E1C]">${sm.total}</td>
+            <td class="px-3 py-2 text-center">
+              <span class="inline-block px-2 py-0.5 rounded-full text-[11px] font-bold border ${pctColor}">
+                ${sm.donePercent}%
+              </span>
+            </td>
+          </tr>
+        `;
+      });
+
+      // แถวรวมสุทธิ
+      rowsHtml += `
+        <tr class="bg-[#F7F4EA] font-bold text-[#201E1C] border-t-2 border-[#E5DEC9]">
+          <td colspan="2" class="px-3 py-2.5 text-center">รวมสุทธิ (${summaryBySite.length} ไซต์งาน)</td>
+          <td class="px-3 py-2.5 text-center text-slate-800">${total.todo}</td>
+          <td class="px-3 py-2.5 text-center text-blue-700">${total.inProgress}</td>
+          <td class="px-3 py-2.5 text-center text-amber-700">${total.review}</td>
+          <td class="px-3 py-2.5 text-center text-emerald-700">${total.done}</td>
+          <td class="px-3 py-2.5 text-center">${total.total}</td>
+          <td class="px-3 py-2.5 text-center">
+            <span class="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+              ${total.donePercent}%
+            </span>
+          </td>
+        </tr>
+      `;
+
+      tbodySummary.innerHTML = rowsHtml;
+    }
+  }
+
+  // 3. View 2: Detailed Tasks
+  const tbodyDetails = document.getElementById('reportDetailsTableBody');
+  if (tbodyDetails) {
+    if (tasks.length === 0) {
+      tbodyDetails.innerHTML = `
+        <tr>
+          <td colspan="8" class="text-center py-8 text-[#6E6862] italic">
+            ไม่พบรายการงานตามช่วงไซต์งานและวันที่เสร็จสิ้นที่เลือก
+          </td>
+        </tr>
+      `;
+    } else {
+      let rowsHtml = '';
+      tasks.forEach((t, idx) => {
+        const isDone = t.status === 'เสร็จสิ้น';
+        const statusBadge = getStatusBadgeStyle(t.status);
+        const compDateDisplay = t.completedAt ? (formatDateDisplay(t.completedAt.substring(0, 10)) + (t.completedAt.length > 10 ? ' ' + t.completedAt.substring(11, 16) : '')) : '-';
+        const isArch = t.source === 'archive';
+
+        rowsHtml += `
+          <tr class="hover:bg-[#FAF8F2] transition-colors">
+            <td class="px-3 py-2 text-center font-mono text-[#6E6862]">${idx + 1}</td>
+            <td class="px-3 py-2 font-mono font-bold text-slate-700 whitespace-nowrap">
+              ${escapeHtml(t.id)}
+              ${isArch ? '<span class="ml-1 text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.2 rounded" title="งานในคลังถาวร">คลัง</span>' : ''}
+            </td>
+            <td class="px-3 py-2 font-semibold text-[#201E1C] whitespace-nowrap">${escapeHtml(t.site)}</td>
+            <td class="px-3 py-2 max-w-xs truncate" title="${escapeHtml(t.title)}">
+              <span class="font-medium text-[#201E1C]">${escapeHtml(t.title)}</span>
+              ${t.description ? `<p class="text-[11px] text-[#6E6862] truncate">${escapeHtml(t.description)}</p>` : ''}
+            </td>
+            <td class="px-3 py-2 text-[#4A4540] whitespace-nowrap">${escapeHtml(t.assignee || 'ไม่ระบุ')}</td>
+            <td class="px-3 py-2 text-center whitespace-nowrap">
+              <span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${statusBadge}">
+                ${escapeHtml(t.status)}
+              </span>
+            </td>
+            <td class="px-3 py-2 text-[#6E6862] whitespace-nowrap">${formatDateDisplay(t.dueDate) || '-'}</td>
+            <td class="px-3 py-2 ${isDone ? 'font-bold text-emerald-700' : 'text-[#8C857B]'} whitespace-nowrap">
+              ${compDateDisplay}
+            </td>
+          </tr>
+        `;
+      });
+      tbodyDetails.innerHTML = rowsHtml;
+    }
+  }
+}
+
+/**
+ * =========================================================================
+ * REPORT EXPORT: VECTOR PDF (A4 แนวนอน พร้อมพิมพ์ / บันทึก PDF ทันที)
+ * =========================================================================
+ */
+function exportReportToPdf() {
+  if (!reportDataState || !reportDataState.tasks) {
+    showToast('กรุณารอโหลดข้อมูลรายงานก่อนส่งออก PDF', 'warning');
+    return;
+  }
+
+  const data = reportDataState;
+  const total = data.totalSummary || { total: 0, todo: 0, inProgress: 0, review: 0, done: 0, donePercent: 0 };
+  const tasks = data.tasks || [];
+  const summaryBySite = data.summaryBySite || [];
+
+  const siteFrom = document.getElementById('reportSiteFrom')?.value || 'ทั้งหมด';
+  const siteTo = document.getElementById('reportSiteTo')?.value || 'ทั้งหมด';
+  const rawCompFrom = document.getElementById('reportCompletedFrom')?.value || '';
+  const rawCompTo = document.getElementById('reportCompletedTo')?.value || '';
+  const dateRangeText = (rawCompFrom || rawCompTo) ? `${rawCompFrom || '-'} ถึง ${rawCompTo || '-'}` : 'ทั้งหมดทุกช่วงเวลา';
+  const printDateStr = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+  const printUser = state.currentUser ? (state.currentUser.fullName || state.currentUser.username) : 'ผู้ใช้งานระบบ';
+
+  const printWin = window.open('', '_blank');
+  if (!printWin) {
+    Swal.fire({
+      icon: 'warning',
+      title: 'เบราว์เซอร์บล็อกหน้าต่างใหม่ (Pop-up)',
+      text: 'กรุณาอนุญาต Pop-up สำหรับหน้านี้เพื่อพิมพ์หรือบันทึก PDF'
+    });
+    return;
+  }
+
+  // สร้างตารางสรุปรายไซต์
+  let summaryRowsHtml = '';
+  summaryBySite.forEach((sm, i) => {
+    summaryRowsHtml += `
+      <tr>
+        <td style="text-align: center;">${i + 1}</td>
+        <td style="font-weight: 600;">${escapeHtml(sm.site)}</td>
+        <td style="text-align: center;">${sm.todo}</td>
+        <td style="text-align: center;">${sm.inProgress}</td>
+        <td style="text-align: center;">${sm.review}</td>
+        <td style="text-align: center; font-weight: bold; color: #047857;">${sm.done}</td>
+        <td style="text-align: center; font-weight: bold;">${sm.total}</td>
+        <td style="text-align: center; font-weight: bold;">${sm.donePercent}%</td>
+      </tr>
+    `;
+  });
+
+  // สร้างตารางรายละเอียดงาน
+  let detailRowsHtml = '';
+  tasks.forEach((t, i) => {
+    const isDone = t.status === 'เสร็จสิ้น';
+    const compDisplay = t.completedAt ? (formatDateDisplay(t.completedAt.substring(0, 10)) + (t.completedAt.length > 10 ? ' ' + t.completedAt.substring(11, 16) : '')) : '-';
+    detailRowsHtml += `
+      <tr>
+        <td style="text-align: center;">${i + 1}</td>
+        <td style="font-family: monospace; font-weight: bold;">${escapeHtml(t.id)}${t.source === 'archive' ? ' (คลัง)' : ''}</td>
+        <td style="font-weight: 600;">${escapeHtml(t.site)}</td>
+        <td>
+          <div style="font-weight: 600;">${escapeHtml(t.title)}</div>
+          ${t.description ? `<div style="font-size: 8.5pt; color: #64748b;">${escapeHtml(t.description)}</div>` : ''}
+        </td>
+        <td>${escapeHtml(t.assignee || 'ไม่ระบุ')}</td>
+        <td style="text-align: center;">
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 8.5pt; font-weight: bold; ${isDone ? 'background: #d1fae5; color: #065f46;' : 'background: #e2e8f0; color: #334155;'}">
+            ${escapeHtml(t.status)}
+          </span>
+        </td>
+        <td style="text-align: center;">${formatDateDisplay(t.dueDate) || '-'}</td>
+        <td style="text-align: center; ${isDone ? 'font-weight: bold; color: #047857;' : 'color: #94a3b8;'}">${compDisplay}</td>
+      </tr>
+    `;
+  });
+
+  const htmlDoc = `
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <title>รายงานสถานะงาน - Work Tracker (${siteFrom} ถึง ${siteTo})</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 10mm 12mm 10mm 12mm;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Noto Sans Thai', 'Plus Jakarta Sans', sans-serif;
+      font-size: 9.5pt;
+      color: #0f172a;
+      background: #ffffff;
+      margin: 0;
+      padding: 15px;
+    }
+    .no-print {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 16px;
+      margin-bottom: 16px;
+      background: #1e293b;
+      color: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .no-print button {
+      padding: 7px 16px;
+      border-radius: 8px;
+      font-size: 10pt;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s;
+    }
+    .btn-print { background: #2563eb; color: #ffffff; margin-right: 8px; }
+    .btn-close { background: #475569; color: #ffffff; }
+    .btn-print:hover, .btn-close:hover { opacity: 0.9; }
+
+    .header-box {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 8px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .header-box h1 {
+      margin: 0 0 4px 0;
+      font-size: 15pt;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .header-box .meta {
+      font-size: 9pt;
+      color: #475569;
+      line-height: 1.4;
+    }
+
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .kpi-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 6px 10px;
+      text-align: center;
+    }
+    .kpi-box .lbl { font-size: 8pt; color: #64748b; font-weight: 600; }
+    .kpi-box .val { font-size: 13pt; font-weight: 700; color: #0f172a; }
+
+    .section-title {
+      font-size: 10.5pt;
+      font-weight: 700;
+      color: #1e293b;
+      margin: 14px 0 6px 0;
+      padding-left: 6px;
+      border-left: 4px solid #2563eb;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 14px;
+      font-size: 9pt;
+      page-break-inside: auto;
+    }
+    thead {
+      display: table-header-group;
+    }
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+    th {
+      background: #1e293b;
+      color: #ffffff;
+      padding: 6px 8px;
+      font-weight: 600;
+      border: 1px solid #334155;
+      text-align: left;
+    }
+    td {
+      padding: 5px 8px;
+      border: 1px solid #cbd5e1;
+      vertical-align: top;
+    }
+    tbody tr:nth-child(even) {
+      background: #f8fafc;
+    }
+
+    .footer-total {
+      background: #e2e8f0 !important;
+      font-weight: 700;
+    }
+
+    @media print {
+      body { padding: 0; font-size: 9pt; }
+      .no-print { display: none !important; }
+      th { background: #1e293b !important; color: #ffffff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .footer-total { background: #e2e8f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="no-print">
+    <div>
+      <span style="font-weight: bold; font-size: 11pt;">ตัวอย่างเอกสารรายงาน A4 แนวนอน (Vector PDF)</span>
+      <span style="font-size: 9pt; color: #94a3b8; margin-left: 10px;">สามารถเลือกเครื่องพิมพ์เป็น "Save as PDF" เพื่อบันทึกเป็นไฟล์ PDF ได้ทันที</span>
+    </div>
+    <div>
+      <button class="btn-print" onclick="window.print()">🖨️ พิมพ์ / บันทึกเป็น PDF (Print)</button>
+      <button class="btn-close" onclick="window.close()">ปิดหน้าต่าง</button>
+    </div>
+  </div>
+
+  <div class="header-box">
+    <div>
+      <h1>รายงานสรุปสถานะการดำเนินงาน (Work Tracker Report)</h1>
+      <div class="meta">
+        <div><b>ช่วงไซต์งาน:</b> ${escapeHtml(siteFrom)} ถึง ${escapeHtml(siteTo)}</div>
+        <div><b>ช่วงวันที่เสร็จสิ้น:</b> ${escapeHtml(dateRangeText)}</div>
+      </div>
+    </div>
+    <div class="meta" style="text-align: right;">
+      <div><b>วันที่ออกเอกสาร:</b> ${printDateStr}</div>
+      <div><b>ผู้ออกรายงาน:</b> ${escapeHtml(printUser)}</div>
+      <div><b>จำนวนรวม:</b> ${tasks.length} รายการ (${summaryBySite.length} ไซต์งาน)</div>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+    <div class="kpi-box"><div class="lbl">งานทั้งหมด</div><div class="val">${total.total}</div></div>
+    <div class="kpi-box"><div class="lbl">รอดำเนินการ</div><div class="val" style="color: #475569;">${total.todo}</div></div>
+    <div class="kpi-box"><div class="lbl">กำลังดำเนินการ</div><div class="val" style="color: #2563eb;">${total.inProgress}</div></div>
+    <div class="kpi-box"><div class="lbl">รอตรวจสอบ</div><div class="val" style="color: #d97706;">${total.review}</div></div>
+    <div class="kpi-box"><div class="lbl">เสร็จสิ้น</div><div class="val" style="color: #059669;">${total.done}</div></div>
+    <div class="kpi-box"><div class="lbl">ความสำเร็จ</div><div class="val" style="color: #059669;">${total.donePercent}%</div></div>
+  </div>
+
+  <div class="section-title">1. ตารางสรุปจำนวนสถานะงานแยกตามไซต์งาน (Site Summary)</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 40px; text-align: center;">ลำดับ</th>
+        <th>ไซต์งาน</th>
+        <th style="width: 70px; text-align: center;">รอดำเนินการ</th>
+        <th style="width: 85px; text-align: center;">กำลังดำเนินการ</th>
+        <th style="width: 75px; text-align: center;">รอตรวจสอบ</th>
+        <th style="width: 70px; text-align: center;">เสร็จสิ้น</th>
+        <th style="width: 70px; text-align: center;">รวมทั้งหมด</th>
+        <th style="width: 75px; text-align: center;">% สำเร็จ</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${summaryRowsHtml}
+      <tr class="footer-total">
+        <td colspan="2" style="text-align: center;">รวมสุทธิ (${summaryBySite.length} ไซต์งาน)</td>
+        <td style="text-align: center;">${total.todo}</td>
+        <td style="text-align: center;">${total.inProgress}</td>
+        <td style="text-align: center;">${total.review}</td>
+        <td style="text-align: center; color: #047857;">${total.done}</td>
+        <td style="text-align: center;">${total.total}</td>
+        <td style="text-align: center; color: #047857;">${total.donePercent}%</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="section-title">2. รายการงานละเอียด (Task Details)</div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width: 35px; text-align: center;">ลำดับ</th>
+        <th style="width: 70px;">รหัสงาน</th>
+        <th style="width: 140px;">ไซต์งาน</th>
+        <th>ชื่องาน / รายละเอียด</th>
+        <th style="width: 90px;">ผู้รับผิดชอบ</th>
+        <th style="width: 80px; text-align: center;">สถานะ</th>
+        <th style="width: 80px; text-align: center;">วันครบกำหนด</th>
+        <th style="width: 95px; text-align: center;">วันที่เสร็จสิ้น</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${detailRowsHtml}
+    </tbody>
+  </table>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+      }, 400);
+    };
+  <\\/script>
+</body>
+</html>
+  `;
+
+  printWin.document.open();
+  printWin.document.write(htmlDoc);
+  printWin.document.close();
+}
+
+/**
+ * =========================================================================
+ * REPORT EXPORT: EXCEL WORKBOOK (.xlsx พร้อมจัดสีหัวตารางและแยก 2 ชีต)
+ * =========================================================================
+ */
+function exportReportToExcel() {
+  if (typeof XLSX === 'undefined') {
+    showToast('กำลังโหลดไลบรารี Excel กรุณาลองใหม่อีกครั้ง', 'warning');
+    return;
+  }
+  if (!reportDataState || !reportDataState.tasks) {
+    showToast('กรุณารอโหลดข้อมูลรายงานก่อนส่งออก Excel', 'warning');
+    return;
+  }
+
+  const data = reportDataState;
+  const total = data.totalSummary || { total: 0, todo: 0, inProgress: 0, review: 0, done: 0, donePercent: 0 };
+  const tasks = data.tasks || [];
+  const summaryBySite = data.summaryBySite || [];
+
+  const siteFrom = document.getElementById('reportSiteFrom')?.value || 'ทั้งหมด';
+  const siteTo = document.getElementById('reportSiteTo')?.value || 'ทั้งหมด';
+  const rawCompFrom = document.getElementById('reportCompletedFrom')?.value || '';
+  const rawCompTo = document.getElementById('reportCompletedTo')?.value || '';
+  const dateRangeText = (rawCompFrom || rawCompTo) ? `${rawCompFrom || '-'} ถึง ${rawCompTo || '-'}` : 'ทั้งหมดทุกช่วงเวลา';
+  const printDateStr = new Date().toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
+  const printUser = state.currentUser ? (state.currentUser.fullName || state.currentUser.username) : 'ผู้ใช้งานระบบ';
+
+  const wb = XLSX.utils.book_new();
+
+  // ----------------------------------------------------
+  // SHEET 1: สรุปรายไซต์งาน (Summary by Site)
+  // ----------------------------------------------------
+  const ws1Data = [
+    ['รายงานสรุปสถานะการดำเนินงาน (Work Tracker Report)'],
+    ['ช่วงไซต์งาน:', `${siteFrom} ถึง ${siteTo}`],
+    ['ช่วงวันที่เสร็จสิ้น:', dateRangeText],
+    ['วันที่ออกรายงาน:', printDateStr, 'ผู้ออกรายงาน:', printUser],
+    [], // แถวว่าง
+    ['ลำดับ', 'ไซต์งาน', 'รอดำเนินการ', 'กำลังดำเนินการ', 'รอตรวจสอบ', 'เสร็จสิ้น', 'รวมทั้งหมด', 'ร้อยละความสำเร็จ (%)']
+  ];
+
+  summaryBySite.forEach((sm, i) => {
+    ws1Data.push([
+      i + 1,
+      sm.site,
+      sm.todo,
+      sm.inProgress,
+      sm.review,
+      sm.done,
+      sm.total,
+      `${sm.donePercent}%`
+    ]);
+  });
+
+  // แถวรวมสุทธิ
+  ws1Data.push([
+    '',
+    `รวมสุทธิ (${summaryBySite.length} ไซต์งาน)`,
+    total.todo,
+    total.inProgress,
+    total.review,
+    total.done,
+    total.total,
+    `${total.donePercent}%`
+  ]);
+
+  const ws1 = XLSX.utils.aoa_to_sheet(ws1Data);
+
+  // กำหนดความกว้างคอลัมน์ของ Sheet 1
+  ws1['!cols'] = [
+    { wch: 8 },  // ลำดับ
+    { wch: 30 }, // ไซต์งาน
+    { wch: 14 }, // รอดำเนินการ
+    { wch: 16 }, // กำลังดำเนินการ
+    { wch: 14 }, // รอตรวจสอบ
+    { wch: 14 }, // เสร็จสิ้น
+    { wch: 14 }, // รวมทั้งหมด
+    { wch: 22 }  // ร้อยละความสำเร็จ
+  ];
+
+  const headerStyle = {
+    fill: { fgColor: { rgb: '1E293B' } },
+    font: { name: 'Prompt', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      top: { style: 'thin', color: { rgb: '334155' } },
+      bottom: { style: 'thin', color: { rgb: '334155' } },
+      left: { style: 'thin', color: { rgb: '334155' } },
+      right: { style: 'thin', color: { rgb: '334155' } }
+    }
+  };
+
+  const totalStyle = {
+    fill: { fgColor: { rgb: 'E2E8F0' } },
+    font: { name: 'Prompt', sz: 11, bold: true, color: { rgb: '0F172A' } },
+    alignment: { horizontal: 'center', vertical: 'center' },
+    border: {
+      top: { style: 'double', color: { rgb: '0F172A' } },
+      bottom: { style: 'double', color: { rgb: '0F172A' } },
+      left: { style: 'thin', color: { rgb: 'CBD5E1' } },
+      right: { style: 'thin', color: { rgb: 'CBD5E1' } }
+    }
+  };
+
+  if (ws1['A1']) {
+    ws1['A1'].s = {
+      font: { name: 'Prompt', sz: 14, bold: true, color: { rgb: '1E293B' } }
+    };
+  }
+
+  const headerCols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
+  headerCols.forEach(col => {
+    const cellRef = col + '6';
+    if (ws1[cellRef]) ws1[cellRef].s = headerStyle;
+  });
+
+  const totalRowIndex = ws1Data.length;
+  headerCols.forEach(col => {
+    const cellRef = col + totalRowIndex;
+    if (ws1[cellRef]) ws1[cellRef].s = totalStyle;
+  });
+
+  // ----------------------------------------------------
+  // SHEET 2: รายการงานละเอียด (Task Details)
+  // ----------------------------------------------------
+  const ws2Data = [
+    ['ลำดับ', 'รหัสงาน', 'ไซต์งาน', 'หัวข้องาน', 'รายละเอียดงาน', 'ผู้แจ้งงาน', 'วันที่แจ้งงาน', 'ผู้รับผิดชอบ', 'ความสำคัญ', 'สถานะ', 'วันครบกำหนด', 'วันที่เสร็จสิ้น', 'คลังงาน']
+  ];
+
+  tasks.forEach((t, i) => {
+    const compDisplay = t.completedAt ? (formatDateDisplay(t.completedAt.substring(0, 10)) + (t.completedAt.length > 10 ? ' ' + t.completedAt.substring(11, 16) : '')) : '';
+    ws2Data.push([
+      i + 1,
+      t.id,
+      t.site,
+      t.title,
+      t.description || '',
+      t.reporter || '',
+      formatDateDisplay(t.reportDate) || '',
+      t.assignee || 'ไม่ระบุ',
+      t.priority || 'ทั่วไป',
+      t.status || 'รอดำเนินการ',
+      formatDateDisplay(t.dueDate) || '',
+      compDisplay,
+      t.source === 'archive' ? 'อยู่ในคลัง' : 'กระดานหลัก'
+    ]);
+  });
+
+  const ws2 = XLSX.utils.aoa_to_sheet(ws2Data);
+
+  ws2['!cols'] = [
+    { wch: 8 },  // ลำดับ
+    { wch: 14 }, // รหัสงาน
+    { wch: 25 }, // ไซต์งาน
+    { wch: 38 }, // หัวข้องาน
+    { wch: 45 }, // รายละเอียดงาน
+    { wch: 18 }, // ผู้แจ้งงาน
+    { wch: 15 }, // วันที่แจ้งงาน
+    { wch: 18 }, // ผู้รับผิดชอบ
+    { wch: 12 }, // ความสำคัญ
+    { wch: 16 }, // สถานะ
+    { wch: 15 }, // วันครบกำหนด
+    { wch: 20 }, // วันที่เสร็จสิ้น
+    { wch: 14 }  // คลังงาน
+  ];
+
+  const ws2HeaderCols = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M'];
+  ws2HeaderCols.forEach(col => {
+    const cellRef = col + '1';
+    if (ws2[cellRef]) ws2[cellRef].s = headerStyle;
+  });
+
+  ws2['!autofilter'] = { ref: `A1:M${ws2Data.length}` };
+
+  XLSX.utils.book_append_sheet(wb, ws1, 'สรุปรายไซต์งาน');
+  XLSX.utils.book_append_sheet(wb, ws2, 'รายละเอียดงาน');
+
+  const nowD = new Date();
+  const padZ = n => String(n).padStart(2, '0');
+  const fileDateStr = String(nowD.getFullYear()) + padZ(nowD.getMonth() + 1) + padZ(nowD.getDate()) + '_' + padZ(nowD.getHours()) + padZ(nowD.getMinutes());
+  const fileName = `WorkTracker_Report_${fileDateStr}.xlsx`;
+
+  XLSX.writeFile(wb, fileName);
+  showToast('📊 ส่งออกรายงาน Excel สำเร็จ: ' + fileName, 'success');
+}
+
+// Export functions to window
+window.openReportModal = openReportModal;
+window.closeReportModal = closeReportModal;
+window.syncReportSiteDropdowns = syncReportSiteDropdowns;
+window.handleReportSiteRangeChange = handleReportSiteRangeChange;
+window.handleReportDateRangeChange = handleReportDateRangeChange;
+window.setReportDatePreset = setReportDatePreset;
+window.switchReportTab = switchReportTab;
+window.fetchReportData = fetchReportData;
+window.exportReportToPdf = exportReportToPdf;
+window.exportReportToExcel = exportReportToExcel;
+
 
 /**
  * =========================================================================

@@ -145,6 +145,7 @@ function doPost(e) {
       getRdpAuditLogs: getRdpAuditLogs,
       getAdminOverviewData: getAdminOverviewData,
       migrateFromLegacyRdpSpreadsheet: migrateFromLegacyRdpSpreadsheet,
+      getReportTasksData: getReportTasksData,
       saveSettings: saveSettings,
       saveSitesList: saveSitesList
     };
@@ -228,7 +229,8 @@ function setupDatabase() {
       'FolderId',
       'Reporter',
       'ReportDate',
-      'Checklist'
+      'Checklist',
+      'CompletedAt'
     ];
 
     // กำหนดหัวตาราง
@@ -243,6 +245,9 @@ function setupDatabase() {
                .setVerticalAlignment('middle');
     taskSheet.setRowHeight(1, 40);
     taskSheet.setFrozenRows(1);
+    for (let c = 1; c <= headers.length; c++) {
+      taskSheet.autoResizeColumn(c);
+    }
 
     // เพิ่มตัวอย่างงานเบื้องต้นเพื่อความสะดวกในการเริ่มต้น
     const sampleDate = Utilities.formatDate(new Date(Date.now() + 86400000 * 3), 'Asia/Bangkok', 'yyyy-MM-dd');
@@ -348,6 +353,15 @@ function setupDatabase() {
                .setHorizontalAlignment('center')
                .setVerticalAlignment('middle');
       taskSheet.autoResizeColumn(15);
+    }
+    if (lastCol < 16) {
+      taskSheet.getRange(1, 16).setValue('CompletedAt')
+               .setBackground('#1e293b')
+               .setFontColor('#ffffff')
+               .setFontWeight('bold')
+               .setHorizontalAlignment('center')
+               .setVerticalAlignment('middle');
+      taskSheet.autoResizeColumn(16);
     }
   }
 
@@ -635,6 +649,30 @@ function saveSitesList(sitesArray, siteChatIds) {
 }
 
 /**
+ * ตรวจสอบและเพิ่มคอลัมน์ที่จำเป็นสำหรับแผ่นงาน Tasks (เช่น CompletedAt)
+ */
+function ensureTaskSheetColumns_(sheet) {
+  if (!sheet) return;
+  try {
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 1) return;
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    if (!headers.includes('CompletedAt')) {
+      const newCol = lastCol + 1;
+      sheet.getRange(1, newCol).setValue('CompletedAt')
+           .setBackground('#1e293b')
+           .setFontColor('#ffffff')
+           .setFontWeight('bold')
+           .setHorizontalAlignment('center')
+           .setVerticalAlignment('middle');
+      sheet.autoResizeColumn(newCol);
+    }
+  } catch (e) {
+    console.warn('ensureTaskSheetColumns_ error: ' + e.message);
+  }
+}
+
+/**
  * ดึงข้อมูลเริ่มต้นทั้งหมด (งาน, สถิติ, ไซต์งาน, การตั้งค่า)
  * รองรับการกรองข้อมูลตามสิทธิ์การเข้าถึงไซต์งานของผู้ใช้ (requestUsername)
  */
@@ -645,6 +683,8 @@ function getInitialData(requestUsername) {
     if (!sheet) {
       setupDatabase();
       sheet = ss.getSheetByName(SHEET_TASKS);
+    } else {
+      ensureTaskSheetColumns_(sheet);
     }
 
     // ดึงรายชื่อผู้ใช้จากชีต Users และตรวจสอบสิทธิ์ของผู้ใช้ปัจจุบัน
@@ -773,6 +813,13 @@ function getInitialData(requestUsername) {
         } catch (e) {}
       }
 
+      let completedAtFormatted = '';
+      if (row.length >= 16 && row[15]) {
+        completedAtFormatted = String(row[15]);
+      } else if (String(row[6]) === 'เสร็จสิ้น' && row[9]) {
+        completedAtFormatted = String(row[9]);
+      }
+
       tasks.push({
         id: String(row[0]),
         site: taskSite,
@@ -788,7 +835,8 @@ function getInitialData(requestUsername) {
         folderId: row[11] ? String(row[11]) : '',
         reporter: String(row[12] || ''),
         reportDate: reportDateFormatted,
-        checklist: checklist
+        checklist: checklist,
+        completedAt: completedAtFormatted
       });
     }
 
@@ -1001,6 +1049,7 @@ function saveTask(taskData) {
     const ss = getDb_();
     const sheet = ss.getSheetByName(SHEET_TASKS);
     if (!sheet) throw new Error('ไม่พบแผ่นงาน Tasks');
+    ensureTaskSheetColumns_(sheet);
 
     const nowStr = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm');
     const values = sheet.getDataRange().getValues();
@@ -1049,6 +1098,7 @@ function saveTask(taskData) {
       finalTaskId = 'TSK-' + (maxNum + 1);
 
       const checklistJson = JSON.stringify(Array.isArray(taskData.checklist) ? taskData.checklist : []);
+      const completedAtVal = (taskData.status === 'เสร็จสิ้น') ? nowStr : '';
 
       const newRow = [
         finalTaskId,
@@ -1065,7 +1115,8 @@ function saveTask(taskData) {
         '',
         taskData.reporter || '',
         normalizedReportDate,
-        checklistJson
+        checklistJson,
+        completedAtVal
       ];
 
       sheet.appendRow(newRow);
@@ -1091,6 +1142,12 @@ function saveTask(taskData) {
       if (taskData.checklist !== undefined) {
         sheet.getRange(rowIndex, 15).setValue(JSON.stringify(Array.isArray(taskData.checklist) ? taskData.checklist : []));
       }
+      if (taskData.status === 'เสร็จสิ้น') {
+        const currentCompletedAt = (values[rowIndex - 1].length >= 16) ? values[rowIndex - 1][15] : '';
+        sheet.getRange(rowIndex, 16).setValue(currentCompletedAt || nowStr);
+      } else {
+        sheet.getRange(rowIndex, 16).setValue('');
+      }
       SpreadsheetApp.flush();
 
       // หากไซต์งานเปลี่ยน ให้ย้ายโฟลเดอร์ใน Drive ไปยังโฟลเดอร์ไซต์ใหม่ด้วย (ถ้ามี)
@@ -1113,6 +1170,9 @@ function saveTask(taskData) {
     } catch (e) {}
 
     const currentFolderId = (rowIndex !== -1 && values[rowIndex - 1][11]) ? String(values[rowIndex - 1][11]) : '';
+    const finalCompletedAt = (taskData.status === 'เสร็จสิ้น')
+      ? ((rowIndex !== -1 && values[rowIndex - 1].length >= 16 && values[rowIndex - 1][15]) || nowStr)
+      : '';
 
     const savedTask = {
       id: finalTaskId,
@@ -1128,7 +1188,8 @@ function saveTask(taskData) {
       updatedAt: nowStr,
       attachments: currentAttachments,
       folderId: currentFolderId,
-      checklist: Array.isArray(taskData.checklist) ? taskData.checklist : []
+      checklist: Array.isArray(taskData.checklist) ? taskData.checklist : [],
+      completedAt: finalCompletedAt
     };
 
     // ส่งการแจ้งเตือน Telegram
@@ -1214,6 +1275,15 @@ function updateTaskStatus(taskId, newStatus) {
     const nowStr = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm');
     sheet.getRange(rowIndex, 7).setValue(newStatus); // Status (Col 7)
     sheet.getRange(rowIndex, 10).setValue(nowStr);   // UpdatedAt (Col 10)
+    ensureTaskSheetColumns_(sheet);
+    if (newStatus === 'เสร็จสิ้น') {
+      const currentCompletedAt = (values[rowIndex - 1].length >= 16) ? values[rowIndex - 1][15] : '';
+      sheet.getRange(rowIndex, 16).setValue(currentCompletedAt || nowStr);
+    } else {
+      if (sheet.getLastColumn() >= 16) {
+        sheet.getRange(rowIndex, 16).setValue('');
+      }
+    }
 
     // ส่งแจ้งเตือน Telegram เข้ากลุ่ม (แยกตามไซต์งาน หรือกลุ่มหลัก)
     try {
@@ -1318,6 +1388,7 @@ function getArchiveSheet_(ss) {
       'Reporter',
       'ReportDate',
       'Checklist',
+      'CompletedAt',
       'ArchivedAt'
     ];
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
@@ -1369,6 +1440,22 @@ function getArchiveSheet_(ss) {
       const insertAt = archivedAtCol > 0 ? archivedAtCol : lastCol;
       sheet.insertColumnBefore(insertAt);
       sheet.getRange(1, insertAt).setValue('Checklist')
+           .setBackground('#334155')
+           .setFontColor('#ffffff')
+           .setFontWeight('bold')
+           .setHorizontalAlignment('center')
+           .setVerticalAlignment('middle');
+      sheet.autoResizeColumn(insertAt);
+    }
+    lastCol = sheet.getLastColumn();
+    currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    if (!currentHeaders.includes('CompletedAt')) {
+      const archivedAtCol = currentHeaders.indexOf('ArchivedAt') + 1;
+      const insertAt = archivedAtCol > 0 ? archivedAtCol : lastCol + 1;
+      if (archivedAtCol > 0) {
+        sheet.insertColumnBefore(insertAt);
+      }
+      sheet.getRange(1, insertAt).setValue('CompletedAt')
            .setBackground('#334155')
            .setFontColor('#ffffff')
            .setFontWeight('bold')
@@ -1428,12 +1515,13 @@ function archiveCompletedTasks(daysThreshold) {
         }
 
         if (shouldArchive) {
-          // แถวที่จะย้ายไป Archive: 15 คอลัมน์เดิม + ArchivedAt = 16 คอลัมน์
+          // แถวที่จะย้ายไป Archive: 15 คอลัมน์เดิม + CompletedAt + ArchivedAt = 17 คอลัมน์
+          const completedAtVal = (row.length >= 16 && row[15]) ? row[15] : (row[9] || '');
           const archiveRow = [
             row[0], row[1], row[2], row[3], row[4],
             row[5], row[6], row[7], row[8], row[9],
             row[10], row[11], row[12] || '', row[13] || '',
-            row[14] || '[]', archivedAtStr
+            row[14] || '[]', completedAtVal, archivedAtStr
           ];
           rowsToArchive.push(archiveRow);
           rowIndicesToDelete.push(i + 1); // 1-based index
@@ -1447,7 +1535,7 @@ function archiveCompletedTasks(daysThreshold) {
 
     // เขียนลงในแผ่นงาน Tasks_Archive (กลับลำดับเพื่อให้เรียงจากเก่าไปใหม่ตามปกติ)
     rowsToArchive.reverse();
-    archiveSheet.getRange(archiveSheet.getLastRow() + 1, 1, rowsToArchive.length, 16).setValues(rowsToArchive);
+    archiveSheet.getRange(archiveSheet.getLastRow() + 1, 1, rowsToArchive.length, rowsToArchive[0].length).setValues(rowsToArchive);
 
     // ลบแถวออกจาก Tasks
     for (let r = 0; r < rowIndicesToDelete.length; r++) {
@@ -1493,11 +1581,12 @@ function archiveSingleTask(taskId) {
     }
 
     const archivedAtStr = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+    const completedAtVal = (targetRow.length >= 16 && targetRow[15]) ? targetRow[15] : (targetRow[9] || '');
     const archiveRow = [
       targetRow[0], targetRow[1], targetRow[2], targetRow[3], targetRow[4],
       targetRow[5], targetRow[6], targetRow[7], targetRow[8], targetRow[9],
       targetRow[10], targetRow[11], targetRow[12] || '', targetRow[13] || '',
-      targetRow[14] || '[]', archivedAtStr
+      targetRow[14] || '[]', completedAtVal, archivedAtStr
     ];
 
     archiveSheet.appendRow(archiveRow);
@@ -1557,8 +1646,9 @@ function getArchivedTasks(params) {
       let taskReporter = '';
       let taskReportDate = '';
       let taskChecklist = [];
+      let taskCompletedAt = '';
       let archivedAtStr = '';
-      if (row.length >= 16) {
+      if (row.length >= 17) {
         taskReporter = String(row[12] || '');
         if (row[13]) {
           taskReportDate = normalizeDateToIso_(row[13]);
@@ -1569,17 +1659,34 @@ function getArchivedTasks(params) {
             if (Array.isArray(p)) taskChecklist = p;
           } catch (e) {}
         }
+        taskCompletedAt = row[15] ? String(row[15]) : (row[9] ? String(row[9]) : '');
+        archivedAtStr = row[16] ? String(row[16]) : '';
+      } else if (row.length === 16) {
+        taskReporter = String(row[12] || '');
+        if (row[13]) {
+          taskReportDate = normalizeDateToIso_(row[13]);
+        }
+        if (row[14]) {
+          try {
+            const p = JSON.parse(row[14]);
+            if (Array.isArray(p)) taskChecklist = p;
+          } catch (e) {}
+        }
+        taskCompletedAt = row[9] ? String(row[9]) : '';
         archivedAtStr = row[15] ? String(row[15]) : '';
       } else if (row.length === 15) {
         taskReporter = String(row[12] || '');
         if (row[13]) {
           taskReportDate = normalizeDateToIso_(row[13]);
         }
+        taskCompletedAt = row[9] ? String(row[9]) : '';
         archivedAtStr = row[14] ? String(row[14]) : '';
       } else if (row.length === 14) {
         taskReporter = String(row[12] || '');
+        taskCompletedAt = row[9] ? String(row[9]) : '';
         archivedAtStr = row[13] ? String(row[13]) : '';
       } else {
+        taskCompletedAt = row[9] ? String(row[9]) : '';
         archivedAtStr = row[12] ? String(row[12]) : '';
       }
 
@@ -1625,6 +1732,7 @@ function getArchivedTasks(params) {
         attachments: attachments,
         folderId: row[11] ? String(row[11]) : '',
         checklist: taskChecklist,
+        completedAt: taskCompletedAt,
         archivedAt: archivedAtStr
       });
     }
@@ -1666,18 +1774,21 @@ function restoreArchivedTask(taskId) {
       return { success: false, message: 'ไม่พบงานในคลัง ' + taskId };
     }
 
-    // แถวสำหรับชีต Tasks (15 คอลัมน์ ตัด ArchivedAt ออก)
+    ensureTaskSheetColumns_(taskSheet);
+
+    // แถวสำหรับชีต Tasks (16 คอลัมน์ ตัด ArchivedAt ออก)
     const taskReporter = (targetRow.length >= 14) ? String(targetRow[12] || '') : '';
     let taskReportDate = '';
     if (targetRow.length >= 15 && targetRow[13]) {
       taskReportDate = normalizeDateToIso_(targetRow[13]);
     }
     const taskChecklistJson = (targetRow.length >= 16 && targetRow[14]) ? String(targetRow[14]) : '[]';
+    const completedAtVal = (targetRow.length >= 17 && targetRow[15]) ? targetRow[15] : (targetRow[9] || '');
 
     const taskRow = [
       targetRow[0], targetRow[1], targetRow[2], targetRow[3], targetRow[4],
       targetRow[5], targetRow[6], targetRow[7], targetRow[8], targetRow[9],
-      targetRow[10], targetRow[11], taskReporter, taskReportDate, taskChecklistJson
+      targetRow[10], targetRow[11], taskReporter, taskReportDate, taskChecklistJson, completedAtVal
     ];
 
     taskSheet.appendRow(taskRow);
@@ -1730,6 +1841,284 @@ function restoreArchivedTask(taskId) {
     return { success: true, task: restoredTask };
   } catch (err) {
     return { success: false, message: err.message };
+  }
+}
+
+/**
+ * =========================================================================
+ * TASK STATUS REPORT SYSTEM (ระบบออกรายงานสถานะงาน)
+ * =========================================================================
+ */
+
+/**
+ * ดึงข้อมูลรายงานสถานะงานตามช่วงไซต์งานและช่วงวันที่เสร็จสิ้น
+ * @param {Object} params
+ * {
+ *   username: string,
+ *   siteFrom: string,
+ *   siteTo: string,
+ *   completedFrom: string, // 'YYYY-MM-DD'
+ *   completedTo: string,   // 'YYYY-MM-DD'
+ *   includePending: boolean, // รวมงานค้างที่ยังไม่เสร็จ (Option A)
+ *   includeArchive: boolean, // รวมงานในคลังถาวร (Archive)
+ *   statusFilter: string     // 'ALL' หรือเฉพาะสถานะ
+ * }
+ */
+function getReportTasksData(params) {
+  try {
+    params = params || {};
+    const ss = getDb_();
+    const taskSheet = ss.getSheetByName(SHEET_TASKS);
+    if (!taskSheet) throw new Error('ไม่พบแผ่นงาน Tasks');
+
+    ensureTaskSheetColumns_(taskSheet);
+
+    const username = (params.username || '').trim();
+    // 1. ตรวจสอบสิทธิ์ผู้ใช้
+    const usersSheet = ss.getSheetByName(SHEET_USERS);
+    let userRole = 'User';
+    let allowedSites = 'ALL';
+
+    if (usersSheet && username) {
+      const uData = usersSheet.getDataRange().getValues();
+      for (let i = 1; i < uData.length; i++) {
+        if (String(uData[i][0]).toLowerCase() === username.toLowerCase()) {
+          userRole = String(uData[i][3] || 'User');
+          const sitesStr = String(uData[i][6] || '');
+          let sitesPerm = 'ALL';
+          if (sitesStr && sitesStr !== 'ALL') {
+            try {
+              const p = JSON.parse(sitesStr);
+              if (Array.isArray(p)) sitesPerm = p;
+            } catch (e) {
+              sitesPerm = sitesStr.split(',').map(s => s.trim()).filter(Boolean);
+            }
+          }
+          allowedSites = (userRole === 'Admin') ? 'ALL' : sitesPerm;
+          break;
+        }
+      }
+    }
+
+    const settings = getSettings_();
+    const systemSites = settings.SITES || [];
+    let permittedSites = [];
+    if (userRole === 'Admin' || allowedSites === 'ALL' || !Array.isArray(allowedSites)) {
+      permittedSites = [...systemSites];
+    } else {
+      permittedSites = systemSites.filter(s => allowedSites.includes(s));
+    }
+
+    // เรียงไซต์ตามลำดับตัวอักษร A-Z
+    permittedSites.sort((a, b) => a.localeCompare(b, 'th'));
+
+    // 2. กรองช่วงไซต์งาน (siteFrom ถึง siteTo)
+    const siteFrom = (params.siteFrom || '').trim();
+    const siteTo = (params.siteTo || '').trim();
+
+    let fromIdx = 0;
+    let toIdx = Math.max(0, permittedSites.length - 1);
+
+    if (siteFrom && siteFrom !== 'ALL') {
+      const idx = permittedSites.indexOf(siteFrom);
+      if (idx !== -1) fromIdx = idx;
+    }
+    if (siteTo && siteTo !== 'ALL') {
+      const idx = permittedSites.indexOf(siteTo);
+      if (idx !== -1) toIdx = idx;
+    }
+    if (fromIdx > toIdx) {
+      const tmp = fromIdx;
+      fromIdx = toIdx;
+      toIdx = tmp;
+    }
+
+    const targetSites = permittedSites.slice(fromIdx, toIdx + 1);
+    const targetSiteSet = new Set(targetSites);
+
+    // 3. อ่านงานจากแผ่นงาน Tasks
+    const activeData = taskSheet.getDataRange().getValues();
+    const rawTasks = [];
+
+    for (let i = 1; i < activeData.length; i++) {
+      const row = activeData[i];
+      if (!row[0]) continue;
+      const tSite = String(row[1] || 'ไม่ระบุไซต์งาน').trim();
+      if (!targetSiteSet.has(tSite)) continue;
+
+      let dueDateFormatted = row[7] ? normalizeDateToIso_(row[7]) : '';
+      let reportDateFormatted = row[13] ? normalizeDateToIso_(row[13]) : (row[8] ? normalizeDateToIso_(row[8]) : '');
+      let checklist = [];
+      if (row[14]) {
+        try {
+          const p = JSON.parse(row[14]);
+          if (Array.isArray(p)) checklist = p;
+        } catch (e) {}
+      }
+
+      let completedAtStr = '';
+      if (row.length >= 16 && row[15]) {
+        completedAtStr = String(row[15]);
+      } else if (String(row[6]) === 'เสร็จสิ้น' && row[9]) {
+        completedAtStr = String(row[9]);
+      }
+
+      rawTasks.push({
+        id: String(row[0]),
+        site: tSite,
+        title: String(row[2] || ''),
+        description: String(row[3] || ''),
+        assignee: String(row[4] || 'ไม่ระบุ'),
+        priority: String(row[5] || 'ทั่วไป'),
+        status: String(row[6] || 'รอดำเนินการ'),
+        dueDate: dueDateFormatted,
+        createdAt: row[8] ? String(row[8]) : '',
+        updatedAt: row[9] ? String(row[9]) : '',
+        reporter: String(row[12] || ''),
+        reportDate: reportDateFormatted,
+        checklist: checklist,
+        completedAt: completedAtStr,
+        source: 'active'
+      });
+    }
+
+    // 4. อ่านงานจาก Tasks_Archive (ถ้าเปิด includeArchive)
+    const includeArchive = params.includeArchive !== false;
+    if (includeArchive) {
+      const archiveSheet = getArchiveSheet_(ss);
+      const archiveData = archiveSheet.getDataRange().getValues();
+      for (let i = 1; i < archiveData.length; i++) {
+        const row = archiveData[i];
+        if (!row[0]) continue;
+        const tSite = String(row[1] || 'ไม่ระบุไซต์งาน').trim();
+        if (!targetSiteSet.has(tSite)) continue;
+
+        let dueDateFormatted = row[7] ? normalizeDateToIso_(row[7]) : '';
+        let reportDateFormatted = (row.length >= 14 && row[13]) ? normalizeDateToIso_(row[13]) : '';
+        let checklist = [];
+        if (row.length >= 15 && row[14]) {
+          try {
+            const p = JSON.parse(row[14]);
+            if (Array.isArray(p)) checklist = p;
+          } catch (e) {}
+        }
+
+        let completedAtStr = '';
+        if (row.length >= 17 && row[15]) {
+          completedAtStr = String(row[15]);
+        } else if (row[9]) {
+          completedAtStr = String(row[9]);
+        }
+
+        rawTasks.push({
+          id: String(row[0]),
+          site: tSite,
+          title: String(row[2] || ''),
+          description: String(row[3] || ''),
+          assignee: String(row[4] || 'ไม่ระบุ'),
+          priority: String(row[5] || 'ทั่วไป'),
+          status: String(row[6] || 'เสร็จสิ้น'),
+          dueDate: dueDateFormatted,
+          createdAt: row[8] ? String(row[8]) : '',
+          updatedAt: row[9] ? String(row[9]) : '',
+          reporter: (row.length >= 13) ? String(row[12] || '') : '',
+          reportDate: reportDateFormatted,
+          checklist: checklist,
+          completedAt: completedAtStr,
+          archivedAt: (row.length >= 17) ? String(row[16] || '') : (row.length >= 16 ? String(row[15] || '') : ''),
+          source: 'archive'
+        });
+      }
+    }
+
+    // 5. กรองตามเงื่อนไขวันที่เสร็จสิ้น (Option A) และสถานะ
+    const completedFrom = (params.completedFrom || '').trim(); // 'YYYY-MM-DD'
+    const completedTo = (params.completedTo || '').trim();     // 'YYYY-MM-DD'
+    const hasDateRange = Boolean(completedFrom || completedTo);
+    const includePending = params.includePending === true;
+    const statusFilter = (params.statusFilter || 'ALL').trim();
+
+    const filteredTasks = [];
+
+    for (let i = 0; i < rawTasks.length; i++) {
+      const t = rawTasks[i];
+
+      // กรองสถานะก่อน หากผู้ใช้เลือกสถานะเฉพาะ
+      if (statusFilter !== 'ALL' && t.status !== statusFilter) {
+        continue;
+      }
+
+      if (hasDateRange) {
+        if (t.status === 'เสร็จสิ้น') {
+          const compDate = (t.completedAt || t.updatedAt || '').substring(0, 10);
+          if (completedFrom && compDate && compDate < completedFrom) continue;
+          if (completedTo && compDate && compDate > completedTo) continue;
+          if (!compDate && (completedFrom || completedTo)) continue;
+          filteredTasks.push(t);
+        } else {
+          if (includePending) {
+            filteredTasks.push(t);
+          }
+        }
+      } else {
+        filteredTasks.push(t);
+      }
+    }
+
+    // เรียงลำดับงานตาม ไซต์งาน แล้วตาม วันที่เสร็จสิ้น / วันที่แก้ไข
+    filteredTasks.sort((a, b) => {
+      const siteCmp = a.site.localeCompare(b.site, 'th');
+      if (siteCmp !== 0) return siteCmp;
+      const dateA = a.completedAt || a.updatedAt || a.dueDate || '';
+      const dateB = b.completedAt || b.updatedAt || b.dueDate || '';
+      return dateB.localeCompare(dateA);
+    });
+
+    // 6. สรุปยอดตามไซต์งาน (summaryBySite)
+    const siteMap = {};
+    targetSites.forEach(s => {
+      siteMap[s] = { site: s, todo: 0, inProgress: 0, review: 0, done: 0, total: 0 };
+    });
+
+    filteredTasks.forEach(t => {
+      if (!siteMap[t.site]) {
+        siteMap[t.site] = { site: t.site, todo: 0, inProgress: 0, review: 0, done: 0, total: 0 };
+      }
+      siteMap[t.site].total++;
+      if (t.status === 'รอดำเนินการ') siteMap[t.site].todo++;
+      else if (t.status === 'กำลังดำเนินการ') siteMap[t.site].inProgress++;
+      else if (t.status === 'รอตรวจสอบ') siteMap[t.site].review++;
+      else if (t.status === 'เสร็จสิ้น') siteMap[t.site].done++;
+    });
+
+    const summaryBySite = targetSites.map(s => {
+      const sm = siteMap[s];
+      const pct = sm.total > 0 ? Math.round((sm.done / sm.total) * 100) : 0;
+      return {
+        ...sm,
+        donePercent: pct
+      };
+    });
+
+    const totalSummary = {
+      total: filteredTasks.length,
+      todo: filteredTasks.filter(t => t.status === 'รอดำเนินการ').length,
+      inProgress: filteredTasks.filter(t => t.status === 'กำลังดำเนินการ').length,
+      review: filteredTasks.filter(t => t.status === 'รอตรวจสอบ').length,
+      done: filteredTasks.filter(t => t.status === 'เสร็จสิ้น').length,
+      donePercent: filteredTasks.length > 0 ? Math.round((filteredTasks.filter(t => t.status === 'เสร็จสิ้น').length / filteredTasks.length) * 100) : 0
+    };
+
+    return {
+      success: true,
+      tasks: filteredTasks,
+      summaryBySite: summaryBySite,
+      totalSummary: totalSummary,
+      permittedSites: permittedSites,
+      targetSites: targetSites
+    };
+  } catch (err) {
+    return { success: false, message: err.message, error: err.message, tasks: [] };
   }
 }
 
