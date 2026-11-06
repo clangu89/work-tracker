@@ -37,6 +37,8 @@ function build() {
   const adminViewHtml = fs.readFileSync(path.join(ROOT_DIR, 'AdminView.html'), 'utf8');
   const rdpScriptHtml = fs.readFileSync(path.join(ROOT_DIR, 'RdpScript.html'), 'utf8');
   const adminScriptHtml = fs.readFileSync(path.join(ROOT_DIR, 'AdminScript.html'), 'utf8');
+  const calendarViewHtml = fs.readFileSync(path.join(ROOT_DIR, 'CalendarView.html'), 'utf8');
+  const calendarScriptHtml = fs.readFileSync(path.join(ROOT_DIR, 'CalendarScript.html'), 'utf8');
 
   // API Bridge Script to polyfill google.script.run for GitHub Pages
   const apiBridge = `
@@ -104,9 +106,11 @@ const GAS_API_ENDPOINT = '${GAS_API_ENDPOINT}';
   let output = indexHtml.replace(/<\?!=\s*include\('Styles'\);\s*\?>/g, stylesHtml);
   output = output.replace(/<\?!=\s*include\('RdpView'\);\s*\?>/g, rdpViewHtml);
   output = output.replace(/<\?!=\s*include\('AdminView'\);\s*\?>/g, adminViewHtml);
+  output = output.replace(/<\?!=\s*include\('CalendarView'\);\s*\?>/g, calendarViewHtml);
   output = output.replace(/<\?!=\s*include\('JavaScript'\);\s*\?>/g, apiBridge + '\n' + javascriptHtml);
   output = output.replace(/<\?!=\s*include\('RdpScript'\);\s*\?>/g, rdpScriptHtml);
   output = output.replace(/<\?!=\s*include\('AdminScript'\);\s*\?>/g, adminScriptHtml);
+  output = output.replace(/<\?!=\s*include\('CalendarScript'\);\s*\?>/g, calendarScriptHtml);
 
   // Fallback for state.webAppUrl in standalone build
   output = output.replace(

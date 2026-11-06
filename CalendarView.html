@@ -1,0 +1,330 @@
+<!-- ================================================================ -->
+<!-- SITE CALENDAR MODULE (ระบบปฏิทินเข้าไซต์งาน) -->
+<!-- ================================================================ -->
+<div id="siteCalendarApp" class="hidden min-h-screen flex flex-col bg-[#FAF8F2] text-[#201E1C]">
+
+  <!-- Top Navbar for Site Calendar -->
+  <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-3">
+        
+        <!-- Left: System Logo, Name & Switcher -->
+        <div class="flex items-center gap-2.5 sm:gap-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 text-sm sm:text-base flex-shrink-0">
+              <i class="fa-solid fa-calendar-days"></i>
+            </div>
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-[#201E1C] leading-tight">ระบบปฏิทินเข้าไซต์งาน</h2>
+              <p class="text-[10px] sm:text-[11px] text-[#6E6862] font-medium">Site Visit & Duty Schedule</p>
+            </div>
+          </div>
+
+          <div class="h-6 w-px bg-[#EFE9DC]"></div>
+
+          <!-- App Switcher Button -->
+          <button onclick="showAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
+            <i class="fa-solid fa-grip text-emerald-600 text-sm"></i>
+            <span class="hidden sm:inline">เลือกระบบ</span>
+          </button>
+        </div>
+
+        <!-- Right: Actions & User Info -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          
+          <!-- Refresh Calendar Button -->
+          <button onclick="refreshCalendarData()" title="รีเฟรชข้อมูลปฏิทิน"
+                  class="h-9 w-9 flex items-center justify-center rounded-xl bg-[#FAF8F2] hover:bg-[#EDE7DA] text-[#6E6862] hover:text-emerald-700 border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
+            <i id="calRefreshIcon" class="fa-solid fa-rotate-right text-xs"></i>
+          </button>
+
+          <!-- Add Schedule Button (Admin / Supervisor only) -->
+          <button id="btnCalendarAddSchedule" onclick="openScheduleModal()"
+                  class="h-9 hidden inline-flex items-center gap-1.5 px-3 sm:px-3.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer active:scale-95">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span>ลงตารางเข้าไซต์</span>
+          </button>
+
+          <!-- User Profile Capsule -->
+          <div class="flex items-center gap-2 pl-2 border-l border-[#EFE9DC]">
+            <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shadow-2xs">
+              <i class="fa-solid fa-user"></i>
+            </div>
+            <div class="hidden md:flex flex-col text-left">
+              <span id="calNavUserFullName" class="font-bold text-xs text-[#201E1C] max-w-[120px] truncate">-</span>
+              <span id="calNavUserRole" class="text-[10px] text-emerald-700 font-semibold uppercase">Member</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Calendar Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 flex flex-col gap-4">
+
+    <!-- Control & Filter Bar -->
+    <div class="bg-white p-4 sm:p-5 rounded-2xl border border-[#EFE9DC] shadow-2xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      
+      <!-- Month Navigator -->
+      <div class="flex items-center gap-2.5">
+        <button onclick="changeCalendarMonth(-1)" title="เดือนก่อนหน้า"
+                class="w-9 h-9 flex items-center justify-center rounded-xl bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] text-[#201E1C] transition-all cursor-pointer shadow-2xs active:scale-95">
+          <i class="fa-solid fa-chevron-left text-xs"></i>
+        </button>
+
+        <h3 id="calCurrentMonthTitle" class="text-base sm:text-lg font-black text-[#1d1b19] min-w-[180px] text-center tracking-tight">
+          กำลังโหลด...
+        </h3>
+
+        <button onclick="changeCalendarMonth(1)" title="เดือนถัดไป"
+                class="w-9 h-9 flex items-center justify-center rounded-xl bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] text-[#201E1C] transition-all cursor-pointer shadow-2xs active:scale-95">
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+
+        <button onclick="goToTodayCalendar()" title="ไปยังเดือนปัจจุบัน"
+                class="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl transition-all cursor-pointer active:scale-95 ml-1">
+          วันนี้
+        </button>
+      </div>
+
+      <!-- Filters & Indicators -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        
+        <!-- Site Filter Dropdown -->
+        <div class="relative min-w-[180px] flex-1 sm:flex-initial">
+          <select id="calFilterSite" onchange="onCalendarFilterChange()"
+                  class="w-full pl-8 pr-7 py-2 text-xs font-medium bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="ALL">🏢 ทุกไซต์งาน</option>
+          </select>
+          <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#6E6862]">
+            <i class="fa-solid fa-location-dot text-xs text-emerald-600"></i>
+          </div>
+        </div>
+
+        <!-- User Filter Dropdown -->
+        <div class="relative min-w-[170px] flex-1 sm:flex-initial">
+          <select id="calFilterUser" onchange="onCalendarFilterChange()"
+                  class="w-full pl-8 pr-7 py-2 text-xs font-medium bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="ALL">👤 ทุกผู้ปฏิบัติงาน</option>
+          </select>
+          <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#6E6862]">
+            <i class="fa-solid fa-user text-xs text-emerald-600"></i>
+          </div>
+        </div>
+
+        <!-- My Schedule Toggle Button -->
+        <button id="btnCalMySchedule" onclick="toggleCalMySchedule()" type="button"
+                class="px-3 py-2 text-xs font-semibold rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] text-[#6E6862] hover:bg-[#EDE7DA] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
+          <i class="fa-solid fa-id-badge text-xs"></i>
+          <span>คิวงานของฉัน</span>
+        </button>
+
+        <!-- Today Duty Badge -->
+        <div class="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl text-xs font-bold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="calTodayDutyCountText">วันนี้มี 0 รายการ</span>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Monthly Calendar Grid View -->
+    <div class="bg-white rounded-2xl border border-[#EFE9DC] shadow-2xs overflow-hidden flex flex-col flex-1">
+      
+      <!-- Day Headers (Sun - Sat) -->
+      <div class="grid grid-cols-7 border-b border-[#EFE9DC] bg-[#FAF8F2] text-center text-xs font-bold py-2.5 text-[#6E6862] select-none">
+        <div class="text-rose-600">อาทิตย์</div>
+        <div>จันทร์</div>
+        <div>อังคาร</div>
+        <div>พุธ</div>
+        <div>พฤหัสบดี</div>
+        <div>ศุกร์</div>
+        <div class="text-indigo-600">เสาร์</div>
+      </div>
+
+      <!-- Day Cells Container (7 columns x variable rows) -->
+      <div id="calGridDays" class="grid grid-cols-7 flex-1 divide-x divide-y divide-[#EFE9DC] min-h-[560px]">
+        <!-- Dynamic Day Cells Rendered via JavaScript -->
+      </div>
+
+    </div>
+
+    <!-- Mobile Agenda List View (Visible on small screens or as helper) -->
+    <div class="block lg:hidden bg-white p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs">
+      <h4 class="font-bold text-sm text-[#1d1b19] mb-3 flex items-center justify-between">
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-list-ul text-emerald-600"></i>
+          <span>รายการเข้าไซต์ประจำเดือนนี้</span>
+        </span>
+        <span id="calAgendaTotalBadge" class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">0 รายการ</span>
+      </h4>
+      <div id="calAgendaList" class="flex flex-col gap-2.5">
+        <!-- Rendered via JavaScript -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================================================================ -->
+  <!-- MODAL: รายละเอียดนัดหมายประจำวัน (Day Schedule Detail) -->
+  <!-- ================================================================ -->
+  <div id="modalDayScheduleDetail" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl border border-[#EFE9DC] shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Modal Header -->
+      <div class="p-5 border-b border-[#EFE9DC] flex items-center justify-between bg-[#FAF8F2]">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg shadow-2xs">
+            <i class="fa-solid fa-calendar-day"></i>
+          </div>
+          <div>
+            <h3 id="modalDayDetailTitle" class="text-base font-bold text-[#1d1b19] leading-tight">รายละเอียดประจำวัน</h3>
+            <p id="modalDayDetailSubtitle" class="text-xs text-[#6E6862] font-medium">-</p>
+          </div>
+        </div>
+        <button onclick="closeDayScheduleDetailModal()" class="w-8 h-8 rounded-full hover:bg-black/5 text-[#6E6862] flex items-center justify-center transition-colors cursor-pointer">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Schedule List in Modal -->
+      <div id="modalDayScheduleItems" class="p-5 flex-1 overflow-y-auto space-y-3">
+        <!-- Dynamic Items -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-[#EFE9DC] bg-[#FAF8F2] flex items-center justify-between gap-3">
+        <button id="btnModalAddForThisDay" onclick="openScheduleModalForSelectedDay()"
+                class="hidden text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>ลงตารางสำหรับวันนี้</span>
+        </button>
+
+        <button onclick="closeDayScheduleDetailModal()" class="ml-auto px-4 py-2 text-xs font-bold text-[#6E6862] hover:text-[#201E1C] bg-white border border-[#EFE9DC] rounded-xl hover:bg-[#EDE7DA] transition-all cursor-pointer shadow-2xs">
+          ปิดหน้าต่าง
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- MODAL: ฟอร์มลงตารางเข้าไซต์งาน (Assign Site Visit Form) -->
+  <!-- ================================================================ -->
+  <div id="modalSiteSchedule" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl border border-[#EFE9DC] shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Header -->
+      <div class="p-5 border-b border-[#EFE9DC] flex items-center justify-between bg-[#FAF8F2]">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-md shadow-emerald-600/20">
+            <i class="fa-solid fa-calendar-plus"></i>
+          </div>
+          <div>
+            <h3 id="modalScheduleFormTitle" class="text-base font-bold text-[#1d1b19]">ลงตารางเข้าไซต์งาน</h3>
+            <p class="text-xs text-[#6E6862]">กำหนดวันที่และมอบหมายผู้ปฏิบัติงาน</p>
+          </div>
+        </div>
+        <button onclick="closeScheduleModal()" class="w-8 h-8 rounded-full hover:bg-black/5 text-[#6E6862] flex items-center justify-center transition-colors cursor-pointer">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="formSiteSchedule" onsubmit="handleScheduleFormSubmit(event)" class="p-5 flex-1 overflow-y-auto space-y-4 text-xs">
+        <input type="hidden" id="calFormScheduleId" value="">
+
+        <!-- วันที่เข้าไซต์งาน -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            วันที่เข้าไซต์งาน <span class="text-rose-500">*</span>
+          </label>
+          <div class="flex items-center gap-2">
+            <input type="date" id="calFormDate" required
+                   class="flex-1 px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none">
+            <button type="button" onclick="setCalFormDateToday()"
+                    class="px-2.5 py-2.5 bg-[#EDE7DA] hover:bg-[#D9D1C3] text-[#201E1C] rounded-xl font-bold text-[11px] transition-colors cursor-pointer whitespace-nowrap">
+              วันนี้
+            </button>
+            <button type="button" onclick="setCalFormDateTomorrow()"
+                    class="px-2.5 py-2.5 bg-[#EDE7DA] hover:bg-[#D9D1C3] text-[#201E1C] rounded-xl font-bold text-[11px] transition-colors cursor-pointer whitespace-nowrap">
+              พรุ่งนี้
+            </button>
+          </div>
+        </div>
+
+        <!-- ไซต์งาน -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            ไซต์งานเป้าหมาย <span class="text-rose-500">*</span>
+          </label>
+          <select id="calFormSite" required
+                  class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="">-- กรุณาเลือกไซต์งาน --</option>
+          </select>
+        </div>
+
+        <!-- ผู้ปฏิบัติงาน -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            ผู้ปฏิบัติงาน (User) <span class="text-rose-500">*</span>
+          </label>
+          <select id="calFormUser" required
+                  class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="">-- กรุณาเลือกผู้ปฏิบัติงาน --</option>
+          </select>
+        </div>
+
+        <!-- วัตถุประสงค์ / งานที่ต้องทำ -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            วัตถุประสงค์ / หมายเหตุงาน
+          </label>
+          <textarea id="calFormPurpose" rows="3" placeholder="เช่น เข้าตรวจระบบไฟฟ้า, ซ่อมบำรุงแอร์, ตรวจรับงวดงาน..."
+                    class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] placeholder-[#9E9890] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none resize-none"></textarea>
+        </div>
+
+        <!-- ผูกกับรหัส Task ใน Work Tracker (Optional) -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            เชื่อมโยงกับงาน / Plan (ถ้ามี)
+          </label>
+          <select id="calFormTaskId"
+                  class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="">-- ไม่ระบุงานเชื่อมโยง --</option>
+          </select>
+        </div>
+
+        <!-- ตัวเลือกแจ้งเตือน Telegram ทันที -->
+        <div class="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200/60 flex items-start gap-2.5">
+          <input type="checkbox" id="calFormNotifyTelegram" checked class="mt-0.5 rounded text-emerald-600 focus:ring-0 cursor-pointer">
+          <label for="calFormNotifyTelegram" class="text-xs text-[#201E1C] cursor-pointer select-none">
+            <span class="font-bold text-emerald-900 block">ส่งแจ้งเตือนเข้า Telegram ของผู้ใช้ทันที</span>
+            <span class="text-[#6E6862] text-[11px] block mt-0.5">ระบบจะส่งข้อความแจ้งเตือนเข้า Telegram Chat ID ส่วนตัวของผู้ใช้ และกลุ่มประจำไซต์งาน (ถ้ามี)</span>
+          </label>
+        </div>
+
+        <!-- Submit & Cancel Buttons -->
+        <div class="pt-3 border-t border-[#EFE9DC] flex items-center justify-end gap-2.5">
+          <button type="button" onclick="closeScheduleModal()"
+                  class="px-4 py-2.5 rounded-xl border border-[#EFE9DC] bg-white text-[#6E6862] hover:bg-[#EDE7DA] font-bold transition-all cursor-pointer shadow-2xs">
+            ยกเลิก
+          </button>
+          <button type="submit" id="btnSubmitScheduleForm"
+                  class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all cursor-pointer shadow-md shadow-emerald-600/20 active:scale-95 flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk text-xs"></i>
+            <span id="btnSubmitScheduleText">บันทึกกำหนดการ</span>
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
+
+</div>

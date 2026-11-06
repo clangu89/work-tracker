@@ -1,0 +1,843 @@
+<script>
+/**
+ * =========================================================================
+ * SITE CALENDAR CLIENT MODULE (CalendarScript.html)
+ * Client-side Controller & Interactive UI for Site Visit Schedule Management
+ * =========================================================================
+ */
+
+const calendarState = {
+  currentYear: new Date().getFullYear(),
+  currentMonth: new Date().getMonth() + 1, // 1 - 12
+  schedules: [],
+  usersList: [],
+  selectedDate: null,
+  siteFilter: 'ALL',
+  userFilter: 'ALL',
+  myScheduleOnly: false,
+  isLoading: false,
+  isInitialized: false
+};
+
+const THAI_MONTH_NAMES = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+const THAI_DAY_NAMES = [
+  'วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'
+];
+
+/**
+ * ตรวจสอบสิทธิ์ว่าผู้ใช้ปัจจุบันมีสิทธิ์จัดการตารางเข้าไซต์หรือไม่ (Admin หรือ Supervisor)
+ */
+function canManageCalendar() {
+  if (!state.currentUser) return false;
+  const role = String(state.currentUser.role || '').trim();
+  return role === 'Admin' || role === 'Supervisor';
+}
+
+/**
+ * เริ่มต้นระบบปฏิทินเข้าไซต์งานเมื่อเข้าสู่แอป
+ */
+function initCalendarApp() {
+  updateCalendarNavbarUser();
+
+  // ปรับแต่ง UI ตามสิทธิ์ของผู้ใช้
+  const canManage = canManageCalendar();
+  const btnAdd = document.getElementById('btnCalendarAddSchedule');
+  const btnModalAdd = document.getElementById('btnModalAddForThisDay');
+  if (btnAdd) btnAdd.classList.toggle('hidden', !canManage);
+  if (btnModalAdd) btnModalAdd.classList.toggle('hidden', !canManage);
+
+  // เตรียมตัวเลือกใน Dropdown ฟิลเตอร์และฟอร์ม
+  syncCalendarDropdowns();
+
+  // โหลดข้อมูลปฏิทิน
+  loadCalendarSchedules();
+  calendarState.isInitialized = true;
+}
+
+/**
+ * อัปเดตข้อมูลผู้ใช้งานบน Navbar ของปฏิทิน
+ */
+function updateCalendarNavbarUser() {
+  if (!state.currentUser) return;
+  const nameEl = document.getElementById('calNavUserFullName');
+  const roleEl = document.getElementById('calNavUserRole');
+  if (nameEl) nameEl.textContent = state.currentUser.fullName || state.currentUser.username;
+  if (roleEl) {
+    roleEl.textContent = state.currentUser.role || 'Member';
+    if (state.currentUser.role === 'Admin') {
+      roleEl.className = 'text-[10px] text-purple-700 font-bold uppercase';
+    } else if (state.currentUser.role === 'Supervisor') {
+      roleEl.className = 'text-[10px] text-blue-700 font-bold uppercase';
+    } else {
+      roleEl.className = 'text-[10px] text-emerald-700 font-semibold uppercase';
+    }
+  }
+}
+
+/**
+ * ซิงค์ข้อมูลไซต์งาน ผู้ใช้งาน และ Task ไปยัง Dropdown ทั้งหมดในปฏิทิน
+ */
+function syncCalendarDropdowns() {
+  // 1. ซิงค์ไซต์งาน
+  const sites = state.sites && state.sites.length > 0 ? state.sites : (window.DEFAULT_SITES || []);
+  const filterSiteEl = document.getElementById('calFilterSite');
+  const formSiteEl = document.getElementById('calFormSite');
+
+  if (filterSiteEl) {
+    const currentVal = filterSiteEl.value;
+    filterSiteEl.innerHTML = '<option value="ALL">🏢 ทุกไซต์งาน</option>' +
+      sites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    if (sites.includes(currentVal)) filterSiteEl.value = currentVal;
+  }
+
+  if (formSiteEl) {
+    formSiteEl.innerHTML = '<option value="">-- กรุณาเลือกไซต์งาน --</option>' +
+      sites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  }
+
+  // 2. ดึงรายชื่อผู้ใช้ถ้ายังไม่มี
+  if (!calendarState.usersList || calendarState.usersList.length === 0) {
+    loadCalendarUsersList();
+  } else {
+    populateCalendarUserDropdowns(calendarState.usersList);
+  }
+
+  // 3. ซิงค์ Task เชื่อมโยงในฟอร์ม
+  const formTaskEl = document.getElementById('calFormTaskId');
+  if (formTaskEl && state.tasks && state.tasks.length > 0) {
+    const activeTasks = state.tasks.filter(t => t.status !== 'เสร็จสิ้น');
+    formTaskEl.innerHTML = '<option value="">-- ไม่ระบุงานเชื่อมโยง --</option>' +
+      activeTasks.map(t => `<option value="${t.id}">[${t.id}] ${escapeHtml(t.title)} (${escapeHtml(t.site)})</option>`).join('');
+  }
+}
+
+/**
+ * ดึงรายชื่อผู้ใช้จากระบบ
+ */
+function loadCalendarUsersList() {
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.users) {
+        calendarState.usersList = res.users;
+        populateCalendarUserDropdowns(res.users);
+      }
+    })
+    .withFailureHandler(function(err) {
+      console.warn('loadCalendarUsersList failed: ' + err.message);
+    })
+    .getUsersList();
+}
+
+/**
+ * เติมรายชื่อผู้ใช้ลงใน Dropdown
+ */
+function populateCalendarUserDropdowns(users) {
+  const filterUserEl = document.getElementById('calFilterUser');
+  const formUserEl = document.getElementById('calFormUser');
+
+  const activeUsers = users.filter(u => u.status !== 'Inactive');
+
+  if (filterUserEl) {
+    const currentVal = filterUserEl.value;
+    filterUserEl.innerHTML = '<option value="ALL">👤 ทุกผู้ปฏิบัติงาน</option>' +
+      activeUsers.map(u => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.fullName || u.username)} (@${escapeHtml(u.username)})</option>`).join('');
+    if (currentVal) filterUserEl.value = currentVal;
+  }
+
+  if (formUserEl) {
+    formUserEl.innerHTML = '<option value="">-- กรุณาเลือกผู้ปฏิบัติงาน --</option>' +
+      activeUsers.map(u => `<option value="${escapeHtml(u.username)}" data-fullname="${escapeHtml(u.fullName || u.username)}">${escapeHtml(u.fullName || u.username)} (${u.role || 'Member'})</option>`).join('');
+  }
+}
+
+/**
+ * โหลดข้อมูลตารางกำหนดการเข้าไซต์งาน
+ */
+function loadCalendarSchedules() {
+  if (calendarState.isLoading) return;
+  calendarState.isLoading = true;
+
+  const refreshIcon = document.getElementById('calRefreshIcon');
+  if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+  updateCalendarMonthTitle();
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    calendarState.isLoading = false;
+    if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+    renderCalendarGrid();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      calendarState.isLoading = false;
+      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      if (res && res.success) {
+        calendarState.schedules = res.schedules || [];
+        renderCalendarGrid();
+        renderCalendarAgenda();
+        updateTodayDutyCountBadge();
+      } else {
+        showToast(res ? res.message : 'ไม่สามารถโหลดข้อมูลปฏิทินได้', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      calendarState.isLoading = false;
+      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+    })
+    .getSiteSchedules(calendarState.currentYear, calendarState.currentMonth, calendarState.siteFilter, calendarState.userFilter);
+}
+
+/**
+ * รีเฟรชข้อมูลปฏิทินแบบแมนนวล
+ */
+function refreshCalendarData() {
+  syncCalendarDropdowns();
+  loadCalendarSchedules();
+  showToast('กำลังรีเฟรชข้อมูลปฏิทิน...', 'info', 1500);
+}
+
+/**
+ * เลื่อนเดือนในปฏิทิน (-1 หรือ +1)
+ */
+function changeCalendarMonth(delta) {
+  calendarState.currentMonth += delta;
+  if (calendarState.currentMonth < 1) {
+    calendarState.currentMonth = 12;
+    calendarState.currentYear -= 1;
+  } else if (calendarState.currentMonth > 12) {
+    calendarState.currentMonth = 1;
+    calendarState.currentYear += 1;
+  }
+  loadCalendarSchedules();
+}
+
+/**
+ * กลับไปยังเดือนปัจจุบัน
+ */
+function goToTodayCalendar() {
+  const now = new Date();
+  calendarState.currentYear = now.getFullYear();
+  calendarState.currentMonth = now.getMonth() + 1;
+  loadCalendarSchedules();
+}
+
+/**
+ * อัปเดตหัวข้อเดือน พ.ศ.
+ */
+function updateCalendarMonthTitle() {
+  const titleEl = document.getElementById('calCurrentMonthTitle');
+  if (!titleEl) return;
+  const monthName = THAI_MONTH_NAMES[calendarState.currentMonth - 1] || '';
+  const thaiYear = calendarState.currentYear + 543;
+  titleEl.textContent = `${monthName} ${thaiYear}`;
+}
+
+/**
+ * ฟิลเตอร์เปลี่ยนค่า
+ */
+function onCalendarFilterChange() {
+  const siteVal = document.getElementById('calFilterSite')?.value || 'ALL';
+  const userVal = document.getElementById('calFilterUser')?.value || 'ALL';
+  calendarState.siteFilter = siteVal;
+  calendarState.userFilter = userVal;
+  renderCalendarGrid();
+  renderCalendarAgenda();
+}
+
+/**
+ * สลับตัวกรอง "เฉพาะคิวงานของฉัน"
+ */
+function toggleCalMySchedule() {
+  calendarState.myScheduleOnly = !calendarState.myScheduleOnly;
+  const btn = document.getElementById('btnCalMySchedule');
+  if (btn) {
+    if (calendarState.myScheduleOnly) {
+      btn.className = 'px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-600 text-white shadow-sm transition-all flex items-center gap-1.5 cursor-pointer';
+    } else {
+      btn.className = 'px-3 py-2 text-xs font-semibold rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] text-[#6E6862] hover:bg-[#EDE7DA] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs';
+    }
+  }
+  renderCalendarGrid();
+  renderCalendarAgenda();
+}
+
+/**
+ * คัดกรองรายการตามตัวกรองที่เลือก
+ */
+function getFilteredSchedules() {
+  const curUser = state.currentUser ? String(state.currentUser.username || '').toLowerCase() : '';
+  return calendarState.schedules.filter(item => {
+    if (calendarState.siteFilter !== 'ALL' && item.site !== calendarState.siteFilter) return false;
+    if (calendarState.userFilter !== 'ALL' && item.username.toLowerCase() !== calendarState.userFilter.toLowerCase()) return false;
+    if (calendarState.myScheduleOnly && item.username.toLowerCase() !== curUser) return false;
+    return true;
+  });
+}
+
+/**
+ * เรนเดอร์ตารางปฏิทินรายเดือน (Monthly Grid View 7x5 หรือ 7x6)
+ */
+function renderCalendarGrid() {
+  const container = document.getElementById('calGridDays');
+  if (!container) return;
+
+  const year = calendarState.currentYear;
+  const month = calendarState.currentMonth; // 1 - 12
+
+  // วันแรกของเดือน (0 = อาทิตย์, 1 = จันทร์, ..., 6 = เสาร์)
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  // จำนวนวันในเดือนนี้
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // จำนวนวันในเดือนก่อนหน้า
+  const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
+
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const filtered = getFilteredSchedules();
+  // จับคู่ตามวันที่ YYYY-MM-DD
+  const scheduleByDate = {};
+  filtered.forEach(s => {
+    if (!scheduleByDate[s.date]) scheduleByDate[s.date] = [];
+    scheduleByDate[s.date].push(s);
+  });
+
+  let html = '';
+
+  // 1. เติมวันของเดือนก่อนหน้า (Padding Leading Days)
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const prevDayNum = daysInPrevMonth - i;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const dateStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevDayNum).padStart(2, '0')}`;
+    const dayItems = scheduleByDate[dateStr] || [];
+
+    html += renderCalendarCellHtml(prevDayNum, dateStr, dayItems, false, false);
+  }
+
+  // 2. เติมวันของเดือนปัจจุบัน
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isToday = (dateStr === todayIso);
+    const dayItems = scheduleByDate[dateStr] || [];
+
+    html += renderCalendarCellHtml(day, dateStr, dayItems, true, isToday);
+  }
+
+  // 3. เติมวันของเดือนถัดไป (Padding Trailing Days เพื่อให้ครบสัปดาห์)
+  const totalCells = firstDay + daysInMonth;
+  const nextDaysCount = (7 - (totalCells % 7)) % 7;
+  for (let day = 1; day <= nextDaysCount; day++) {
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const dateStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dayItems = scheduleByDate[dateStr] || [];
+
+    html += renderCalendarCellHtml(day, dateStr, dayItems, false, false);
+  }
+
+  container.innerHTML = html;
+}
+
+/**
+ * สร้าง HTML สำหรับช่องวันในปฏิทิน 1 ช่อง
+ */
+function renderCalendarCellHtml(dayNum, dateStr, items, isCurrentMonth, isToday) {
+  const canManage = canManageCalendar();
+  const bgClass = isCurrentMonth 
+    ? (isToday ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'bg-white hover:bg-[#FAF8F2]') 
+    : 'bg-[#F7F4EA]/40 text-[#9E9890] hover:bg-[#F7F4EA]';
+
+  const badgeLimit = 3;
+  const visibleItems = items.slice(0, badgeLimit);
+  const overflowCount = items.length - badgeLimit;
+
+  let itemsHtml = visibleItems.map(item => {
+    const siteColor = (typeof getSiteColorStyle === 'function') 
+      ? getSiteColorStyle(item.site) 
+      : { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' };
+
+    return `
+      <div class="px-1.5 py-0.5 rounded-lg text-[10px] font-semibold truncate border ${siteColor.bg} ${siteColor.text} ${siteColor.border} flex items-center gap-1 shadow-2xs"
+           title="[${escapeHtml(item.site)}] ${escapeHtml(item.fullName)}: ${escapeHtml(item.purpose || 'เข้าไซต์งาน')}">
+        <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>
+        <span class="truncate font-bold">${escapeHtml(item.fullName || item.username)}</span>
+      </div>
+    `;
+  }).join('');
+
+  if (overflowCount > 0) {
+    itemsHtml += `
+      <div class="text-[10px] text-[#6E6862] font-bold px-1 hover:underline">
+        + อีก ${overflowCount} คน...
+      </div>
+    `;
+  }
+
+  return `
+    <div onclick="openDayScheduleDetail('${dateStr}')"
+         class="${bgClass} p-1.5 sm:p-2.5 min-h-[95px] sm:min-h-[110px] flex flex-col justify-between transition-colors cursor-pointer group relative">
+      
+      <!-- Day Header -->
+      <div class="flex items-center justify-between">
+        <span class="inline-flex items-center justify-center text-xs font-bold w-6 h-6 rounded-full transition-transform group-hover:scale-110 ${
+          isToday ? 'bg-emerald-600 text-white shadow-sm' : (isCurrentMonth ? 'text-[#201E1C]' : 'text-[#9E9890]')
+        }">
+          ${dayNum}
+        </span>
+
+        ${canManage ? `
+          <button onclick="event.stopPropagation(); openScheduleModal('${dateStr}')" 
+                  title="ลงตารางวันที่ ${dayNum}"
+                  class="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-md hover:bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] transition-opacity cursor-pointer">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        ` : ''}
+      </div>
+
+      <!-- Scheduled Personnel Chips -->
+      <div class="flex-1 mt-1 space-y-1 overflow-hidden">
+        ${itemsHtml}
+      </div>
+
+    </div>
+  `;
+}
+
+/**
+ * เรนเดอร์ Agenda รายการเข้าไซต์งาน (สำหรับหน้าจอมือถือ)
+ */
+function renderCalendarAgenda() {
+  const container = document.getElementById('calAgendaList');
+  const badgeEl = document.getElementById('calAgendaTotalBadge');
+  if (!container) return;
+
+  const filtered = getFilteredSchedules();
+  if (badgeEl) badgeEl.textContent = `${filtered.length} รายการ`;
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-6 text-xs text-[#9E9890]">
+        <i class="fa-solid fa-calendar-xmark text-2xl mb-1 text-[#D9D1C3]"></i>
+        <p>ไม่มีกำหนดการเข้าไซต์งานในเดือนนี้</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
+    const siteColor = (typeof getSiteColorStyle === 'function') 
+      ? getSiteColorStyle(item.site) 
+      : { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' };
+
+    return `
+      <div onclick="openDayScheduleDetail('${item.date}')"
+           class="p-3 bg-[#FAF8F2] hover:bg-[#EDE7DA]/70 rounded-xl border border-[#EFE9DC] flex items-center justify-between gap-3 cursor-pointer transition-colors shadow-2xs">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-white border border-[#EFE9DC] flex items-center justify-center font-bold text-xs text-emerald-700 shadow-2xs">
+            ${item.date ? item.date.split('-')[2] : '-'}
+          </div>
+          <div>
+            <div class="font-bold text-xs text-[#201E1C]">${escapeHtml(item.fullName || item.username)}</div>
+            <div class="text-[11px] text-[#6E6862] mt-0.5 truncate max-w-[200px]">
+              ${escapeHtml(item.purpose || 'เข้าไซต์งาน')}
+            </div>
+          </div>
+        </div>
+
+        <span class="badge-site ${siteColor.bg} ${siteColor.text} border ${siteColor.border} text-[10px] font-bold">
+          <i class="fa-solid fa-location-dot text-[9px]"></i>
+          ${escapeHtml(item.site)}
+        </span>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * อัปเดตตัวเลขแจ้งเตือนจำนวนคนเข้าไซต์วันนี้
+ */
+function updateTodayDutyCountBadge() {
+  const badge = document.getElementById('calTodayDutyCountText');
+  if (!badge) return;
+
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const todayCount = calendarState.schedules.filter(s => s.date === todayIso).length;
+  badge.textContent = `วันนี้มี ${todayCount} รายการ`;
+}
+
+/**
+ * แปลงวันที่เป็นข้อความภาษาไทยสวยงาม
+ */
+function formatThaiDateDisplay(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  const dayName = THAI_DAY_NAMES[d.getDay()] || '';
+  const monthName = THAI_MONTH_NAMES[parseInt(parts[1], 10) - 1] || '';
+  const thaiYear = parseInt(parts[0], 10) + 543;
+  return `${dayName}ที่ ${parseInt(parts[2], 10)} ${monthName} ${thaiYear}`;
+}
+
+/**
+ * เปิด Modal ดูรายละเอียดรายวัน
+ */
+function openDayScheduleDetail(dateStr) {
+  calendarState.selectedDate = dateStr;
+  const modal = document.getElementById('modalDayScheduleDetail');
+  const titleEl = document.getElementById('modalDayDetailTitle');
+  const subtitleEl = document.getElementById('modalDayDetailSubtitle');
+  const container = document.getElementById('modalDayScheduleItems');
+
+  if (titleEl) titleEl.textContent = 'กำหนดการเข้าไซต์งาน';
+  if (subtitleEl) subtitleEl.textContent = formatThaiDateDisplay(dateStr);
+
+  const daySchedules = calendarState.schedules.filter(s => s.date === dateStr);
+  const canManage = canManageCalendar();
+
+  if (container) {
+    if (daySchedules.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-10 text-xs text-[#9E9890]">
+          <div class="w-12 h-12 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-2">
+            <i class="fa-solid fa-calendar-check"></i>
+          </div>
+          <p class="font-bold text-sm text-[#201E1C]">ไม่มีกำหนดการเข้าไซต์งานในวันนี้</p>
+          <p class="mt-1">ยังไม่มีการมอบหมายผู้ปฏิบัติงานสำหรับวันดังกล่าว</p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = daySchedules.map(item => {
+        const siteColor = (typeof getSiteColorStyle === 'function')
+          ? getSiteColorStyle(item.site)
+          : { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' };
+
+        return `
+          <div class="p-3.5 bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC] flex flex-col gap-2.5">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                  ${escapeHtml((item.fullName || item.username).substring(0, 1))}
+                </div>
+                <div>
+                  <h5 class="font-bold text-xs text-[#201E1C] leading-tight">
+                    ${escapeHtml(item.fullName || item.username)}
+                    <span class="text-[11px] font-normal text-[#6E6862]">(@${escapeHtml(item.username)})</span>
+                  </h5>
+                  <div class="mt-1">
+                    <span class="badge-site ${siteColor.bg} ${siteColor.text} border ${siteColor.border} text-[10px] font-bold">
+                      <i class="fa-solid fa-location-dot text-[9px]"></i>
+                      ${escapeHtml(item.site)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              ${canManage ? `
+                <div class="flex items-center gap-1">
+                  <button onclick="editSiteSchedule('${item.id}')" title="แก้ไข"
+                          class="w-7 h-7 rounded-lg bg-white hover:bg-blue-50 text-[#6E6862] hover:text-blue-600 border border-[#EFE9DC] flex items-center justify-center text-xs transition-colors cursor-pointer">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button onclick="confirmDeleteSiteSchedule('${item.id}')" title="ลบ"
+                          class="w-7 h-7 rounded-lg bg-white hover:bg-rose-50 text-[#6E6862] hover:text-rose-600 border border-[#EFE9DC] flex items-center justify-center text-xs transition-colors cursor-pointer">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+
+            ${item.purpose ? `
+              <div class="text-xs text-[#201E1C] bg-white p-2.5 rounded-xl border border-[#EFE9DC]/70 font-medium">
+                <span class="text-[#6E6862] font-bold mr-1">งานที่ต้องทำ:</span>
+                ${escapeHtml(item.purpose)}
+              </div>
+            ` : ''}
+
+            <div class="flex items-center justify-between text-[11px] text-[#6E6862] pt-1 border-t border-[#EFE9DC]/60">
+              <span>มอบหมายโดย: <b>${escapeHtml(item.createdBy || 'ผู้ดูแลระบบ')}</b></span>
+              ${item.taskId ? `
+                <button onclick="jumpToTaskInWorkTracker('${escapeHtml(item.taskId)}')"
+                        class="text-emerald-700 hover:text-emerald-800 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                  <i class="fa-solid fa-link text-[10px]"></i>
+                  <span>ดูงาน #${escapeHtml(item.taskId)}</span>
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+/**
+ * ปิด Modal รายละเอียดรายวัน
+ */
+function closeDayScheduleDetailModal() {
+  const modal = document.getElementById('modalDayScheduleDetail');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * เปิด Modal ลงตารางสำหรับวันที่เลือกไว้
+ */
+function openScheduleModalForSelectedDay() {
+  closeDayScheduleDetailModal();
+  openScheduleModal(calendarState.selectedDate);
+}
+
+/**
+ * เปิด Modal ฟอร์มลงตารางเข้าไซต์งาน
+ */
+function openScheduleModal(dateStr, scheduleId) {
+  if (!canManageCalendar()) {
+    showToast('จำกัดเฉพาะสิทธิ์ Admin หรือ Supervisor เท่านั้น', 'warning');
+    return;
+  }
+
+  const modal = document.getElementById('modalSiteSchedule');
+  const titleEl = document.getElementById('modalScheduleFormTitle');
+  const submitTextEl = document.getElementById('btnSubmitScheduleText');
+  const idInput = document.getElementById('calFormScheduleId');
+  const dateInput = document.getElementById('calFormDate');
+  const siteSelect = document.getElementById('calFormSite');
+  const userSelect = document.getElementById('calFormUser');
+  const purposeInput = document.getElementById('calFormPurpose');
+  const taskSelect = document.getElementById('calFormTaskId');
+  const notifyCheck = document.getElementById('calFormNotifyTelegram');
+
+  syncCalendarDropdowns();
+
+  if (scheduleId) {
+    const item = calendarState.schedules.find(s => s.id === scheduleId);
+    if (item) {
+      if (titleEl) titleEl.textContent = 'แก้ไขตารางเข้าไซต์งาน';
+      if (submitTextEl) submitTextEl.textContent = 'บันทึกการแก้ไข';
+      if (idInput) idInput.value = item.id;
+      if (dateInput) dateInput.value = item.date;
+      if (siteSelect) siteSelect.value = item.site;
+      if (userSelect) userSelect.value = item.username;
+      if (purposeInput) purposeInput.value = item.purpose || '';
+      if (taskSelect) taskSelect.value = item.taskId || '';
+      if (notifyCheck) notifyCheck.checked = true;
+    }
+  } else {
+    if (titleEl) titleEl.textContent = 'ลงตารางเข้าไซต์งาน';
+    if (submitTextEl) submitTextEl.textContent = 'บันทึกกำหนดการ';
+    if (idInput) idInput.value = '';
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    if (dateInput) dateInput.value = dateStr || todayIso;
+    if (siteSelect) siteSelect.value = (calendarState.siteFilter !== 'ALL') ? calendarState.siteFilter : '';
+    if (userSelect) userSelect.value = (calendarState.userFilter !== 'ALL') ? calendarState.userFilter : '';
+    if (purposeInput) purposeInput.value = '';
+    if (taskSelect) taskSelect.value = '';
+    if (notifyCheck) notifyCheck.checked = true;
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+/**
+ * ปิด Modal ฟอร์ม
+ */
+function closeScheduleModal() {
+  const modal = document.getElementById('modalSiteSchedule');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * ตั้งวันที่ในฟอร์มเป็น วันนี้
+ */
+function setCalFormDateToday() {
+  const d = new Date();
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const input = document.getElementById('calFormDate');
+  if (input) input.value = iso;
+}
+
+/**
+ * ตั้งวันที่ในฟอร์มเป็น วันพรุ่งนี้
+ */
+function setCalFormDateTomorrow() {
+  const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const input = document.getElementById('calFormDate');
+  if (input) input.value = iso;
+}
+
+/**
+ * กดแก้ไขจาก Modal รายวัน
+ */
+function editSiteSchedule(scheduleId) {
+  closeDayScheduleDetailModal();
+  openScheduleModal(null, scheduleId);
+}
+
+/**
+ * บันทึกฟอร์มลงตารางเข้าไซต์งาน
+ */
+function handleScheduleFormSubmit(event) {
+  if (event) event.preventDefault();
+
+  if (!canManageCalendar()) {
+    showToast('จำกัดเฉพาะสิทธิ์ Admin หรือ Supervisor เท่านั้น', 'warning');
+    return;
+  }
+
+  const id = document.getElementById('calFormScheduleId')?.value || '';
+  const date = document.getElementById('calFormDate')?.value || '';
+  const site = document.getElementById('calFormSite')?.value || '';
+  const userSelect = document.getElementById('calFormUser');
+  const username = userSelect?.value || '';
+  const fullName = userSelect?.options[userSelect.selectedIndex]?.getAttribute('data-fullname') || '';
+  const purpose = document.getElementById('calFormPurpose')?.value || '';
+  const taskId = document.getElementById('calFormTaskId')?.value || '';
+  const notifyTelegram = document.getElementById('calFormNotifyTelegram')?.checked ?? true;
+
+  if (!date || !site || !username) {
+    showToast('กรุณากรอก วันที่, ไซต์งาน, และผู้ปฏิบัติงานให้ครบถ้วน', 'warning');
+    return;
+  }
+
+  const scheduleData = {
+    id: id,
+    date: date,
+    site: site,
+    username: username,
+    fullName: fullName,
+    purpose: purpose,
+    taskId: taskId,
+    notifyTelegram: notifyTelegram
+  };
+
+  const btnSubmit = document.getElementById('btnSubmitScheduleForm');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.classList.add('opacity-60');
+  }
+
+  const operatorUsername = state.currentUser ? state.currentUser.username : 'admin';
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.classList.remove('opacity-60');
+    }
+    showToast('กำลังอยู่ในโหมดจำลอง ไม่สามารถส่งข้อมูลไปยังเซิร์ฟเวอร์ได้', 'info');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('opacity-60');
+      }
+      if (res && res.success) {
+        showToast(res.message || 'บันทึกตารางเข้าไซต์งานสำเร็จ!', 'success');
+        closeScheduleModal();
+        loadCalendarSchedules();
+      } else {
+        showToast(res ? res.message : 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('opacity-60');
+      }
+      showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+    })
+    .saveSiteSchedule(scheduleData, operatorUsername);
+}
+
+/**
+ * ยืนยันและลบรายการตารางเข้าไซต์งาน
+ */
+function confirmDeleteSiteSchedule(scheduleId) {
+  if (!canManageCalendar()) {
+    showToast('จำกัดเฉพาะสิทธิ์ Admin หรือ Supervisor เท่านั้น', 'warning');
+    return;
+  }
+
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'ยืนยันการลบรายการ?',
+      text: 'คุณต้องการลบกำหนดการเข้าไซต์งานนี้ใช่หรือไม่?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#e11d48',
+      cancelButtonColor: '#6e6862',
+      confirmButtonText: 'ใช่, ลบรายการ',
+      cancelButtonText: 'ยกเลิก',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        executeDeleteSiteSchedule(scheduleId);
+      }
+    });
+  } else {
+    if (confirm('คุณต้องการลบกำหนดการเข้าไซต์งานนี้ใช่หรือไม่?')) {
+      executeDeleteSiteSchedule(scheduleId);
+    }
+  }
+}
+
+/**
+ * เรียก API ลบรายการ
+ */
+function executeDeleteSiteSchedule(scheduleId) {
+  const operatorUsername = state.currentUser ? state.currentUser.username : 'admin';
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.success) {
+        showToast('ลบรายการนัดหมายเรียบร้อยแล้ว', 'success');
+        loadCalendarSchedules();
+        // หากเปิด Modal รายวันอยู่ ให้รีเฟรชข้อมูลใน Modal ด้วย
+        if (calendarState.selectedDate) {
+          openDayScheduleDetail(calendarState.selectedDate);
+        }
+      } else {
+        showToast(res ? res.message : 'ไม่สามารถลบรายการได้', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      showToast('เกิดข้อผิดพลาดในการลบ: ' + err.message, 'error');
+    })
+    .deleteSiteSchedule(scheduleId, operatorUsername);
+}
+
+/**
+ * กระโดดไปดูงานในระบบ Work Tracker (Deep Link)
+ */
+function jumpToTaskInWorkTracker(taskId) {
+  closeDayScheduleDetailModal();
+  enterApp('work_tracker');
+  // ค้นหาและไฮไลต์ Task นั้น
+  setTimeout(() => {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.value = taskId;
+      if (typeof renderDashboard === 'function') renderDashboard();
+    }
+    showToast(`กำลังเปิดงาน #${taskId} ในระบบติดตามงาน`, 'info', 2000);
+  }, 200);
+}
+</script>

@@ -9,3 +9,6 @@
 !AdminView.html
 !RdpScript.html
 !AdminScript.html
+!CalendarBackend.js
+!CalendarView.html
+!CalendarScript.html

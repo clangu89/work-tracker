@@ -147,7 +147,13 @@ function doPost(e) {
       migrateFromLegacyRdpSpreadsheet: migrateFromLegacyRdpSpreadsheet,
       getReportTasksData: getReportTasksData,
       saveSettings: saveSettings,
-      saveSitesList: saveSitesList
+      saveSitesList: saveSitesList,
+      getSiteSchedules: getSiteSchedules,
+      saveSiteSchedule: saveSiteSchedule,
+      deleteSiteSchedule: deleteSiteSchedule,
+      sendDailySiteScheduleReminders: sendDailySiteScheduleReminders,
+      setupScheduleReminderTrigger: setupScheduleReminderTrigger,
+      triggerDailySiteScheduleRemindersNow: triggerDailySiteScheduleRemindersNow
     };
 
     const targetFn = PUBLIC_API_ACTIONS[payload.action];
@@ -423,6 +429,11 @@ function setupDatabase() {
   // --- 4. เตรียมตารางระบบ RDP Manager ---
   if (typeof setupRdpDatabase_ === 'function') {
     setupRdpDatabase_(ss);
+  }
+
+  // --- 5. เตรียมตารางระบบปฏิทินเข้าไซต์งาน (Site Calendar) ---
+  if (typeof setupSiteSchedulesDatabase_ === 'function') {
+    setupSiteSchedulesDatabase_(ss);
   }
 
   return { success: true, sheetUrl: ss.getUrl() };
@@ -2748,11 +2759,14 @@ function getUsersList() {
         }
       }
 
-      let allowedApps = ['work_tracker', 'rdp_manager'];
+      let allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar'];
       if (rows[i][8] !== undefined && String(rows[i][8]).trim() !== '') {
         try {
           const parsedApps = JSON.parse(String(rows[i][8]));
-          if (Array.isArray(parsedApps)) allowedApps = parsedApps;
+          if (Array.isArray(parsedApps)) {
+            allowedApps = parsedApps;
+            if (!allowedApps.includes('site_calendar')) allowedApps.push('site_calendar');
+          }
         } catch (e) {}
       }
       if (String(rows[i][3]).trim() === 'Admin' && !allowedApps.includes('admin')) {

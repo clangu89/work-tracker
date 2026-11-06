@@ -3340,6 +3340,7 @@ function checkAuthSession() {
   document.getElementById('workTrackerApp')?.classList.add('hidden');
   document.getElementById('rdpManagerApp')?.classList.add('hidden');
   document.getElementById('adminCenterApp')?.classList.add('hidden');
+  document.getElementById('siteCalendarApp')?.classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   switchLoginMethod('pin');
   document.getElementById('loginStep1').classList.remove('hidden');
@@ -3670,6 +3671,7 @@ function handleLogout() {
       document.getElementById('workTrackerApp')?.classList.add('hidden');
       document.getElementById('rdpManagerApp')?.classList.add('hidden');
       document.getElementById('adminCenterApp')?.classList.add('hidden');
+      document.getElementById('siteCalendarApp')?.classList.add('hidden');
       document.getElementById('loginUsername').value = '';
       if (document.getElementById('loginPassUsername')) document.getElementById('loginPassUsername').value = '';
       if (document.getElementById('loginPassPassword')) document.getElementById('loginPassPassword').value = '';
@@ -5698,7 +5700,7 @@ function exportReportToExcel() {
 
   XLSX.utils.book_append_sheet(wb, ws1, 'สรุปรายไซต์งาน');
   XLSX.utils.book_append_sheet(wb, ws2, 'รายละเอียดงาน');
-
+
   const nowD = new Date();
   const padZ = n => String(n).padStart(2, '0');
   const fileDateStr = String(nowD.getFullYear()) + padZ(nowD.getMonth() + 1) + padZ(nowD.getDate()) + '_' + padZ(nowD.getHours()) + padZ(nowD.getMinutes());
@@ -6007,6 +6009,7 @@ function openAppLauncher() {
   document.getElementById('workTrackerApp')?.classList.add('hidden');
   document.getElementById('rdpManagerApp')?.classList.add('hidden');
   document.getElementById('adminCenterApp')?.classList.add('hidden');
+  document.getElementById('siteCalendarApp')?.classList.add('hidden');
   document.getElementById('loginScreen')?.classList.add('hidden');
 
   const launcher = document.getElementById('appLauncherScreen');
@@ -6020,6 +6023,10 @@ function openAppLauncher() {
   sendHeartbeat();
 }
 
+function showAppLauncher() {
+  openAppLauncher();
+}
+
 function renderAppLauncher() {
   if (!state.currentUser) return;
   const user = state.currentUser;
@@ -6028,8 +6035,8 @@ function renderAppLauncher() {
   let allowedApps = [];
   if (Array.isArray(user.allowedApps)) allowedApps = user.allowedApps;
   else if (typeof user.allowedApps === 'string') {
-    try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager']; }
-  } else allowedApps = ['work_tracker', 'rdp_manager'];
+    try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar']; }
+  } else allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar'];
 
   const cardAdmin = document.getElementById('launcherCardAdmin');
   if (cardAdmin) {
@@ -6057,6 +6064,15 @@ function renderAppLauncher() {
       cardRDP.classList.add('opacity-40', 'pointer-events-none');
     }
   }
+
+  const cardCal = document.getElementById('launcherCardCalendar');
+  if (cardCal) {
+    if (allowedApps.includes('site_calendar') || isAdmin || user.role === 'Supervisor' || user.role === 'Member') {
+      cardCal.classList.remove('opacity-40', 'pointer-events-none');
+    } else {
+      cardCal.classList.add('opacity-40', 'pointer-events-none');
+    }
+  }
 }
 
 function enterApp(appKey) {
@@ -6069,11 +6085,13 @@ function enterApp(appKey) {
   const wtApp = document.getElementById('workTrackerApp');
   const rdpApp = document.getElementById('rdpManagerApp');
   const adminApp = document.getElementById('adminCenterApp');
+  const calApp = document.getElementById('siteCalendarApp');
 
   if (appKey === 'work_tracker') {
     if (wtApp) wtApp.classList.remove('hidden');
     if (rdpApp) rdpApp.classList.add('hidden');
     if (adminApp) adminApp.classList.add('hidden');
+    if (calApp) calApp.classList.add('hidden');
 
     const curUser = state.currentUser ? state.currentUser.username : '';
     const needsLoad = !state.wtInitialized || 
@@ -6095,6 +6113,7 @@ function enterApp(appKey) {
     if (rdpApp) rdpApp.classList.remove('hidden');
     if (wtApp) wtApp.classList.add('hidden');
     if (adminApp) adminApp.classList.add('hidden');
+    if (calApp) calApp.classList.add('hidden');
 
     if (typeof initRdpApp === 'function') {
       initRdpApp();
@@ -6103,9 +6122,19 @@ function enterApp(appKey) {
     if (adminApp) adminApp.classList.remove('hidden');
     if (wtApp) wtApp.classList.add('hidden');
     if (rdpApp) rdpApp.classList.add('hidden');
+    if (calApp) calApp.classList.add('hidden');
 
     if (typeof initAdminApp === 'function') {
       initAdminApp();
+    }
+  } else if (appKey === 'site_calendar') {
+    if (calApp) calApp.classList.remove('hidden');
+    if (wtApp) wtApp.classList.add('hidden');
+    if (rdpApp) rdpApp.classList.add('hidden');
+    if (adminApp) adminApp.classList.add('hidden');
+
+    if (typeof initCalendarApp === 'function') {
+      initCalendarApp();
     }
   }
 

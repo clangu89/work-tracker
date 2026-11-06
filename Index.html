@@ -274,8 +274,8 @@
     <!-- Main Launcher Area -->
     <main class="flex-1 flex flex-col items-center justify-center max-w-6xl w-full mx-auto px-4 py-10 relative z-10">
       
-      <!-- App Cards Grid (3 App Tiles + 1 Widget Column) -->
-      <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+      <!-- App Cards Grid (App Tiles + Control Widgets) -->
+      <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 w-full">
         
         <!-- CARD 1: WORK TRACKER -->
         <div id="launcherCardWorkTracker" onclick="enterApp('work_tracker')"
@@ -307,6 +307,25 @@
           </div>
           <div class="pt-5 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0a84ff]">
             <span>เปิดระบบ</span>
+            <div class="w-9 h-9 lg-circle lg-glass lg-beam-icon text-xs group-hover:translate-x-1 transition-transform">
+              <i class="fa-solid fa-arrow-right"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 3: SITE CALENDAR (NEW SYSTEM TILE) -->
+        <div id="launcherCardCalendar" onclick="enterApp('site_calendar')" style="--beam-delay: -2.7s;"
+             class="lg-glass lg-tile lg-beam-card p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
+          <div>
+            <div class="w-16 h-16 lg-circle lg-fill-green lg-beam-icon text-2xl shadow-lg group-hover:scale-105 transition-transform text-[#30d158]">
+              <i class="fa-solid fa-calendar-days"></i>
+            </div>
+            <h3 class="text-xl font-bold text-[#1d1b19] group-hover:text-[#30d158] transition-colors mt-5">ระบบปฏิทินไซต์งาน</h3>
+            <div class="text-xs text-[#6e6862] font-medium mt-1">Site Calendar</div>
+            <p class="text-[11px] text-[#9E9890] font-normal mt-2 line-clamp-2">ตารางนัดหมายและกำหนดการช่างเข้าปฏิบัติงานตามไซต์งาน</p>
+          </div>
+          <div class="pt-5 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#30d158]">
+            <span>เปิดดูปฏิทิน</span>
             <div class="w-9 h-9 lg-circle lg-glass lg-beam-icon text-xs group-hover:translate-x-1 transition-transform">
               <i class="fa-solid fa-arrow-right"></i>
             </div>
@@ -1985,10 +2004,12 @@
   <!-- ================= SUBMODULE VIEWS ================= -->
   <?!= include('RdpView'); ?>
   <?!= include('AdminView'); ?>
+  <?!= include('CalendarView'); ?>
 
   <!-- ================= CLIENT SCRIPTS ================= -->
   <?!= include('JavaScript'); ?>
   <?!= include('RdpScript'); ?>
   <?!= include('AdminScript'); ?>
+  <?!= include('CalendarScript'); ?>
 </body>
 </html>

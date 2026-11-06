@@ -784,8 +784,8 @@
     <!-- Main Launcher Area -->
     <main class="flex-1 flex flex-col items-center justify-center max-w-6xl w-full mx-auto px-4 py-10 relative z-10">
       
-      <!-- App Cards Grid (3 App Tiles + 1 Widget Column) -->
-      <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 w-full">
+      <!-- App Cards Grid (App Tiles + Control Widgets) -->
+      <div id="launcherCardsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6 w-full">
         
         <!-- CARD 1: WORK TRACKER -->
         <div id="launcherCardWorkTracker" onclick="enterApp('work_tracker')"
@@ -817,6 +817,25 @@
           </div>
           <div class="pt-5 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#0a84ff]">
             <span>เปิดระบบ</span>
+            <div class="w-9 h-9 lg-circle lg-glass lg-beam-icon text-xs group-hover:translate-x-1 transition-transform">
+              <i class="fa-solid fa-arrow-right"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 3: SITE CALENDAR (NEW SYSTEM TILE) -->
+        <div id="launcherCardCalendar" onclick="enterApp('site_calendar')" style="--beam-delay: -2.7s;"
+             class="lg-glass lg-tile lg-beam-card p-7 flex flex-col justify-between cursor-pointer group min-h-[260px]">
+          <div>
+            <div class="w-16 h-16 lg-circle lg-fill-green lg-beam-icon text-2xl shadow-lg group-hover:scale-105 transition-transform text-[#30d158]">
+              <i class="fa-solid fa-calendar-days"></i>
+            </div>
+            <h3 class="text-xl font-bold text-[#1d1b19] group-hover:text-[#30d158] transition-colors mt-5">ระบบปฏิทินไซต์งาน</h3>
+            <div class="text-xs text-[#6e6862] font-medium mt-1">Site Calendar</div>
+            <p class="text-[11px] text-[#9E9890] font-normal mt-2 line-clamp-2">ตารางนัดหมายและกำหนดการช่างเข้าปฏิบัติงานตามไซต์งาน</p>
+          </div>
+          <div class="pt-5 border-t border-black/5 flex items-center justify-between text-xs font-bold text-[#30d158]">
+            <span>เปิดดูปฏิทิน</span>
             <div class="w-9 h-9 lg-circle lg-glass lg-beam-icon text-xs group-hover:translate-x-1 transition-transform">
               <i class="fa-solid fa-arrow-right"></i>
             </div>
@@ -3690,6 +3709,337 @@
 
     </div>
   </main>
+
+</div>
+
+  <!-- ================================================================ -->
+<!-- SITE CALENDAR MODULE (ระบบปฏิทินเข้าไซต์งาน) -->
+<!-- ================================================================ -->
+<div id="siteCalendarApp" class="hidden min-h-screen flex flex-col bg-[#FAF8F2] text-[#201E1C]">
+
+  <!-- Top Navbar for Site Calendar -->
+  <header class="bg-white border-b border-[#EFE9DC] sticky top-0 z-30 shadow-2xs">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16 gap-3">
+        
+        <!-- Left: System Logo, Name & Switcher -->
+        <div class="flex items-center gap-2.5 sm:gap-3.5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shadow-emerald-600/20 text-sm sm:text-base flex-shrink-0">
+              <i class="fa-solid fa-calendar-days"></i>
+            </div>
+            <div>
+              <h2 class="text-sm sm:text-base font-bold text-[#201E1C] leading-tight">ระบบปฏิทินเข้าไซต์งาน</h2>
+              <p class="text-[10px] sm:text-[11px] text-[#6E6862] font-medium">Site Visit & Duty Schedule</p>
+            </div>
+          </div>
+
+          <div class="h-6 w-px bg-[#EFE9DC]"></div>
+
+          <!-- App Switcher Button -->
+          <button onclick="showAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
+            <i class="fa-solid fa-grip text-emerald-600 text-sm"></i>
+            <span class="hidden sm:inline">เลือกระบบ</span>
+          </button>
+        </div>
+
+        <!-- Right: Actions & User Info -->
+        <div class="flex items-center gap-2 sm:gap-3">
+          
+          <!-- Refresh Calendar Button -->
+          <button onclick="refreshCalendarData()" title="รีเฟรชข้อมูลปฏิทิน"
+                  class="h-9 w-9 flex items-center justify-center rounded-xl bg-[#FAF8F2] hover:bg-[#EDE7DA] text-[#6E6862] hover:text-emerald-700 border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
+            <i id="calRefreshIcon" class="fa-solid fa-rotate-right text-xs"></i>
+          </button>
+
+          <!-- Add Schedule Button (Admin / Supervisor only) -->
+          <button id="btnCalendarAddSchedule" onclick="openScheduleModal()"
+                  class="h-9 hidden inline-flex items-center gap-1.5 px-3 sm:px-3.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-600/20 transition-all cursor-pointer active:scale-95">
+            <i class="fa-solid fa-plus text-xs"></i>
+            <span>ลงตารางเข้าไซต์</span>
+          </button>
+
+          <!-- User Profile Capsule -->
+          <div class="flex items-center gap-2 pl-2 border-l border-[#EFE9DC]">
+            <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold text-xs shadow-2xs">
+              <i class="fa-solid fa-user"></i>
+            </div>
+            <div class="hidden md:flex flex-col text-left">
+              <span id="calNavUserFullName" class="font-bold text-xs text-[#201E1C] max-w-[120px] truncate">-</span>
+              <span id="calNavUserRole" class="text-[10px] text-emerald-700 font-semibold uppercase">Member</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Calendar Content Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full flex-1 flex flex-col gap-4">
+
+    <!-- Control & Filter Bar -->
+    <div class="bg-white p-4 sm:p-5 rounded-2xl border border-[#EFE9DC] shadow-2xs flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      
+      <!-- Month Navigator -->
+      <div class="flex items-center gap-2.5">
+        <button onclick="changeCalendarMonth(-1)" title="เดือนก่อนหน้า"
+                class="w-9 h-9 flex items-center justify-center rounded-xl bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] text-[#201E1C] transition-all cursor-pointer shadow-2xs active:scale-95">
+          <i class="fa-solid fa-chevron-left text-xs"></i>
+        </button>
+
+        <h3 id="calCurrentMonthTitle" class="text-base sm:text-lg font-black text-[#1d1b19] min-w-[180px] text-center tracking-tight">
+          กำลังโหลด...
+        </h3>
+
+        <button onclick="changeCalendarMonth(1)" title="เดือนถัดไป"
+                class="w-9 h-9 flex items-center justify-center rounded-xl bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] text-[#201E1C] transition-all cursor-pointer shadow-2xs active:scale-95">
+          <i class="fa-solid fa-chevron-right text-xs"></i>
+        </button>
+
+        <button onclick="goToTodayCalendar()" title="ไปยังเดือนปัจจุบัน"
+                class="px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 rounded-xl transition-all cursor-pointer active:scale-95 ml-1">
+          วันนี้
+        </button>
+      </div>
+
+      <!-- Filters & Indicators -->
+      <div class="flex flex-wrap items-center gap-2.5">
+        
+        <!-- Site Filter Dropdown -->
+        <div class="relative min-w-[180px] flex-1 sm:flex-initial">
+          <select id="calFilterSite" onchange="onCalendarFilterChange()"
+                  class="w-full pl-8 pr-7 py-2 text-xs font-medium bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="ALL">🏢 ทุกไซต์งาน</option>
+          </select>
+          <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#6E6862]">
+            <i class="fa-solid fa-location-dot text-xs text-emerald-600"></i>
+          </div>
+        </div>
+
+        <!-- User Filter Dropdown -->
+        <div class="relative min-w-[170px] flex-1 sm:flex-initial">
+          <select id="calFilterUser" onchange="onCalendarFilterChange()"
+                  class="w-full pl-8 pr-7 py-2 text-xs font-medium bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="ALL">👤 ทุกผู้ปฏิบัติงาน</option>
+          </select>
+          <div class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-[#6E6862]">
+            <i class="fa-solid fa-user text-xs text-emerald-600"></i>
+          </div>
+        </div>
+
+        <!-- My Schedule Toggle Button -->
+        <button id="btnCalMySchedule" onclick="toggleCalMySchedule()" type="button"
+                class="px-3 py-2 text-xs font-semibold rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] text-[#6E6862] hover:bg-[#EDE7DA] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs">
+          <i class="fa-solid fa-id-badge text-xs"></i>
+          <span>คิวงานของฉัน</span>
+        </button>
+
+        <!-- Today Duty Badge -->
+        <div class="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-800 border border-emerald-200/80 rounded-xl text-xs font-bold">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span id="calTodayDutyCountText">วันนี้มี 0 รายการ</span>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Monthly Calendar Grid View -->
+    <div class="bg-white rounded-2xl border border-[#EFE9DC] shadow-2xs overflow-hidden flex flex-col flex-1">
+      
+      <!-- Day Headers (Sun - Sat) -->
+      <div class="grid grid-cols-7 border-b border-[#EFE9DC] bg-[#FAF8F2] text-center text-xs font-bold py-2.5 text-[#6E6862] select-none">
+        <div class="text-rose-600">อาทิตย์</div>
+        <div>จันทร์</div>
+        <div>อังคาร</div>
+        <div>พุธ</div>
+        <div>พฤหัสบดี</div>
+        <div>ศุกร์</div>
+        <div class="text-indigo-600">เสาร์</div>
+      </div>
+
+      <!-- Day Cells Container (7 columns x variable rows) -->
+      <div id="calGridDays" class="grid grid-cols-7 flex-1 divide-x divide-y divide-[#EFE9DC] min-h-[560px]">
+        <!-- Dynamic Day Cells Rendered via JavaScript -->
+      </div>
+
+    </div>
+
+    <!-- Mobile Agenda List View (Visible on small screens or as helper) -->
+    <div class="block lg:hidden bg-white p-4 rounded-2xl border border-[#EFE9DC] shadow-2xs">
+      <h4 class="font-bold text-sm text-[#1d1b19] mb-3 flex items-center justify-between">
+        <span class="flex items-center gap-2">
+          <i class="fa-solid fa-list-ul text-emerald-600"></i>
+          <span>รายการเข้าไซต์ประจำเดือนนี้</span>
+        </span>
+        <span id="calAgendaTotalBadge" class="text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">0 รายการ</span>
+      </h4>
+      <div id="calAgendaList" class="flex flex-col gap-2.5">
+        <!-- Rendered via JavaScript -->
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ================================================================ -->
+  <!-- MODAL: รายละเอียดนัดหมายประจำวัน (Day Schedule Detail) -->
+  <!-- ================================================================ -->
+  <div id="modalDayScheduleDetail" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl border border-[#EFE9DC] shadow-2xl max-w-lg w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Modal Header -->
+      <div class="p-5 border-b border-[#EFE9DC] flex items-center justify-between bg-[#FAF8F2]">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg shadow-2xs">
+            <i class="fa-solid fa-calendar-day"></i>
+          </div>
+          <div>
+            <h3 id="modalDayDetailTitle" class="text-base font-bold text-[#1d1b19] leading-tight">รายละเอียดประจำวัน</h3>
+            <p id="modalDayDetailSubtitle" class="text-xs text-[#6E6862] font-medium">-</p>
+          </div>
+        </div>
+        <button onclick="closeDayScheduleDetailModal()" class="w-8 h-8 rounded-full hover:bg-black/5 text-[#6E6862] flex items-center justify-center transition-colors cursor-pointer">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Schedule List in Modal -->
+      <div id="modalDayScheduleItems" class="p-5 flex-1 overflow-y-auto space-y-3">
+        <!-- Dynamic Items -->
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-[#EFE9DC] bg-[#FAF8F2] flex items-center justify-between gap-3">
+        <button id="btnModalAddForThisDay" onclick="openScheduleModalForSelectedDay()"
+                class="hidden text-xs font-bold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer">
+          <i class="fa-solid fa-plus text-xs"></i>
+          <span>ลงตารางสำหรับวันนี้</span>
+        </button>
+
+        <button onclick="closeDayScheduleDetailModal()" class="ml-auto px-4 py-2 text-xs font-bold text-[#6E6862] hover:text-[#201E1C] bg-white border border-[#EFE9DC] rounded-xl hover:bg-[#EDE7DA] transition-all cursor-pointer shadow-2xs">
+          ปิดหน้าต่าง
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ================================================================ -->
+  <!-- MODAL: ฟอร์มลงตารางเข้าไซต์งาน (Assign Site Visit Form) -->
+  <!-- ================================================================ -->
+  <div id="modalSiteSchedule" class="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl border border-[#EFE9DC] shadow-2xl max-w-md w-full max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Header -->
+      <div class="p-5 border-b border-[#EFE9DC] flex items-center justify-between bg-[#FAF8F2]">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-600 text-white flex items-center justify-center text-lg shadow-md shadow-emerald-600/20">
+            <i class="fa-solid fa-calendar-plus"></i>
+          </div>
+          <div>
+            <h3 id="modalScheduleFormTitle" class="text-base font-bold text-[#1d1b19]">ลงตารางเข้าไซต์งาน</h3>
+            <p class="text-xs text-[#6E6862]">กำหนดวันที่และมอบหมายผู้ปฏิบัติงาน</p>
+          </div>
+        </div>
+        <button onclick="closeScheduleModal()" class="w-8 h-8 rounded-full hover:bg-black/5 text-[#6E6862] flex items-center justify-center transition-colors cursor-pointer">
+          <i class="fa-solid fa-xmark text-sm"></i>
+        </button>
+      </div>
+
+      <!-- Form Body -->
+      <form id="formSiteSchedule" onsubmit="handleScheduleFormSubmit(event)" class="p-5 flex-1 overflow-y-auto space-y-4 text-xs">
+        <input type="hidden" id="calFormScheduleId" value="">
+
+        <!-- วันที่เข้าไซต์งาน -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            วันที่เข้าไซต์งาน <span class="text-rose-500">*</span>
+          </label>
+          <div class="flex items-center gap-2">
+            <input type="date" id="calFormDate" required
+                   class="flex-1 px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none">
+            <button type="button" onclick="setCalFormDateToday()"
+                    class="px-2.5 py-2.5 bg-[#EDE7DA] hover:bg-[#D9D1C3] text-[#201E1C] rounded-xl font-bold text-[11px] transition-colors cursor-pointer whitespace-nowrap">
+              วันนี้
+            </button>
+            <button type="button" onclick="setCalFormDateTomorrow()"
+                    class="px-2.5 py-2.5 bg-[#EDE7DA] hover:bg-[#D9D1C3] text-[#201E1C] rounded-xl font-bold text-[11px] transition-colors cursor-pointer whitespace-nowrap">
+              พรุ่งนี้
+            </button>
+          </div>
+        </div>
+
+        <!-- ไซต์งาน -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            ไซต์งานเป้าหมาย <span class="text-rose-500">*</span>
+          </label>
+          <select id="calFormSite" required
+                  class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="">-- กรุณาเลือกไซต์งาน --</option>
+          </select>
+        </div>
+
+        <!-- ผู้ปฏิบัติงาน -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            ผู้ปฏิบัติงาน (User) <span class="text-rose-500">*</span>
+          </label>
+          <select id="calFormUser" required
+                  class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="">-- กรุณาเลือกผู้ปฏิบัติงาน --</option>
+          </select>
+        </div>
+
+        <!-- วัตถุประสงค์ / งานที่ต้องทำ -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            วัตถุประสงค์ / หมายเหตุงาน
+          </label>
+          <textarea id="calFormPurpose" rows="3" placeholder="เช่น เข้าตรวจระบบไฟฟ้า, ซ่อมบำรุงแอร์, ตรวจรับงวดงาน..."
+                    class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] placeholder-[#9E9890] focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none resize-none"></textarea>
+        </div>
+
+        <!-- ผูกกับรหัส Task ใน Work Tracker (Optional) -->
+        <div>
+          <label class="block font-bold text-[#201E1C] mb-1.5">
+            เชื่อมโยงกับงาน / Plan (ถ้ามี)
+          </label>
+          <select id="calFormTaskId"
+                  class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
+            <option value="">-- ไม่ระบุงานเชื่อมโยง --</option>
+          </select>
+        </div>
+
+        <!-- ตัวเลือกแจ้งเตือน Telegram ทันที -->
+        <div class="bg-emerald-50/70 p-3 rounded-xl border border-emerald-200/60 flex items-start gap-2.5">
+          <input type="checkbox" id="calFormNotifyTelegram" checked class="mt-0.5 rounded text-emerald-600 focus:ring-0 cursor-pointer">
+          <label for="calFormNotifyTelegram" class="text-xs text-[#201E1C] cursor-pointer select-none">
+            <span class="font-bold text-emerald-900 block">ส่งแจ้งเตือนเข้า Telegram ของผู้ใช้ทันที</span>
+            <span class="text-[#6E6862] text-[11px] block mt-0.5">ระบบจะส่งข้อความแจ้งเตือนเข้า Telegram Chat ID ส่วนตัวของผู้ใช้ และกลุ่มประจำไซต์งาน (ถ้ามี)</span>
+          </label>
+        </div>
+
+        <!-- Submit & Cancel Buttons -->
+        <div class="pt-3 border-t border-[#EFE9DC] flex items-center justify-end gap-2.5">
+          <button type="button" onclick="closeScheduleModal()"
+                  class="px-4 py-2.5 rounded-xl border border-[#EFE9DC] bg-white text-[#6E6862] hover:bg-[#EDE7DA] font-bold transition-all cursor-pointer shadow-2xs">
+            ยกเลิก
+          </button>
+          <button type="submit" id="btnSubmitScheduleForm"
+                  class="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition-all cursor-pointer shadow-md shadow-emerald-600/20 active:scale-95 flex items-center gap-1.5">
+            <i class="fa-solid fa-floppy-disk text-xs"></i>
+            <span id="btnSubmitScheduleText">บันทึกกำหนดการ</span>
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
 
 </div>
 
@@ -7097,6 +7447,7 @@ function checkAuthSession() {
   document.getElementById('workTrackerApp')?.classList.add('hidden');
   document.getElementById('rdpManagerApp')?.classList.add('hidden');
   document.getElementById('adminCenterApp')?.classList.add('hidden');
+  document.getElementById('siteCalendarApp')?.classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   switchLoginMethod('pin');
   document.getElementById('loginStep1').classList.remove('hidden');
@@ -7427,6 +7778,7 @@ function handleLogout() {
       document.getElementById('workTrackerApp')?.classList.add('hidden');
       document.getElementById('rdpManagerApp')?.classList.add('hidden');
       document.getElementById('adminCenterApp')?.classList.add('hidden');
+      document.getElementById('siteCalendarApp')?.classList.add('hidden');
       document.getElementById('loginUsername').value = '';
       if (document.getElementById('loginPassUsername')) document.getElementById('loginPassUsername').value = '';
       if (document.getElementById('loginPassPassword')) document.getElementById('loginPassPassword').value = '';
@@ -9455,7 +9807,7 @@ function exportReportToExcel() {
 
   XLSX.utils.book_append_sheet(wb, ws1, 'สรุปรายไซต์งาน');
   XLSX.utils.book_append_sheet(wb, ws2, 'รายละเอียดงาน');
-
+
   const nowD = new Date();
   const padZ = n => String(n).padStart(2, '0');
   const fileDateStr = String(nowD.getFullYear()) + padZ(nowD.getMonth() + 1) + padZ(nowD.getDate()) + '_' + padZ(nowD.getHours()) + padZ(nowD.getMinutes());
@@ -9764,6 +10116,7 @@ function openAppLauncher() {
   document.getElementById('workTrackerApp')?.classList.add('hidden');
   document.getElementById('rdpManagerApp')?.classList.add('hidden');
   document.getElementById('adminCenterApp')?.classList.add('hidden');
+  document.getElementById('siteCalendarApp')?.classList.add('hidden');
   document.getElementById('loginScreen')?.classList.add('hidden');
 
   const launcher = document.getElementById('appLauncherScreen');
@@ -9777,6 +10130,10 @@ function openAppLauncher() {
   sendHeartbeat();
 }
 
+function showAppLauncher() {
+  openAppLauncher();
+}
+
 function renderAppLauncher() {
   if (!state.currentUser) return;
   const user = state.currentUser;
@@ -9785,8 +10142,8 @@ function renderAppLauncher() {
   let allowedApps = [];
   if (Array.isArray(user.allowedApps)) allowedApps = user.allowedApps;
   else if (typeof user.allowedApps === 'string') {
-    try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager']; }
-  } else allowedApps = ['work_tracker', 'rdp_manager'];
+    try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar']; }
+  } else allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar'];
 
   const cardAdmin = document.getElementById('launcherCardAdmin');
   if (cardAdmin) {
@@ -9814,6 +10171,15 @@ function renderAppLauncher() {
       cardRDP.classList.add('opacity-40', 'pointer-events-none');
     }
   }
+
+  const cardCal = document.getElementById('launcherCardCalendar');
+  if (cardCal) {
+    if (allowedApps.includes('site_calendar') || isAdmin || user.role === 'Supervisor' || user.role === 'Member') {
+      cardCal.classList.remove('opacity-40', 'pointer-events-none');
+    } else {
+      cardCal.classList.add('opacity-40', 'pointer-events-none');
+    }
+  }
 }
 
 function enterApp(appKey) {
@@ -9826,11 +10192,13 @@ function enterApp(appKey) {
   const wtApp = document.getElementById('workTrackerApp');
   const rdpApp = document.getElementById('rdpManagerApp');
   const adminApp = document.getElementById('adminCenterApp');
+  const calApp = document.getElementById('siteCalendarApp');
 
   if (appKey === 'work_tracker') {
     if (wtApp) wtApp.classList.remove('hidden');
     if (rdpApp) rdpApp.classList.add('hidden');
     if (adminApp) adminApp.classList.add('hidden');
+    if (calApp) calApp.classList.add('hidden');
 
     const curUser = state.currentUser ? state.currentUser.username : '';
     const needsLoad = !state.wtInitialized || 
@@ -9852,6 +10220,7 @@ function enterApp(appKey) {
     if (rdpApp) rdpApp.classList.remove('hidden');
     if (wtApp) wtApp.classList.add('hidden');
     if (adminApp) adminApp.classList.add('hidden');
+    if (calApp) calApp.classList.add('hidden');
 
     if (typeof initRdpApp === 'function') {
       initRdpApp();
@@ -9860,9 +10229,19 @@ function enterApp(appKey) {
     if (adminApp) adminApp.classList.remove('hidden');
     if (wtApp) wtApp.classList.add('hidden');
     if (rdpApp) rdpApp.classList.add('hidden');
+    if (calApp) calApp.classList.add('hidden');
 
     if (typeof initAdminApp === 'function') {
       initAdminApp();
+    }
+  } else if (appKey === 'site_calendar') {
+    if (calApp) calApp.classList.remove('hidden');
+    if (wtApp) wtApp.classList.add('hidden');
+    if (rdpApp) rdpApp.classList.add('hidden');
+    if (adminApp) adminApp.classList.add('hidden');
+
+    if (typeof initCalendarApp === 'function') {
+      initCalendarApp();
     }
   }
 
@@ -12810,6 +13189,850 @@ function renderAdminAuditLogs() {
       </tr>
     `;
   }).join("");
+}
+</script>
+
+  <script>
+/**
+ * =========================================================================
+ * SITE CALENDAR CLIENT MODULE (CalendarScript.html)
+ * Client-side Controller & Interactive UI for Site Visit Schedule Management
+ * =========================================================================
+ */
+
+const calendarState = {
+  currentYear: new Date().getFullYear(),
+  currentMonth: new Date().getMonth() + 1, // 1 - 12
+  schedules: [],
+  usersList: [],
+  selectedDate: null,
+  siteFilter: 'ALL',
+  userFilter: 'ALL',
+  myScheduleOnly: false,
+  isLoading: false,
+  isInitialized: false
+};
+
+const THAI_MONTH_NAMES = [
+  'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
+  'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
+];
+
+const THAI_DAY_NAMES = [
+  'วันอาทิตย์', 'วันจันทร์', 'วันอังคาร', 'วันพุธ', 'วันพฤหัสบดี', 'วันศุกร์', 'วันเสาร์'
+];
+
+/**
+ * ตรวจสอบสิทธิ์ว่าผู้ใช้ปัจจุบันมีสิทธิ์จัดการตารางเข้าไซต์หรือไม่ (Admin หรือ Supervisor)
+ */
+function canManageCalendar() {
+  if (!state.currentUser) return false;
+  const role = String(state.currentUser.role || '').trim();
+  return role === 'Admin' || role === 'Supervisor';
+}
+
+/**
+ * เริ่มต้นระบบปฏิทินเข้าไซต์งานเมื่อเข้าสู่แอป
+ */
+function initCalendarApp() {
+  updateCalendarNavbarUser();
+
+  // ปรับแต่ง UI ตามสิทธิ์ของผู้ใช้
+  const canManage = canManageCalendar();
+  const btnAdd = document.getElementById('btnCalendarAddSchedule');
+  const btnModalAdd = document.getElementById('btnModalAddForThisDay');
+  if (btnAdd) btnAdd.classList.toggle('hidden', !canManage);
+  if (btnModalAdd) btnModalAdd.classList.toggle('hidden', !canManage);
+
+  // เตรียมตัวเลือกใน Dropdown ฟิลเตอร์และฟอร์ม
+  syncCalendarDropdowns();
+
+  // โหลดข้อมูลปฏิทิน
+  loadCalendarSchedules();
+  calendarState.isInitialized = true;
+}
+
+/**
+ * อัปเดตข้อมูลผู้ใช้งานบน Navbar ของปฏิทิน
+ */
+function updateCalendarNavbarUser() {
+  if (!state.currentUser) return;
+  const nameEl = document.getElementById('calNavUserFullName');
+  const roleEl = document.getElementById('calNavUserRole');
+  if (nameEl) nameEl.textContent = state.currentUser.fullName || state.currentUser.username;
+  if (roleEl) {
+    roleEl.textContent = state.currentUser.role || 'Member';
+    if (state.currentUser.role === 'Admin') {
+      roleEl.className = 'text-[10px] text-purple-700 font-bold uppercase';
+    } else if (state.currentUser.role === 'Supervisor') {
+      roleEl.className = 'text-[10px] text-blue-700 font-bold uppercase';
+    } else {
+      roleEl.className = 'text-[10px] text-emerald-700 font-semibold uppercase';
+    }
+  }
+}
+
+/**
+ * ซิงค์ข้อมูลไซต์งาน ผู้ใช้งาน และ Task ไปยัง Dropdown ทั้งหมดในปฏิทิน
+ */
+function syncCalendarDropdowns() {
+  // 1. ซิงค์ไซต์งาน
+  const sites = state.sites && state.sites.length > 0 ? state.sites : (window.DEFAULT_SITES || []);
+  const filterSiteEl = document.getElementById('calFilterSite');
+  const formSiteEl = document.getElementById('calFormSite');
+
+  if (filterSiteEl) {
+    const currentVal = filterSiteEl.value;
+    filterSiteEl.innerHTML = '<option value="ALL">🏢 ทุกไซต์งาน</option>' +
+      sites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    if (sites.includes(currentVal)) filterSiteEl.value = currentVal;
+  }
+
+  if (formSiteEl) {
+    formSiteEl.innerHTML = '<option value="">-- กรุณาเลือกไซต์งาน --</option>' +
+      sites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  }
+
+  // 2. ดึงรายชื่อผู้ใช้ถ้ายังไม่มี
+  if (!calendarState.usersList || calendarState.usersList.length === 0) {
+    loadCalendarUsersList();
+  } else {
+    populateCalendarUserDropdowns(calendarState.usersList);
+  }
+
+  // 3. ซิงค์ Task เชื่อมโยงในฟอร์ม
+  const formTaskEl = document.getElementById('calFormTaskId');
+  if (formTaskEl && state.tasks && state.tasks.length > 0) {
+    const activeTasks = state.tasks.filter(t => t.status !== 'เสร็จสิ้น');
+    formTaskEl.innerHTML = '<option value="">-- ไม่ระบุงานเชื่อมโยง --</option>' +
+      activeTasks.map(t => `<option value="${t.id}">[${t.id}] ${escapeHtml(t.title)} (${escapeHtml(t.site)})</option>`).join('');
+  }
+}
+
+/**
+ * ดึงรายชื่อผู้ใช้จากระบบ
+ */
+function loadCalendarUsersList() {
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.users) {
+        calendarState.usersList = res.users;
+        populateCalendarUserDropdowns(res.users);
+      }
+    })
+    .withFailureHandler(function(err) {
+      console.warn('loadCalendarUsersList failed: ' + err.message);
+    })
+    .getUsersList();
+}
+
+/**
+ * เติมรายชื่อผู้ใช้ลงใน Dropdown
+ */
+function populateCalendarUserDropdowns(users) {
+  const filterUserEl = document.getElementById('calFilterUser');
+  const formUserEl = document.getElementById('calFormUser');
+
+  const activeUsers = users.filter(u => u.status !== 'Inactive');
+
+  if (filterUserEl) {
+    const currentVal = filterUserEl.value;
+    filterUserEl.innerHTML = '<option value="ALL">👤 ทุกผู้ปฏิบัติงาน</option>' +
+      activeUsers.map(u => `<option value="${escapeHtml(u.username)}">${escapeHtml(u.fullName || u.username)} (@${escapeHtml(u.username)})</option>`).join('');
+    if (currentVal) filterUserEl.value = currentVal;
+  }
+
+  if (formUserEl) {
+    formUserEl.innerHTML = '<option value="">-- กรุณาเลือกผู้ปฏิบัติงาน --</option>' +
+      activeUsers.map(u => `<option value="${escapeHtml(u.username)}" data-fullname="${escapeHtml(u.fullName || u.username)}">${escapeHtml(u.fullName || u.username)} (${u.role || 'Member'})</option>`).join('');
+  }
+}
+
+/**
+ * โหลดข้อมูลตารางกำหนดการเข้าไซต์งาน
+ */
+function loadCalendarSchedules() {
+  if (calendarState.isLoading) return;
+  calendarState.isLoading = true;
+
+  const refreshIcon = document.getElementById('calRefreshIcon');
+  if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+  updateCalendarMonthTitle();
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    calendarState.isLoading = false;
+    if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+    renderCalendarGrid();
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      calendarState.isLoading = false;
+      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      if (res && res.success) {
+        calendarState.schedules = res.schedules || [];
+        renderCalendarGrid();
+        renderCalendarAgenda();
+        updateTodayDutyCountBadge();
+      } else {
+        showToast(res ? res.message : 'ไม่สามารถโหลดข้อมูลปฏิทินได้', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      calendarState.isLoading = false;
+      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+    })
+    .getSiteSchedules(calendarState.currentYear, calendarState.currentMonth, calendarState.siteFilter, calendarState.userFilter);
+}
+
+/**
+ * รีเฟรชข้อมูลปฏิทินแบบแมนนวล
+ */
+function refreshCalendarData() {
+  syncCalendarDropdowns();
+  loadCalendarSchedules();
+  showToast('กำลังรีเฟรชข้อมูลปฏิทิน...', 'info', 1500);
+}
+
+/**
+ * เลื่อนเดือนในปฏิทิน (-1 หรือ +1)
+ */
+function changeCalendarMonth(delta) {
+  calendarState.currentMonth += delta;
+  if (calendarState.currentMonth < 1) {
+    calendarState.currentMonth = 12;
+    calendarState.currentYear -= 1;
+  } else if (calendarState.currentMonth > 12) {
+    calendarState.currentMonth = 1;
+    calendarState.currentYear += 1;
+  }
+  loadCalendarSchedules();
+}
+
+/**
+ * กลับไปยังเดือนปัจจุบัน
+ */
+function goToTodayCalendar() {
+  const now = new Date();
+  calendarState.currentYear = now.getFullYear();
+  calendarState.currentMonth = now.getMonth() + 1;
+  loadCalendarSchedules();
+}
+
+/**
+ * อัปเดตหัวข้อเดือน พ.ศ.
+ */
+function updateCalendarMonthTitle() {
+  const titleEl = document.getElementById('calCurrentMonthTitle');
+  if (!titleEl) return;
+  const monthName = THAI_MONTH_NAMES[calendarState.currentMonth - 1] || '';
+  const thaiYear = calendarState.currentYear + 543;
+  titleEl.textContent = `${monthName} ${thaiYear}`;
+}
+
+/**
+ * ฟิลเตอร์เปลี่ยนค่า
+ */
+function onCalendarFilterChange() {
+  const siteVal = document.getElementById('calFilterSite')?.value || 'ALL';
+  const userVal = document.getElementById('calFilterUser')?.value || 'ALL';
+  calendarState.siteFilter = siteVal;
+  calendarState.userFilter = userVal;
+  renderCalendarGrid();
+  renderCalendarAgenda();
+}
+
+/**
+ * สลับตัวกรอง "เฉพาะคิวงานของฉัน"
+ */
+function toggleCalMySchedule() {
+  calendarState.myScheduleOnly = !calendarState.myScheduleOnly;
+  const btn = document.getElementById('btnCalMySchedule');
+  if (btn) {
+    if (calendarState.myScheduleOnly) {
+      btn.className = 'px-3 py-2 text-xs font-bold rounded-xl border border-emerald-300 bg-emerald-600 text-white shadow-sm transition-all flex items-center gap-1.5 cursor-pointer';
+    } else {
+      btn.className = 'px-3 py-2 text-xs font-semibold rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] text-[#6E6862] hover:bg-[#EDE7DA] transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs';
+    }
+  }
+  renderCalendarGrid();
+  renderCalendarAgenda();
+}
+
+/**
+ * คัดกรองรายการตามตัวกรองที่เลือก
+ */
+function getFilteredSchedules() {
+  const curUser = state.currentUser ? String(state.currentUser.username || '').toLowerCase() : '';
+  return calendarState.schedules.filter(item => {
+    if (calendarState.siteFilter !== 'ALL' && item.site !== calendarState.siteFilter) return false;
+    if (calendarState.userFilter !== 'ALL' && item.username.toLowerCase() !== calendarState.userFilter.toLowerCase()) return false;
+    if (calendarState.myScheduleOnly && item.username.toLowerCase() !== curUser) return false;
+    return true;
+  });
+}
+
+/**
+ * เรนเดอร์ตารางปฏิทินรายเดือน (Monthly Grid View 7x5 หรือ 7x6)
+ */
+function renderCalendarGrid() {
+  const container = document.getElementById('calGridDays');
+  if (!container) return;
+
+  const year = calendarState.currentYear;
+  const month = calendarState.currentMonth; // 1 - 12
+
+  // วันแรกของเดือน (0 = อาทิตย์, 1 = จันทร์, ..., 6 = เสาร์)
+  const firstDay = new Date(year, month - 1, 1).getDay();
+  // จำนวนวันในเดือนนี้
+  const daysInMonth = new Date(year, month, 0).getDate();
+  // จำนวนวันในเดือนก่อนหน้า
+  const daysInPrevMonth = new Date(year, month - 1, 0).getDate();
+
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const filtered = getFilteredSchedules();
+  // จับคู่ตามวันที่ YYYY-MM-DD
+  const scheduleByDate = {};
+  filtered.forEach(s => {
+    if (!scheduleByDate[s.date]) scheduleByDate[s.date] = [];
+    scheduleByDate[s.date].push(s);
+  });
+
+  let html = '';
+
+  // 1. เติมวันของเดือนก่อนหน้า (Padding Leading Days)
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const prevDayNum = daysInPrevMonth - i;
+    const prevMonth = month === 1 ? 12 : month - 1;
+    const prevYear = month === 1 ? year - 1 : year;
+    const dateStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevDayNum).padStart(2, '0')}`;
+    const dayItems = scheduleByDate[dateStr] || [];
+
+    html += renderCalendarCellHtml(prevDayNum, dateStr, dayItems, false, false);
+  }
+
+  // 2. เติมวันของเดือนปัจจุบัน
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isToday = (dateStr === todayIso);
+    const dayItems = scheduleByDate[dateStr] || [];
+
+    html += renderCalendarCellHtml(day, dateStr, dayItems, true, isToday);
+  }
+
+  // 3. เติมวันของเดือนถัดไป (Padding Trailing Days เพื่อให้ครบสัปดาห์)
+  const totalCells = firstDay + daysInMonth;
+  const nextDaysCount = (7 - (totalCells % 7)) % 7;
+  for (let day = 1; day <= nextDaysCount; day++) {
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const dateStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const dayItems = scheduleByDate[dateStr] || [];
+
+    html += renderCalendarCellHtml(day, dateStr, dayItems, false, false);
+  }
+
+  container.innerHTML = html;
+}
+
+/**
+ * สร้าง HTML สำหรับช่องวันในปฏิทิน 1 ช่อง
+ */
+function renderCalendarCellHtml(dayNum, dateStr, items, isCurrentMonth, isToday) {
+  const canManage = canManageCalendar();
+  const bgClass = isCurrentMonth 
+    ? (isToday ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'bg-white hover:bg-[#FAF8F2]') 
+    : 'bg-[#F7F4EA]/40 text-[#9E9890] hover:bg-[#F7F4EA]';
+
+  const badgeLimit = 3;
+  const visibleItems = items.slice(0, badgeLimit);
+  const overflowCount = items.length - badgeLimit;
+
+  let itemsHtml = visibleItems.map(item => {
+    const siteColor = (typeof getSiteColorStyle === 'function') 
+      ? getSiteColorStyle(item.site) 
+      : { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' };
+
+    return `
+      <div class="px-1.5 py-0.5 rounded-lg text-[10px] font-semibold truncate border ${siteColor.bg} ${siteColor.text} ${siteColor.border} flex items-center gap-1 shadow-2xs"
+           title="[${escapeHtml(item.site)}] ${escapeHtml(item.fullName)}: ${escapeHtml(item.purpose || 'เข้าไซต์งาน')}">
+        <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>
+        <span class="truncate font-bold">${escapeHtml(item.fullName || item.username)}</span>
+      </div>
+    `;
+  }).join('');
+
+  if (overflowCount > 0) {
+    itemsHtml += `
+      <div class="text-[10px] text-[#6E6862] font-bold px-1 hover:underline">
+        + อีก ${overflowCount} คน...
+      </div>
+    `;
+  }
+
+  return `
+    <div onclick="openDayScheduleDetail('${dateStr}')"
+         class="${bgClass} p-1.5 sm:p-2.5 min-h-[95px] sm:min-h-[110px] flex flex-col justify-between transition-colors cursor-pointer group relative">
+      
+      <!-- Day Header -->
+      <div class="flex items-center justify-between">
+        <span class="inline-flex items-center justify-center text-xs font-bold w-6 h-6 rounded-full transition-transform group-hover:scale-110 ${
+          isToday ? 'bg-emerald-600 text-white shadow-sm' : (isCurrentMonth ? 'text-[#201E1C]' : 'text-[#9E9890]')
+        }">
+          ${dayNum}
+        </span>
+
+        ${canManage ? `
+          <button onclick="event.stopPropagation(); openScheduleModal('${dateStr}')" 
+                  title="ลงตารางวันที่ ${dayNum}"
+                  class="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-md hover:bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] transition-opacity cursor-pointer">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        ` : ''}
+      </div>
+
+      <!-- Scheduled Personnel Chips -->
+      <div class="flex-1 mt-1 space-y-1 overflow-hidden">
+        ${itemsHtml}
+      </div>
+
+    </div>
+  `;
+}
+
+/**
+ * เรนเดอร์ Agenda รายการเข้าไซต์งาน (สำหรับหน้าจอมือถือ)
+ */
+function renderCalendarAgenda() {
+  const container = document.getElementById('calAgendaList');
+  const badgeEl = document.getElementById('calAgendaTotalBadge');
+  if (!container) return;
+
+  const filtered = getFilteredSchedules();
+  if (badgeEl) badgeEl.textContent = `${filtered.length} รายการ`;
+
+  if (filtered.length === 0) {
+    container.innerHTML = `
+      <div class="text-center py-6 text-xs text-[#9E9890]">
+        <i class="fa-solid fa-calendar-xmark text-2xl mb-1 text-[#D9D1C3]"></i>
+        <p>ไม่มีกำหนดการเข้าไซต์งานในเดือนนี้</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
+    const siteColor = (typeof getSiteColorStyle === 'function') 
+      ? getSiteColorStyle(item.site) 
+      : { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' };
+
+    return `
+      <div onclick="openDayScheduleDetail('${item.date}')"
+           class="p-3 bg-[#FAF8F2] hover:bg-[#EDE7DA]/70 rounded-xl border border-[#EFE9DC] flex items-center justify-between gap-3 cursor-pointer transition-colors shadow-2xs">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-xl bg-white border border-[#EFE9DC] flex items-center justify-center font-bold text-xs text-emerald-700 shadow-2xs">
+            ${item.date ? item.date.split('-')[2] : '-'}
+          </div>
+          <div>
+            <div class="font-bold text-xs text-[#201E1C]">${escapeHtml(item.fullName || item.username)}</div>
+            <div class="text-[11px] text-[#6E6862] mt-0.5 truncate max-w-[200px]">
+              ${escapeHtml(item.purpose || 'เข้าไซต์งาน')}
+            </div>
+          </div>
+        </div>
+
+        <span class="badge-site ${siteColor.bg} ${siteColor.text} border ${siteColor.border} text-[10px] font-bold">
+          <i class="fa-solid fa-location-dot text-[9px]"></i>
+          ${escapeHtml(item.site)}
+        </span>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * อัปเดตตัวเลขแจ้งเตือนจำนวนคนเข้าไซต์วันนี้
+ */
+function updateTodayDutyCountBadge() {
+  const badge = document.getElementById('calTodayDutyCountText');
+  if (!badge) return;
+
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+  const todayCount = calendarState.schedules.filter(s => s.date === todayIso).length;
+  badge.textContent = `วันนี้มี ${todayCount} รายการ`;
+}
+
+/**
+ * แปลงวันที่เป็นข้อความภาษาไทยสวยงาม
+ */
+function formatThaiDateDisplay(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length !== 3) return dateStr;
+  const d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+  const dayName = THAI_DAY_NAMES[d.getDay()] || '';
+  const monthName = THAI_MONTH_NAMES[parseInt(parts[1], 10) - 1] || '';
+  const thaiYear = parseInt(parts[0], 10) + 543;
+  return `${dayName}ที่ ${parseInt(parts[2], 10)} ${monthName} ${thaiYear}`;
+}
+
+/**
+ * เปิด Modal ดูรายละเอียดรายวัน
+ */
+function openDayScheduleDetail(dateStr) {
+  calendarState.selectedDate = dateStr;
+  const modal = document.getElementById('modalDayScheduleDetail');
+  const titleEl = document.getElementById('modalDayDetailTitle');
+  const subtitleEl = document.getElementById('modalDayDetailSubtitle');
+  const container = document.getElementById('modalDayScheduleItems');
+
+  if (titleEl) titleEl.textContent = 'กำหนดการเข้าไซต์งาน';
+  if (subtitleEl) subtitleEl.textContent = formatThaiDateDisplay(dateStr);
+
+  const daySchedules = calendarState.schedules.filter(s => s.date === dateStr);
+  const canManage = canManageCalendar();
+
+  if (container) {
+    if (daySchedules.length === 0) {
+      container.innerHTML = `
+        <div class="text-center py-10 text-xs text-[#9E9890]">
+          <div class="w-12 h-12 mx-auto rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-2">
+            <i class="fa-solid fa-calendar-check"></i>
+          </div>
+          <p class="font-bold text-sm text-[#201E1C]">ไม่มีกำหนดการเข้าไซต์งานในวันนี้</p>
+          <p class="mt-1">ยังไม่มีการมอบหมายผู้ปฏิบัติงานสำหรับวันดังกล่าว</p>
+        </div>
+      `;
+    } else {
+      container.innerHTML = daySchedules.map(item => {
+        const siteColor = (typeof getSiteColorStyle === 'function')
+          ? getSiteColorStyle(item.site)
+          : { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' };
+
+        return `
+          <div class="p-3.5 bg-[#FAF8F2] rounded-2xl border border-[#EFE9DC] flex flex-col gap-2.5">
+            <div class="flex items-start justify-between gap-2">
+              <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
+                  ${escapeHtml((item.fullName || item.username).substring(0, 1))}
+                </div>
+                <div>
+                  <h5 class="font-bold text-xs text-[#201E1C] leading-tight">
+                    ${escapeHtml(item.fullName || item.username)}
+                    <span class="text-[11px] font-normal text-[#6E6862]">(@${escapeHtml(item.username)})</span>
+                  </h5>
+                  <div class="mt-1">
+                    <span class="badge-site ${siteColor.bg} ${siteColor.text} border ${siteColor.border} text-[10px] font-bold">
+                      <i class="fa-solid fa-location-dot text-[9px]"></i>
+                      ${escapeHtml(item.site)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              ${canManage ? `
+                <div class="flex items-center gap-1">
+                  <button onclick="editSiteSchedule('${item.id}')" title="แก้ไข"
+                          class="w-7 h-7 rounded-lg bg-white hover:bg-blue-50 text-[#6E6862] hover:text-blue-600 border border-[#EFE9DC] flex items-center justify-center text-xs transition-colors cursor-pointer">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                  <button onclick="confirmDeleteSiteSchedule('${item.id}')" title="ลบ"
+                          class="w-7 h-7 rounded-lg bg-white hover:bg-rose-50 text-[#6E6862] hover:text-rose-600 border border-[#EFE9DC] flex items-center justify-center text-xs transition-colors cursor-pointer">
+                    <i class="fa-solid fa-trash-can"></i>
+                  </button>
+                </div>
+              ` : ''}
+            </div>
+
+            ${item.purpose ? `
+              <div class="text-xs text-[#201E1C] bg-white p-2.5 rounded-xl border border-[#EFE9DC]/70 font-medium">
+                <span class="text-[#6E6862] font-bold mr-1">งานที่ต้องทำ:</span>
+                ${escapeHtml(item.purpose)}
+              </div>
+            ` : ''}
+
+            <div class="flex items-center justify-between text-[11px] text-[#6E6862] pt-1 border-t border-[#EFE9DC]/60">
+              <span>มอบหมายโดย: <b>${escapeHtml(item.createdBy || 'ผู้ดูแลระบบ')}</b></span>
+              ${item.taskId ? `
+                <button onclick="jumpToTaskInWorkTracker('${escapeHtml(item.taskId)}')"
+                        class="text-emerald-700 hover:text-emerald-800 font-bold hover:underline flex items-center gap-1 cursor-pointer">
+                  <i class="fa-solid fa-link text-[10px]"></i>
+                  <span>ดูงาน #${escapeHtml(item.taskId)}</span>
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+/**
+ * ปิด Modal รายละเอียดรายวัน
+ */
+function closeDayScheduleDetailModal() {
+  const modal = document.getElementById('modalDayScheduleDetail');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * เปิด Modal ลงตารางสำหรับวันที่เลือกไว้
+ */
+function openScheduleModalForSelectedDay() {
+  closeDayScheduleDetailModal();
+  openScheduleModal(calendarState.selectedDate);
+}
+
+/**
+ * เปิด Modal ฟอร์มลงตารางเข้าไซต์งาน
+ */
+function openScheduleModal(dateStr, scheduleId) {
+  if (!canManageCalendar()) {
+    showToast('จำกัดเฉพาะสิทธิ์ Admin หรือ Supervisor เท่านั้น', 'warning');
+    return;
+  }
+
+  const modal = document.getElementById('modalSiteSchedule');
+  const titleEl = document.getElementById('modalScheduleFormTitle');
+  const submitTextEl = document.getElementById('btnSubmitScheduleText');
+  const idInput = document.getElementById('calFormScheduleId');
+  const dateInput = document.getElementById('calFormDate');
+  const siteSelect = document.getElementById('calFormSite');
+  const userSelect = document.getElementById('calFormUser');
+  const purposeInput = document.getElementById('calFormPurpose');
+  const taskSelect = document.getElementById('calFormTaskId');
+  const notifyCheck = document.getElementById('calFormNotifyTelegram');
+
+  syncCalendarDropdowns();
+
+  if (scheduleId) {
+    const item = calendarState.schedules.find(s => s.id === scheduleId);
+    if (item) {
+      if (titleEl) titleEl.textContent = 'แก้ไขตารางเข้าไซต์งาน';
+      if (submitTextEl) submitTextEl.textContent = 'บันทึกการแก้ไข';
+      if (idInput) idInput.value = item.id;
+      if (dateInput) dateInput.value = item.date;
+      if (siteSelect) siteSelect.value = item.site;
+      if (userSelect) userSelect.value = item.username;
+      if (purposeInput) purposeInput.value = item.purpose || '';
+      if (taskSelect) taskSelect.value = item.taskId || '';
+      if (notifyCheck) notifyCheck.checked = true;
+    }
+  } else {
+    if (titleEl) titleEl.textContent = 'ลงตารางเข้าไซต์งาน';
+    if (submitTextEl) submitTextEl.textContent = 'บันทึกกำหนดการ';
+    if (idInput) idInput.value = '';
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    if (dateInput) dateInput.value = dateStr || todayIso;
+    if (siteSelect) siteSelect.value = (calendarState.siteFilter !== 'ALL') ? calendarState.siteFilter : '';
+    if (userSelect) userSelect.value = (calendarState.userFilter !== 'ALL') ? calendarState.userFilter : '';
+    if (purposeInput) purposeInput.value = '';
+    if (taskSelect) taskSelect.value = '';
+    if (notifyCheck) notifyCheck.checked = true;
+  }
+
+  if (modal) modal.classList.remove('hidden');
+}
+
+/**
+ * ปิด Modal ฟอร์ม
+ */
+function closeScheduleModal() {
+  const modal = document.getElementById('modalSiteSchedule');
+  if (modal) modal.classList.add('hidden');
+}
+
+/**
+ * ตั้งวันที่ในฟอร์มเป็น วันนี้
+ */
+function setCalFormDateToday() {
+  const d = new Date();
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const input = document.getElementById('calFormDate');
+  if (input) input.value = iso;
+}
+
+/**
+ * ตั้งวันที่ในฟอร์มเป็น วันพรุ่งนี้
+ */
+function setCalFormDateTomorrow() {
+  const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const input = document.getElementById('calFormDate');
+  if (input) input.value = iso;
+}
+
+/**
+ * กดแก้ไขจาก Modal รายวัน
+ */
+function editSiteSchedule(scheduleId) {
+  closeDayScheduleDetailModal();
+  openScheduleModal(null, scheduleId);
+}
+
+/**
+ * บันทึกฟอร์มลงตารางเข้าไซต์งาน
+ */
+function handleScheduleFormSubmit(event) {
+  if (event) event.preventDefault();
+
+  if (!canManageCalendar()) {
+    showToast('จำกัดเฉพาะสิทธิ์ Admin หรือ Supervisor เท่านั้น', 'warning');
+    return;
+  }
+
+  const id = document.getElementById('calFormScheduleId')?.value || '';
+  const date = document.getElementById('calFormDate')?.value || '';
+  const site = document.getElementById('calFormSite')?.value || '';
+  const userSelect = document.getElementById('calFormUser');
+  const username = userSelect?.value || '';
+  const fullName = userSelect?.options[userSelect.selectedIndex]?.getAttribute('data-fullname') || '';
+  const purpose = document.getElementById('calFormPurpose')?.value || '';
+  const taskId = document.getElementById('calFormTaskId')?.value || '';
+  const notifyTelegram = document.getElementById('calFormNotifyTelegram')?.checked ?? true;
+
+  if (!date || !site || !username) {
+    showToast('กรุณากรอก วันที่, ไซต์งาน, และผู้ปฏิบัติงานให้ครบถ้วน', 'warning');
+    return;
+  }
+
+  const scheduleData = {
+    id: id,
+    date: date,
+    site: site,
+    username: username,
+    fullName: fullName,
+    purpose: purpose,
+    taskId: taskId,
+    notifyTelegram: notifyTelegram
+  };
+
+  const btnSubmit = document.getElementById('btnSubmitScheduleForm');
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.classList.add('opacity-60');
+  }
+
+  const operatorUsername = state.currentUser ? state.currentUser.username : 'admin';
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.classList.remove('opacity-60');
+    }
+    showToast('กำลังอยู่ในโหมดจำลอง ไม่สามารถส่งข้อมูลไปยังเซิร์ฟเวอร์ได้', 'info');
+    return;
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('opacity-60');
+      }
+      if (res && res.success) {
+        showToast(res.message || 'บันทึกตารางเข้าไซต์งานสำเร็จ!', 'success');
+        closeScheduleModal();
+        loadCalendarSchedules();
+      } else {
+        showToast(res ? res.message : 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      if (btnSubmit) {
+        btnSubmit.disabled = false;
+        btnSubmit.classList.remove('opacity-60');
+      }
+      showToast('เกิดข้อผิดพลาด: ' + err.message, 'error');
+    })
+    .saveSiteSchedule(scheduleData, operatorUsername);
+}
+
+/**
+ * ยืนยันและลบรายการตารางเข้าไซต์งาน
+ */
+function confirmDeleteSiteSchedule(scheduleId) {
+  if (!canManageCalendar()) {
+    showToast('จำกัดเฉพาะสิทธิ์ Admin หรือ Supervisor เท่านั้น', 'warning');
+    return;
+  }
+
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({
+      title: 'ยืนยันการลบรายการ?',
+      text: 'คุณต้องการลบกำหนดการเข้าไซต์งานนี้ใช่หรือไม่?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#e11d48',
+      cancelButtonColor: '#6e6862',
+      confirmButtonText: 'ใช่, ลบรายการ',
+      cancelButtonText: 'ยกเลิก',
+      reverseButtons: true
+    }).then((result) => {
+      if (result.isConfirmed) {
+        executeDeleteSiteSchedule(scheduleId);
+      }
+    });
+  } else {
+    if (confirm('คุณต้องการลบกำหนดการเข้าไซต์งานนี้ใช่หรือไม่?')) {
+      executeDeleteSiteSchedule(scheduleId);
+    }
+  }
+}
+
+/**
+ * เรียก API ลบรายการ
+ */
+function executeDeleteSiteSchedule(scheduleId) {
+  const operatorUsername = state.currentUser ? state.currentUser.username : 'admin';
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (res && res.success) {
+        showToast('ลบรายการนัดหมายเรียบร้อยแล้ว', 'success');
+        loadCalendarSchedules();
+        // หากเปิด Modal รายวันอยู่ ให้รีเฟรชข้อมูลใน Modal ด้วย
+        if (calendarState.selectedDate) {
+          openDayScheduleDetail(calendarState.selectedDate);
+        }
+      } else {
+        showToast(res ? res.message : 'ไม่สามารถลบรายการได้', 'error');
+      }
+    })
+    .withFailureHandler(function(err) {
+      showToast('เกิดข้อผิดพลาดในการลบ: ' + err.message, 'error');
+    })
+    .deleteSiteSchedule(scheduleId, operatorUsername);
+}
+
+/**
+ * กระโดดไปดูงานในระบบ Work Tracker (Deep Link)
+ */
+function jumpToTaskInWorkTracker(taskId) {
+  closeDayScheduleDetailModal();
+  enterApp('work_tracker');
+  // ค้นหาและไฮไลต์ Task นั้น
+  setTimeout(() => {
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.value = taskId;
+      if (typeof renderDashboard === 'function') renderDashboard();
+    }
+    showToast(`กำลังเปิดงาน #${taskId} ในระบบติดตามงาน`, 'info', 2000);
+  }, 200);
 }
 </script>
 
