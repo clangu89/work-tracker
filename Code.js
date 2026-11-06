@@ -2048,19 +2048,27 @@ function getReportTasksData(params) {
         continue;
       }
 
+      const isDone = t.status === 'เสร็จสิ้น';
+
+      // 1. ถ้าไม่รวมงานค้าง (includePending = false) และงานนี้ยังไม่เสร็จสิ้น -> ข้ามทันทีในทุกกรณี
+      if (!isDone && !includePending) {
+        continue;
+      }
+
+      // 2. ตรวจสอบเงื่อนไขช่วงวันที่เสร็จสิ้น
       if (hasDateRange) {
-        if (t.status === 'เสร็จสิ้น') {
+        if (isDone) {
           const compDate = (t.completedAt || t.updatedAt || '').substring(0, 10);
           if (completedFrom && compDate && compDate < completedFrom) continue;
           if (completedTo && compDate && compDate > completedTo) continue;
           if (!compDate && (completedFrom || completedTo)) continue;
           filteredTasks.push(t);
         } else {
-          if (includePending) {
-            filteredTasks.push(t);
-          }
+          // งานค้างที่ยังไม่เสร็จ (includePending = true)
+          filteredTasks.push(t);
         }
       } else {
+        // ไม่มีช่วงวันที่: รวมเฉพาะงานที่ผ่านเงื่อนไขข้อ 1 (เสร็จสิ้นทั้งหมด หรือ เสร็จสิ้น+งานค้างทั้งหมด)
         filteredTasks.push(t);
       }
     }
