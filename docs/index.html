@@ -3708,11 +3708,22 @@
 
               <!-- เวลาที่ส่ง -->
               <div class="bg-[#FAF8F2] p-3.5 rounded-2xl border border-[#EFE9DC] flex flex-col justify-between gap-1.5">
-                <label class="text-xs font-bold text-[#201E1C]" for="cal-cfg-reminder-time">เวลาส่งรอบเช้า (ชั่วโมง)</label>
+                <div class="flex items-center justify-between">
+                  <label class="text-xs font-bold text-[#201E1C]" for="cal-cfg-reminder-time">เวลาส่งรอบเช้า (เวลาไทย 24 ชม.)</label>
+                  <span class="text-[10px] text-emerald-700 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200/60">24 ชั่วโมง</span>
+                </div>
                 <div class="flex items-center gap-2">
-                  <input type="text" id="cal-cfg-reminder-time" placeholder="07:00" value="07:00"
-                         class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-[#201E1C] font-mono">
+                  <input type="time" id="cal-cfg-reminder-time" value="07:00" step="60"
+                         class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-[#201E1C] font-mono cursor-pointer shadow-2xs">
                   <span class="text-xs text-[#6E6862] font-semibold whitespace-nowrap">น.</span>
+                </div>
+                <!-- ปุ่มเลือกเวลาด่วน (Quick Presets) -->
+                <div class="flex items-center gap-1 pt-1 flex-wrap">
+                  <span class="text-[10px] text-[#6E6862] font-medium mr-0.5">ลัด:</span>
+                  <button type="button" onclick="setCalendarReminderPreset('06:30')" class="px-2 py-0.5 text-[10px] font-bold bg-white hover:bg-emerald-50 text-[#6E6862] hover:text-emerald-700 border border-[#EFE9DC] rounded-lg transition-colors cursor-pointer shadow-2xs active:scale-95">06:30</button>
+                  <button type="button" onclick="setCalendarReminderPreset('07:00')" class="px-2 py-0.5 text-[10px] font-bold bg-white hover:bg-emerald-50 text-[#6E6862] hover:text-emerald-700 border border-[#EFE9DC] rounded-lg transition-colors cursor-pointer shadow-2xs active:scale-95">07:00</button>
+                  <button type="button" onclick="setCalendarReminderPreset('07:30')" class="px-2 py-0.5 text-[10px] font-bold bg-white hover:bg-emerald-50 text-[#6E6862] hover:text-emerald-700 border border-[#EFE9DC] rounded-lg transition-colors cursor-pointer shadow-2xs active:scale-95">07:30</button>
+                  <button type="button" onclick="setCalendarReminderPreset('08:00')" class="px-2 py-0.5 text-[10px] font-bold bg-white hover:bg-emerald-50 text-[#6E6862] hover:text-emerald-700 border border-[#EFE9DC] rounded-lg transition-colors cursor-pointer shadow-2xs active:scale-95">08:00</button>
                 </div>
               </div>
             </div>
@@ -13403,6 +13414,64 @@ function renderAdminAuditLogs() {
 // --------------------------------------------------------------------
 
 /**
+ * จัดฟอร์แมตค่าเวลาให้อยู่ในรูปแบบ 24 ชั่วโมงประเทศไทย (HH:mm) เช่น 07:00
+ */
+function formatTo24HourTime(val) {
+  if (val === undefined || val === null || val === '') return '07:00';
+
+  const s = String(val).trim();
+
+  // หากเป็น Date String ผิดเพี้ยนจาก Sheets (เช่น Sat Dec 30 1899...)
+  if (s.includes('1899') || s.includes('GMT')) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      try {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Bangkok',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).formatToParts(d).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+        if (parts.hour && parts.minute && parts.hour !== 'NaN') {
+          return `${parts.hour}:${parts.minute}`;
+        }
+      } catch (e) {}
+    }
+    return '07:00';
+  }
+
+  // รูปแบบ HH:mm หรือ H:mm
+  const match = s.match(/^([01]?\d|2[0-3]):([0-5]\d)/);
+  if (match) {
+    const hh = String(match[1]).padStart(2, '0');
+    const mm = String(match[2]).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  // ตัวเลขเดี่ยวระบุชั่วโมง (เช่น "7" หรือ 7)
+  const num = parseInt(s, 10);
+  if (!isNaN(num) && num >= 0 && num <= 23) {
+    return `${String(num).padStart(2, '0')}:00`;
+  }
+
+  return '07:00';
+}
+window.formatTo24HourTime = formatTo24HourTime;
+
+/**
+ * กำหนดเวลาแจ้งเตือนด่วนจากปุ่ม Preset
+ */
+function setCalendarReminderPreset(timeStr) {
+  const input = document.getElementById("cal-cfg-reminder-time");
+  if (input) {
+    input.value = timeStr;
+    input.focus();
+    showToast(`เลือกเวลาส่งแจ้งเตือน: ${timeStr} น.`, "info", 1200);
+  }
+}
+window.setCalendarReminderPreset = setCalendarReminderPreset;
+
+/**
  * เติมค่าการตั้งค่าระบบปฏิทินเข้าไซต์งานลงในฟอร์ม Admin Center
  */
 function populateCalendarSettings() {
@@ -13427,7 +13496,7 @@ function populateCalendarSettings() {
     reminderDays.value = String(s.CALENDAR_REMINDER_DAYS_BEFORE !== undefined ? s.CALENDAR_REMINDER_DAYS_BEFORE : "1");
   }
   if (reminderTime) {
-    reminderTime.value = String(s.CALENDAR_REMINDER_TIME || "07:00");
+    reminderTime.value = formatTo24HourTime(s.CALENDAR_REMINDER_TIME);
   }
 
   if (notifyImmediate) {
@@ -13462,10 +13531,13 @@ function saveCalendarSettings() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>กำลังบันทึก...';
   }
 
+  const rawReminderTime = document.getElementById("cal-cfg-reminder-time")?.value;
+  const cleanReminderTime = formatTo24HourTime(rawReminderTime);
+
   const newSettings = {
     CALENDAR_ENABLE_ADVANCE_REMINDER: document.getElementById("cal-cfg-enable-advance-reminder")?.checked ?? true,
     CALENDAR_REMINDER_DAYS_BEFORE: document.getElementById("cal-cfg-reminder-days")?.value || "1",
-    CALENDAR_REMINDER_TIME: document.getElementById("cal-cfg-reminder-time")?.value?.trim() || "07:00",
+    CALENDAR_REMINDER_TIME: cleanReminderTime,
     CALENDAR_NOTIFY_ON_SCHEDULE: document.getElementById("cal-cfg-notify-immediate")?.checked ?? true,
     CALENDAR_NOTIFY_SITE_GROUP: document.getElementById("cal-cfg-notify-site-group")?.checked ?? true,
     CALENDAR_NOTIFY_MAIN_GROUP: document.getElementById("cal-cfg-notify-main-group")?.checked ?? false,

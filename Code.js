@@ -178,9 +178,23 @@ function doPost(e) {
  * รองรับทั้ง Container-bound (เชื่อมกับ Sheet ปัจจุบัน) หรือ Standalone (สร้างชีตใหม่/อ่านจาก ID)
  */
 function getDb_() {
+  const ensureBangkokTimeZone_ = (spreadsheet) => {
+    if (!spreadsheet) return;
+    try {
+      if (spreadsheet.getSpreadsheetTimeZone() !== 'Asia/Bangkok') {
+        spreadsheet.setSpreadsheetTimeZone('Asia/Bangkok');
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
   // 1. ลองดึงจาก Active Spreadsheet ก่อน (กรณีเปิด Apps Script จากตัวชีต)
   let ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (ss) return ss;
+  if (ss) {
+    ensureBangkokTimeZone_(ss);
+    return ss;
+  }
 
   // 2. กรณี Standalone script: ค้นหาจาก Script Properties
   const props = PropertiesService.getScriptProperties();
@@ -188,7 +202,9 @@ function getDb_() {
 
   if (sheetId) {
     try {
-      return SpreadsheetApp.openById(sheetId);
+      ss = SpreadsheetApp.openById(sheetId);
+      ensureBangkokTimeZone_(ss);
+      return ss;
     } catch (e) {
       console.warn('Cannot open sheet by ID, creating a new one: ' + e.message);
     }
@@ -197,6 +213,7 @@ function getDb_() {
   // 3. หากยังไม่มี ให้สร้าง Google Sheet ใหม่ทันที
   ss = SpreadsheetApp.create('Work Tracker Database (โปรแกรมติดตามงาน)');
   props.setProperty('SPREADSHEET_ID', ss.getId());
+  ensureBangkokTimeZone_(ss);
   console.log('Created new database sheet with ID: ' + ss.getId());
   return ss;
 }
@@ -456,6 +473,53 @@ function formatHeaderRow_(sheet, bgColor) {
 }
 
 /**
+ * แปลงและจัดฟอร์แมตเวลาให้เป็นเวลาประเทศไทย รูปแบบ 24 ชั่วโมง (HH:mm)
+ */
+function normalizeThailandTime24h_(rawVal) {
+  if (rawVal === undefined || rawVal === null || rawVal === '') return '07:00';
+
+  if (rawVal instanceof Date) {
+    try {
+      return Utilities.formatDate(rawVal, 'Asia/Bangkok', 'HH:mm');
+    } catch (e) {
+      return '07:00';
+    }
+  }
+
+  const s = String(rawVal).trim();
+
+  // หากเป็นข้อความแสดงผล Date ผิดเพี้ยนจาก Sheets (เช่น Sat Dec 30 1899...)
+  if (s.includes('1899') || s.includes('GMT')) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      try {
+        const timeStr = Utilities.formatDate(d, 'Asia/Bangkok', 'HH:mm');
+        if (timeStr && timeStr !== '00:00' && !timeStr.includes('NaN')) {
+          return timeStr;
+        }
+      } catch (e) {}
+    }
+    return '07:00';
+  }
+
+  // รูปแบบ HH:mm หรือ H:mm
+  const match = s.match(/^([01]?\d|2[0-3]):([0-5]\d)/);
+  if (match) {
+    const hh = String(match[1]).padStart(2, '0');
+    const mm = String(match[2]).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  // ตัวเลขเดี่ยวระบุชั่วโมง (เช่น "7" หรือ 7)
+  const num = parseInt(s, 10);
+  if (!isNaN(num) && num >= 0 && num <= 23) {
+    return `${String(num).padStart(2, '0')}:00`;
+  }
+
+  return '07:00';
+}
+
+/**
  * ดึงการตั้งค่าทั้งหมดจากชีต Settings
  */
 function getSettings_() {
@@ -494,7 +558,8 @@ function getSettings_() {
 
   for (let i = 1; i < values.length; i++) {
     const key = String(values[i][0]).trim();
-    const val = String(values[i][1]).trim();
+    const rawVal = values[i][1];
+    const val = String(rawVal).trim();
     if (key === 'TELEGRAM_BOT_TOKEN') settings.TELEGRAM_BOT_TOKEN = val;
     if (key === 'TELEGRAM_CHAT_ID') settings.TELEGRAM_CHAT_ID = val;
     if (key === 'NOTIFY_ON_CREATE') settings.NOTIFY_ON_CREATE = (val.toLowerCase() === 'true');
@@ -508,7 +573,7 @@ function getSettings_() {
     if (key === 'RDP_DEFAULT_SHARE_DRIVES') settings.RDP_DEFAULT_SHARE_DRIVES = (val.toLowerCase() !== 'false');
     if (key === 'CALENDAR_ENABLE_ADVANCE_REMINDER') settings.CALENDAR_ENABLE_ADVANCE_REMINDER = (val.toLowerCase() !== 'false');
     if (key === 'CALENDAR_REMINDER_DAYS_BEFORE') settings.CALENDAR_REMINDER_DAYS_BEFORE = val || '1';
-    if (key === 'CALENDAR_REMINDER_TIME') settings.CALENDAR_REMINDER_TIME = val || '07:00';
+    if (key === 'CALENDAR_REMINDER_TIME') settings.CALENDAR_REMINDER_TIME = normalizeThailandTime24h_(rawVal);
     if (key === 'CALENDAR_NOTIFY_ON_SCHEDULE') settings.CALENDAR_NOTIFY_ON_SCHEDULE = (val.toLowerCase() !== 'false');
     if (key === 'CALENDAR_NOTIFY_SITE_GROUP') settings.CALENDAR_NOTIFY_SITE_GROUP = (val.toLowerCase() !== 'false');
     if (key === 'CALENDAR_NOTIFY_MAIN_GROUP') settings.CALENDAR_NOTIFY_MAIN_GROUP = (val.toLowerCase() === 'true');
@@ -558,11 +623,16 @@ function saveSettings(newSettings) {
       keysMap[values[i][0]] = i + 1; // row index in Sheet (1-based)
     }
 
-    const updateOrAdd = (key, value, desc) => {
+    const updateOrAdd = (key, value, desc, asPlainText = false) => {
       if (keysMap[key]) {
-        sheet.getRange(keysMap[key], 2).setValue(value);
+        const cell = sheet.getRange(keysMap[key], 2);
+        if (asPlainText) cell.setNumberFormat('@');
+        cell.setValue(value);
       } else {
         sheet.appendRow([key, value, desc || '']);
+        if (asPlainText) {
+          sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
+        }
       }
     };
 
@@ -619,7 +689,8 @@ function saveSettings(newSettings) {
       updateOrAdd('CALENDAR_REMINDER_DAYS_BEFORE', String(newSettings.CALENDAR_REMINDER_DAYS_BEFORE), 'จำนวนวันเตือนล่วงหน้า');
     }
     if (newSettings.CALENDAR_REMINDER_TIME !== undefined) {
-      updateOrAdd('CALENDAR_REMINDER_TIME', String(newSettings.CALENDAR_REMINDER_TIME), 'เวลาส่งแจ้งเตือนรอบเช้า');
+      const cleanTime = normalizeThailandTime24h_(newSettings.CALENDAR_REMINDER_TIME);
+      updateOrAdd('CALENDAR_REMINDER_TIME', cleanTime, 'เวลาส่งแจ้งเตือนรอบเช้า (เวลาประเทศไทย 24 ชม.)', true);
     }
     if (newSettings.CALENDAR_NOTIFY_ON_SCHEDULE !== undefined) {
       updateOrAdd('CALENDAR_NOTIFY_ON_SCHEDULE', String(newSettings.CALENDAR_NOTIFY_ON_SCHEDULE), 'แจ้งเตือนทันทีเมื่อลงตาราง (true/false)');
@@ -671,11 +742,16 @@ function saveSitesList(sitesArray, siteChatIds) {
       keysMap[values[i][0]] = i + 1;
     }
 
-    const updateOrAdd = (key, value, desc) => {
+    const updateOrAdd = (key, value, desc, asPlainText = false) => {
       if (keysMap[key]) {
-        sheet.getRange(keysMap[key], 2).setValue(value);
+        const cell = sheet.getRange(keysMap[key], 2);
+        if (asPlainText) cell.setNumberFormat('@');
+        cell.setValue(value);
       } else {
         sheet.appendRow([key, value, desc || '']);
+        if (asPlainText) {
+          sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
+        }
       }
     };
 

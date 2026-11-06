@@ -1375,6 +1375,64 @@ function renderAdminAuditLogs() {
 // --------------------------------------------------------------------
 
 /**
+ * จัดฟอร์แมตค่าเวลาให้อยู่ในรูปแบบ 24 ชั่วโมงประเทศไทย (HH:mm) เช่น 07:00
+ */
+function formatTo24HourTime(val) {
+  if (val === undefined || val === null || val === '') return '07:00';
+
+  const s = String(val).trim();
+
+  // หากเป็น Date String ผิดเพี้ยนจาก Sheets (เช่น Sat Dec 30 1899...)
+  if (s.includes('1899') || s.includes('GMT')) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      try {
+        const parts = new Intl.DateTimeFormat('en-GB', {
+          timeZone: 'Asia/Bangkok',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).formatToParts(d).reduce((acc, p) => { acc[p.type] = p.value; return acc; }, {});
+        if (parts.hour && parts.minute && parts.hour !== 'NaN') {
+          return `${parts.hour}:${parts.minute}`;
+        }
+      } catch (e) {}
+    }
+    return '07:00';
+  }
+
+  // รูปแบบ HH:mm หรือ H:mm
+  const match = s.match(/^([01]?\d|2[0-3]):([0-5]\d)/);
+  if (match) {
+    const hh = String(match[1]).padStart(2, '0');
+    const mm = String(match[2]).padStart(2, '0');
+    return `${hh}:${mm}`;
+  }
+
+  // ตัวเลขเดี่ยวระบุชั่วโมง (เช่น "7" หรือ 7)
+  const num = parseInt(s, 10);
+  if (!isNaN(num) && num >= 0 && num <= 23) {
+    return `${String(num).padStart(2, '0')}:00`;
+  }
+
+  return '07:00';
+}
+window.formatTo24HourTime = formatTo24HourTime;
+
+/**
+ * กำหนดเวลาแจ้งเตือนด่วนจากปุ่ม Preset
+ */
+function setCalendarReminderPreset(timeStr) {
+  const input = document.getElementById("cal-cfg-reminder-time");
+  if (input) {
+    input.value = timeStr;
+    input.focus();
+    showToast(`เลือกเวลาส่งแจ้งเตือน: ${timeStr} น.`, "info", 1200);
+  }
+}
+window.setCalendarReminderPreset = setCalendarReminderPreset;
+
+/**
  * เติมค่าการตั้งค่าระบบปฏิทินเข้าไซต์งานลงในฟอร์ม Admin Center
  */
 function populateCalendarSettings() {
@@ -1399,7 +1457,7 @@ function populateCalendarSettings() {
     reminderDays.value = String(s.CALENDAR_REMINDER_DAYS_BEFORE !== undefined ? s.CALENDAR_REMINDER_DAYS_BEFORE : "1");
   }
   if (reminderTime) {
-    reminderTime.value = String(s.CALENDAR_REMINDER_TIME || "07:00");
+    reminderTime.value = formatTo24HourTime(s.CALENDAR_REMINDER_TIME);
   }
 
   if (notifyImmediate) {
@@ -1434,10 +1492,13 @@ function saveCalendarSettings() {
     btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>กำลังบันทึก...';
   }
 
+  const rawReminderTime = document.getElementById("cal-cfg-reminder-time")?.value;
+  const cleanReminderTime = formatTo24HourTime(rawReminderTime);
+
   const newSettings = {
     CALENDAR_ENABLE_ADVANCE_REMINDER: document.getElementById("cal-cfg-enable-advance-reminder")?.checked ?? true,
     CALENDAR_REMINDER_DAYS_BEFORE: document.getElementById("cal-cfg-reminder-days")?.value || "1",
-    CALENDAR_REMINDER_TIME: document.getElementById("cal-cfg-reminder-time")?.value?.trim() || "07:00",
+    CALENDAR_REMINDER_TIME: cleanReminderTime,
     CALENDAR_NOTIFY_ON_SCHEDULE: document.getElementById("cal-cfg-notify-immediate")?.checked ?? true,
     CALENDAR_NOTIFY_SITE_GROUP: document.getElementById("cal-cfg-notify-site-group")?.checked ?? true,
     CALENDAR_NOTIFY_MAIN_GROUP: document.getElementById("cal-cfg-notify-main-group")?.checked ?? false,

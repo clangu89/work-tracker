@@ -533,11 +533,17 @@ function sendDailySiteScheduleReminders() {
 function setupScheduleReminderTrigger() {
   try {
     const settings = (typeof getSettings_ === 'function') ? getSettings_() : null;
-    const timeStr = (settings && settings.CALENDAR_REMINDER_TIME) ? String(settings.CALENDAR_REMINDER_TIME).trim() : '07:00';
+    const rawTime = (settings && settings.CALENDAR_REMINDER_TIME) ? settings.CALENDAR_REMINDER_TIME : '07:00';
+    const timeStr = (typeof normalizeThailandTime24h_ === 'function') ? normalizeThailandTime24h_(rawTime) : '07:00';
+
     let targetHour = 7;
-    if (timeStr.includes(':')) {
-      const h = parseInt(timeStr.split(':')[0], 10);
+    let targetMinute = 0;
+    if (timeStr && timeStr.includes(':')) {
+      const parts = timeStr.split(':');
+      const h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
       if (!isNaN(h) && h >= 0 && h <= 23) targetHour = h;
+      if (!isNaN(m) && m >= 0 && m <= 59) targetMinute = m;
     }
 
     const triggers = ScriptApp.getProjectTriggers();
@@ -555,10 +561,10 @@ function setupScheduleReminderTrigger() {
       .inTimezone('Asia/Bangkok')
       .create();
 
-    const formattedHour = String(targetHour).padStart(2, '0') + ':00 น.';
+    const formattedTime = timeStr + ' น. (เวลาประเทศไทย 24 ชม.)';
     return { 
       success: true, 
-      message: `ติดตั้งระบบแจ้งเตือนอัตโนมัติรอบเช้าเวลา ${formattedHour} ทุกวัน เรียบร้อยแล้ว` 
+      message: `ติดตั้งระบบแจ้งเตือนอัตโนมัติรอบเช้าเวลา ${formattedTime} ทุกวัน เรียบร้อยแล้ว` 
     };
   } catch (error) {
     console.error('setupScheduleReminderTrigger error: ' + error.message);
