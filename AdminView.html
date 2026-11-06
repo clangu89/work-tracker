@@ -38,6 +38,13 @@
             <span class="text-[10px] bg-purple-600 text-white px-1.5 py-0.2 rounded-md font-bold uppercase">ADMIN</span>
           </div>
 
+          <!-- Notification Center Bell Button -->
+          <button id="btnAdminNotification" onclick="toggleNotificationCenter(event, 'admin')" title="ศูนย์แจ้งเตือน"
+                  class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <i class="fa-solid fa-bell text-purple-600"></i>
+            <span id="badgeAdminNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+          </button>
+
           <!-- Online Users Counter & View Button -->
           <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
                   class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">

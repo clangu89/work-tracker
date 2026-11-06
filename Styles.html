@@ -487,4 +487,24 @@
     background-color: var(--ch-card-subtle);
     color: var(--ch-text-main);
   }
+
+  /* ================= NOTIFICATION CENTER (iOS LIQUID GLASS) ================= */
+  .lg-popover {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 100%);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    box-shadow: 0 0 0 1px rgba(110, 90, 65, 0.14),
+                inset 0 1px 0 rgba(255, 255, 255, 0.90),
+                0 24px 60px -12px rgba(60, 40, 20, 0.28);
+    color: #1d1b19;
+  }
+  @keyframes bellRing {
+    0%, 100% { transform: rotate(0); }
+    15%, 45% { transform: rotate(14deg); }
+    30%, 60% { transform: rotate(-14deg); }
+  }
+  .bell-has-unread i {
+    animation: bellRing 2.2s ease-in-out infinite;
+    transform-origin: top center;
+  }
 </style>

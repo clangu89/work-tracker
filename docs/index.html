@@ -536,6 +536,26 @@
     background-color: var(--ch-card-subtle);
     color: var(--ch-text-main);
   }
+
+  /* ================= NOTIFICATION CENTER (iOS LIQUID GLASS) ================= */
+  .lg-popover {
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 255, 255, 0.82) 100%);
+    backdrop-filter: blur(32px) saturate(200%);
+    -webkit-backdrop-filter: blur(32px) saturate(200%);
+    box-shadow: 0 0 0 1px rgba(110, 90, 65, 0.14),
+                inset 0 1px 0 rgba(255, 255, 255, 0.90),
+                0 24px 60px -12px rgba(60, 40, 20, 0.28);
+    color: #1d1b19;
+  }
+  @keyframes bellRing {
+    0%, 100% { transform: rotate(0); }
+    15%, 45% { transform: rotate(14deg); }
+    30%, 60% { transform: rotate(-14deg); }
+  }
+  .bell-has-unread i {
+    animation: bellRing 2.2s ease-in-out infinite;
+    transform-origin: top center;
+  }
 </style>
 
 </head>
@@ -738,6 +758,13 @@
             <span class="user-role-badge-nav text-[10px] bg-[#0a84ff] text-white px-2 py-0.5 rounded-full font-bold uppercase shadow-2xs">Member</span>
           </div>
 
+          <!-- Notification Center Bell Button -->
+          <button id="btnLauncherNotification" onclick="toggleNotificationCenter(event, 'launcher')" title="ศูนย์แจ้งเตือน"
+                  class="relative w-10 h-10 lg-circle lg-glass lg-beam-icon hover:bg-white text-sm text-[#1d1b19] cursor-pointer shadow-sm active:scale-95 transition-all">
+            <i class="fa-solid fa-bell"></i>
+            <span id="badgeLauncherNotification" class="absolute -top-1 -right-1 z-10 min-w-[20px] h-5 px-1 rounded-full bg-[#ff3b30] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+          </button>
+
           <!-- Online Users Circular Button -->
           <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
                   class="relative w-10 h-10 lg-circle lg-glass lg-beam-icon hover:bg-white text-sm text-[#1d1b19] cursor-pointer shadow-sm active:scale-95 transition-all">
@@ -934,6 +961,13 @@
             <span id="navUserFullName" class="font-semibold max-w-[120px] truncate">-</span>
             <span id="navUserRole" class="text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
           </div>
+
+          <!-- Notification Center Bell Button -->
+          <button id="btnWtNotification" onclick="toggleNotificationCenter(event, 'wt')" title="ศูนย์แจ้งเตือน"
+                  class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <i class="fa-solid fa-bell text-[#2491FA]"></i>
+            <span id="badgeWtNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+          </button>
 
           <!-- Online Users Counter & View Button -->
           <button id="btnOnlineUsers" onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
@@ -2401,6 +2435,51 @@
     </div>
   </div>
 
+  <!-- ================= SHARED NOTIFICATION CENTER POPOVER (iOS Liquid Glass - แบบที่ 1) ================= -->
+  <div id="notificationCenterPopover" class="hidden fixed z-50 top-18 right-4 sm:right-8 w-[calc(100vw-32px)] sm:w-[390px] lg-popover rounded-[32px] p-5 shadow-2xl flex flex-col gap-3.5 border border-white/80 transition-all duration-200">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2.5 border-b border-black/5">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 lg-circle bg-gradient-to-tr from-amber-400 to-orange-500 text-white text-xs shadow-xs">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+        <div>
+          <h3 class="text-xs sm:text-sm font-bold text-[#1d1b19] leading-tight">ศูนย์แจ้งเตือน</h3>
+          <p id="notifSubtitle" class="text-[10px] text-rose-500 font-semibold">กำลังตรวจสอบการแจ้งเตือน...</p>
+        </div>
+      </div>
+      <button type="button" onclick="markAllNotificationsAsRead()" class="text-[11px] text-[#0a84ff] hover:underline font-bold cursor-pointer">
+        อ่านทั้งหมด
+      </button>
+    </div>
+
+    <!-- Segmented Filter Tabs (ทั้งหมด / ยังไม่อ่าน) -->
+    <div class="flex items-center gap-1 bg-black/5 p-1 rounded-full text-xs">
+      <button type="button" id="notifTabAll" onclick="switchNotifTab('all')" class="flex-1 py-1 rounded-full bg-white text-[#1d1b19] font-bold shadow-xs text-center text-[11px] transition-all cursor-pointer">
+        ทั้งหมด (<span id="notifCountAll">0</span>)
+      </button>
+      <button type="button" id="notifTabUnread" onclick="switchNotifTab('unread')" class="flex-1 py-1 rounded-full text-[#6e6862] hover:text-[#1d1b19] font-medium text-center text-[11px] transition-all cursor-pointer">
+        ยังไม่อ่าน (<span id="notifCountUnread">0</span>)
+      </button>
+    </div>
+
+    <!-- Notification Items Scrollable List -->
+    <div id="notifListContainer" class="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+      <!-- Rendered dynamically -->
+    </div>
+
+    <!-- Footer -->
+    <div class="pt-2 border-t border-black/5 flex items-center justify-between text-[11px] text-[#6e6862]">
+      <span class="flex items-center gap-1">
+        <i class="fa-solid fa-circle-info text-[10px] text-[#0a84ff]"></i>
+        <span>คลิกนอกกรอบเพื่อปิด</span>
+      </span>
+      <button type="button" onclick="clearAllNotifications()" class="text-rose-500 hover:underline cursor-pointer">
+        ล้างทั้งหมด
+      </button>
+    </div>
+  </div>
+
   <!-- ================= TOAST NOTIFICATION CONTAINER ================= -->
   <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none"></div>
 
@@ -2446,6 +2525,13 @@
             <span class="user-display-name-nav font-semibold max-w-[120px] truncate">-</span>
             <span class="user-role-badge-nav text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
           </div>
+
+          <!-- Notification Center Bell Button -->
+          <button id="btnRdpNotification" onclick="toggleNotificationCenter(event, 'rdp')" title="ศูนย์แจ้งเตือน"
+                  class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <i class="fa-solid fa-bell text-[#2491FA]"></i>
+            <span id="badgeRdpNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+          </button>
 
           <!-- Online Users Counter & View Button -->
           <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
@@ -2865,6 +2951,13 @@
             <span class="user-display-name-nav font-semibold max-w-[120px] truncate">-</span>
             <span class="text-[10px] bg-purple-600 text-white px-1.5 py-0.2 rounded-md font-bold uppercase">ADMIN</span>
           </div>
+
+          <!-- Notification Center Bell Button -->
+          <button id="btnAdminNotification" onclick="toggleNotificationCenter(event, 'admin')" title="ศูนย์แจ้งเตือน"
+                  class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <i class="fa-solid fa-bell text-purple-600"></i>
+            <span id="badgeAdminNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+          </button>
 
           <!-- Online Users Counter & View Button -->
           <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
@@ -9574,6 +9667,7 @@ function openAppLauncher() {
   if (launcher) launcher.classList.remove('hidden');
   startLauncherClock();
   initWeatherWidget();
+  updateAllNotificationBadges();
 
   renderAppLauncher();
   updateNavbarUser();
@@ -9673,8 +9767,401 @@ function enterApp(appKey) {
   sendHeartbeat();
 }
 
-</script>
 
+
+// ================= NOTIFICATION CENTER (iOS LIQUID GLASS) =================
+let currentNotifTab = 'all';
+let activeNotifications = [];
+
+function getReadNotificationIds() {
+  try {
+    const raw = localStorage.getItem('wt_read_notifications');
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function saveReadNotificationIds(idSet) {
+  try {
+    localStorage.setItem('wt_read_notifications', JSON.stringify(Array.from(idSet)));
+  } catch (e) {
+    console.warn('Failed saving read notification ids', e);
+  }
+}
+
+function getDismissedNotificationIds() {
+  try {
+    const raw = localStorage.getItem('wt_dismissed_notifications');
+    return raw ? new Set(JSON.parse(raw)) : new Set();
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function saveDismissedNotificationIds(idSet) {
+  try {
+    localStorage.setItem('wt_dismissed_notifications', JSON.stringify(Array.from(idSet)));
+  } catch (e) {
+    console.warn('Failed saving dismissed notification ids', e);
+  }
+}
+
+function generateSystemNotifications() {
+  const list = [];
+  const readIds = getReadNotificationIds();
+  const dismissedIds = getDismissedNotificationIds();
+  const currentUser = state.currentUser ? (state.currentUser.fullName || state.currentUser.name || state.currentUser.username) : '';
+
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // 1. Scan Work Tracker tasks
+  if (Array.isArray(state.tasks)) {
+    state.tasks.forEach(task => {
+      if (task.status === 'เสร็จสิ้น' || task.status === 'ยกเลิก') return;
+
+      const isOverdue = task.dueDate && task.dueDate < todayStr;
+      const isDueToday = task.dueDate && task.dueDate === todayStr;
+      const isAssignedToMe = currentUser && task.assignee && (task.assignee.toLowerCase().includes(currentUser.toLowerCase()) || currentUser.toLowerCase().includes(task.assignee.toLowerCase()));
+      const isUrgent = task.priority === 'ด่วนที่สุด' || task.priority === 'ด่วนมาก';
+
+      // (a) Overdue alert
+      if (isOverdue) {
+        const notifId = 'notif_overdue_' + task.id;
+        if (!dismissedIds.has(notifId)) {
+          list.push({
+            id: notifId,
+            taskId: task.id,
+            system: 'Work Tracker',
+            type: 'danger',
+            category: 'งานเกินกำหนด',
+            badgeBg: 'bg-rose-100 text-rose-700',
+            cardBg: 'bg-rose-50/70 border-rose-200/90 hover:bg-rose-100/70',
+            iconClass: 'fa-solid fa-clock text-rose-500',
+            iconBg: 'bg-rose-500',
+            title: task.title || 'งานไม่มีชื่อ',
+            subtitle: `กำหนดส่ง: ${task.dueDate} • ผู้รับผิดชอบ: ${task.assignee || 'ไม่ระบุ'}`,
+            timeAgo: 'เกินกำหนดส่ง',
+            read: readIds.has(notifId)
+          });
+        }
+      }
+      // (b) Assigned to me alert
+      else if (isAssignedToMe) {
+        const notifId = 'notif_assign_' + task.id;
+        if (!dismissedIds.has(notifId)) {
+          list.push({
+            id: notifId,
+            taskId: task.id,
+            system: 'Work Tracker',
+            type: 'primary',
+            category: 'งานที่คุณรับผิดชอบ',
+            badgeBg: 'bg-blue-100 text-blue-700',
+            cardBg: 'bg-blue-50/70 border-blue-200/90 hover:bg-blue-100/70',
+            iconClass: 'fa-solid fa-user-check text-blue-500',
+            iconBg: 'bg-[#0a84ff]',
+            title: task.title || 'งานไม่มีชื่อ',
+            subtitle: `สถานะ: ${task.status || 'รอดำเนินการ'} • ไซต์งาน: ${task.site || '-'}`,
+            timeAgo: isDueToday ? 'ครบกำหนดวันนี้' : (task.dueDate ? `ส่ง ${task.dueDate}` : 'งานที่มอบหมาย'),
+            read: readIds.has(notifId)
+          });
+        }
+      }
+      // (c) Urgent task alert
+      else if (isUrgent) {
+        const notifId = 'notif_urgent_' + task.id;
+        if (!dismissedIds.has(notifId)) {
+          list.push({
+            id: notifId,
+            taskId: task.id,
+            system: 'Work Tracker',
+            type: 'warning',
+            category: 'งานเร่งด่วน (' + task.priority + ')',
+            badgeBg: 'bg-amber-100 text-amber-800',
+            cardBg: 'bg-amber-50/70 border-amber-200/90 hover:bg-amber-100/70',
+            iconClass: 'fa-solid fa-fire text-amber-500',
+            iconBg: 'bg-amber-500',
+            title: task.title || 'งานไม่มีชื่อ',
+            subtitle: `ไซต์งาน: ${task.site || '-'} • กำหนดส่ง: ${task.dueDate || '-'}`,
+            timeAgo: 'ความสำคัญสูง',
+            read: readIds.has(notifId)
+          });
+        }
+      }
+    });
+  }
+
+  // 2. Scan RDP Sites (if any offline or error)
+  if (Array.isArray(state.rdpSites)) {
+    state.rdpSites.forEach(site => {
+      if (site.status === 'error' || site.status === 'offline') {
+        const notifId = 'notif_rdp_' + site.id;
+        if (!dismissedIds.has(notifId)) {
+          list.push({
+            id: notifId,
+            system: 'RDP Manager',
+            type: 'warning',
+            category: 'RDP ไซต์งาน',
+            badgeBg: 'bg-amber-100 text-amber-800',
+            cardBg: 'bg-amber-50/70 border-amber-200/90 hover:bg-amber-100/70',
+            iconClass: 'fa-solid fa-triangle-exclamation text-amber-500',
+            iconBg: 'bg-amber-500',
+            title: `ไซต์ ${site.name || site.id} ขาดการเชื่อมต่อ`,
+            subtitle: `IP: ${site.ip || '-'} (พอร์ต ${site.port || 3389})`,
+            timeAgo: 'ต้องการตรวจสอบ',
+            read: readIds.has(notifId)
+          });
+        }
+      }
+    });
+  }
+
+  // 3. Welcome / System Ready Announcement
+  const welcomeId = 'notif_sys_welcome';
+  if (!dismissedIds.has(welcomeId)) {
+    list.push({
+      id: welcomeId,
+      system: 'Portal',
+      type: 'info',
+      category: 'ระบบพร้อมใช้งาน',
+      badgeBg: 'bg-emerald-100 text-emerald-700',
+      cardBg: 'bg-emerald-50/70 border-emerald-200/90 hover:bg-emerald-100/70',
+      iconClass: 'fa-solid fa-shield-halved text-emerald-500',
+      iconBg: 'bg-[#30d158]',
+      title: 'เชื่อมต่อศูนย์ข้อมูลระบบเรียบร้อย',
+      subtitle: 'ยินดีต้อนรับสู่ Work Tracker & Remote Portal (iOS Liquid Glass)',
+      timeAgo: 'วันนี้',
+      read: readIds.has(welcomeId)
+    });
+  }
+
+  activeNotifications = list;
+  return list;
+}
+
+function updateAllNotificationBadges() {
+  const notifs = generateSystemNotifications();
+  const unreadCount = notifs.filter(n => !n.read).length;
+
+  const badges = [
+    document.getElementById('badgeLauncherNotification'),
+    document.getElementById('badgeWtNotification'),
+    document.getElementById('badgeRdpNotification'),
+    document.getElementById('badgeAdminNotification')
+  ];
+
+  const buttons = [
+    document.getElementById('btnLauncherNotification'),
+    document.getElementById('btnWtNotification'),
+    document.getElementById('btnRdpNotification'),
+    document.getElementById('btnAdminNotification')
+  ];
+
+  badges.forEach(badge => {
+    if (!badge) return;
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  });
+
+  buttons.forEach(btn => {
+    if (!btn) return;
+    if (unreadCount > 0) {
+      btn.classList.add('bell-has-unread');
+    } else {
+      btn.classList.remove('bell-has-unread');
+    }
+  });
+}
+
+function toggleNotificationCenter(event, sourceApp) {
+  if (event) {
+    event.stopPropagation();
+  }
+
+  const popover = document.getElementById('notificationCenterPopover');
+  if (!popover) return;
+
+  if (!popover.classList.contains('hidden')) {
+    closeNotificationCenter();
+    return;
+  }
+
+  // Open popover
+  popover.classList.remove('hidden');
+  renderNotificationCenter();
+
+  // Position smartly near the clicked button
+  if (event && event.currentTarget) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const isMobile = window.innerWidth < 640;
+    if (isMobile) {
+      popover.style.top = (rect.bottom + 12) + 'px';
+      popover.style.right = '16px';
+      popover.style.left = '16px';
+      popover.style.width = 'calc(100vw - 32px)';
+    } else {
+      popover.style.top = (rect.bottom + 14) + 'px';
+      popover.style.right = Math.max(16, window.innerWidth - rect.right - 10) + 'px';
+      popover.style.left = 'auto';
+      popover.style.width = '390px';
+    }
+  }
+}
+
+function closeNotificationCenter() {
+  const popover = document.getElementById('notificationCenterPopover');
+  if (popover) {
+    popover.classList.add('hidden');
+  }
+}
+
+// Close popover when clicking outside
+window.addEventListener('click', (e) => {
+  const popover = document.getElementById('notificationCenterPopover');
+  if (!popover || popover.classList.contains('hidden')) return;
+
+  const isClickInside = popover.contains(e.target);
+  const isBellButton = e.target.closest('#btnLauncherNotification, #btnWtNotification, #btnRdpNotification, #btnAdminNotification');
+
+  if (!isClickInside && !isBellButton) {
+    closeNotificationCenter();
+  }
+});
+
+function switchNotifTab(tab) {
+  currentNotifTab = tab;
+  const tabAll = document.getElementById('notifTabAll');
+  const tabUnread = document.getElementById('notifTabUnread');
+
+  if (tab === 'all') {
+    tabAll?.classList.add('bg-white', 'text-[#1d1b19]', 'shadow-xs', 'font-bold');
+    tabAll?.classList.remove('text-[#6e6862]', 'font-medium');
+    tabUnread?.classList.remove('bg-white', 'text-[#1d1b19]', 'shadow-xs', 'font-bold');
+    tabUnread?.classList.add('text-[#6e6862]', 'font-medium');
+  } else {
+    tabUnread?.classList.add('bg-white', 'text-[#1d1b19]', 'shadow-xs', 'font-bold');
+    tabUnread?.classList.remove('text-[#6e6862]', 'font-medium');
+    tabAll?.classList.remove('bg-white', 'text-[#1d1b19]', 'shadow-xs', 'font-bold');
+    tabAll?.classList.add('text-[#6e6862]', 'font-medium');
+  }
+
+  renderNotificationCenter();
+}
+
+function renderNotificationCenter() {
+  generateSystemNotifications();
+
+  const container = document.getElementById('notifListContainer');
+  const countAllEl = document.getElementById('notifCountAll');
+  const countUnreadEl = document.getElementById('notifCountUnread');
+  const subtitleEl = document.getElementById('notifSubtitle');
+
+  const allCount = activeNotifications.length;
+  const unreadCount = activeNotifications.filter(n => !n.read).length;
+
+  if (countAllEl) countAllEl.textContent = allCount;
+  if (countUnreadEl) countUnreadEl.textContent = unreadCount;
+  if (subtitleEl) {
+    if (unreadCount > 0) {
+      subtitleEl.textContent = `${unreadCount} รายการใหม่ที่ยังไม่ได้อ่าน`;
+      subtitleEl.className = 'text-[10px] text-rose-500 font-semibold';
+    } else {
+      subtitleEl.textContent = 'อ่านครบทุกรายการแล้ว';
+      subtitleEl.className = 'text-[10px] text-emerald-600 font-semibold';
+    }
+  }
+
+  if (!container) return;
+
+  const displayList = currentNotifTab === 'unread' 
+    ? activeNotifications.filter(n => !n.read) 
+    : activeNotifications;
+
+  if (displayList.length === 0) {
+    container.innerHTML = `
+      <div class="py-10 text-center text-[#6e6862]">
+        <div class="w-12 h-12 lg-circle bg-emerald-100 text-emerald-600 text-xl mx-auto mb-2.5">
+          <i class="fa-solid fa-check"></i>
+        </div>
+        <p class="text-xs font-bold text-[#1d1b19]">ไม่มีรายการแจ้งเตือน</p>
+        <p class="text-[11px] text-[#6e6862] mt-0.5">คุณจัดการงานและระบบเรียบร้อยทั้งหมดแล้ว</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = displayList.map(item => `
+    <div onclick="handleNotificationClick('${item.id}', ${item.taskId || 'null'})"
+         class="p-3 rounded-2xl border transition-all flex items-start gap-2.5 cursor-pointer relative ${item.cardBg} ${item.read ? 'opacity-70' : 'shadow-xs'}">
+      <div class="w-8 h-8 rounded-full ${item.iconBg} text-white flex items-center justify-center text-xs shrink-0 mt-0.5 shadow-xs">
+        <i class="${item.iconClass.replace(/text-[a-z0-9-]+/g, '')} text-white"></i>
+      </div>
+      <div class="flex-1 min-w-0 pr-1">
+        <div class="flex items-center justify-between gap-1">
+          <span class="text-[9px] font-bold uppercase px-1.5 py-0.2 rounded ${item.badgeBg}">${item.category}</span>
+          <span class="text-[9px] text-[#6e6862] font-medium">${item.timeAgo}</span>
+        </div>
+        <div class="text-xs font-bold text-[#1d1b19] truncate mt-1 leading-snug">${item.title}</div>
+        <div class="text-[10px] sm:text-[11px] text-[#6e6862] truncate mt-0.5">${item.subtitle}</div>
+      </div>
+      ${!item.read ? '<span class="w-2 h-2 rounded-full bg-rose-500 shrink-0 mt-2"></span>' : ''}
+    </div>
+  `).join('');
+}
+
+function handleNotificationClick(notifId, taskId) {
+  const readIds = getReadNotificationIds();
+  readIds.add(notifId);
+  saveReadNotificationIds(readIds);
+  updateAllNotificationBadges();
+
+  closeNotificationCenter();
+
+  if (taskId) {
+    enterApp('work_tracker');
+    setTimeout(() => {
+      const searchBox = document.getElementById('searchTasks');
+      if (searchBox) {
+        searchBox.value = '';
+        if (typeof filterTasks === 'function') filterTasks();
+      }
+      if (typeof openTaskModal === 'function') {
+        const found = state.tasks?.find(t => String(t.id) === String(taskId));
+        if (found) {
+          openTaskModal(found);
+        }
+      }
+    }, 300);
+  }
+}
+
+function markAllNotificationsAsRead() {
+  const readIds = getReadNotificationIds();
+  activeNotifications.forEach(n => readIds.add(n.id));
+  saveReadNotificationIds(readIds);
+  updateAllNotificationBadges();
+  renderNotificationCenter();
+  if (typeof showToast === 'function') {
+    showToast('ทำเครื่องหมายอ่านทั้งหมดเรียบร้อย', 'success');
+  }
+}
+
+function clearAllNotifications() {
+  const dismissedIds = getDismissedNotificationIds();
+  activeNotifications.forEach(n => dismissedIds.add(n.id));
+  saveDismissedNotificationIds(dismissedIds);
+  updateAllNotificationBadges();
+  renderNotificationCenter();
+  if (typeof showToast === 'function') {
+    showToast('ล้างรายการแจ้งเตือนทั้งหมดแล้ว', 'info');
+  }
+}
+
+</script>
   <script>
 /**
  * ====================================================================

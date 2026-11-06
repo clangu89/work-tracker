@@ -248,6 +248,13 @@
             <span class="user-role-badge-nav text-[10px] bg-[#0a84ff] text-white px-2 py-0.5 rounded-full font-bold uppercase shadow-2xs">Member</span>
           </div>
 
+          <!-- Notification Center Bell Button -->
+          <button id="btnLauncherNotification" onclick="toggleNotificationCenter(event, 'launcher')" title="ศูนย์แจ้งเตือน"
+                  class="relative w-10 h-10 lg-circle lg-glass lg-beam-icon hover:bg-white text-sm text-[#1d1b19] cursor-pointer shadow-sm active:scale-95 transition-all">
+            <i class="fa-solid fa-bell"></i>
+            <span id="badgeLauncherNotification" class="absolute -top-1 -right-1 z-10 min-w-[20px] h-5 px-1 rounded-full bg-[#ff3b30] text-white text-[10px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+          </button>
+
           <!-- Online Users Circular Button -->
           <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
                   class="relative w-10 h-10 lg-circle lg-glass lg-beam-icon hover:bg-white text-sm text-[#1d1b19] cursor-pointer shadow-sm active:scale-95 transition-all">
@@ -444,6 +451,13 @@
             <span id="navUserFullName" class="font-semibold max-w-[120px] truncate">-</span>
             <span id="navUserRole" class="text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
           </div>
+
+          <!-- Notification Center Bell Button -->
+          <button id="btnWtNotification" onclick="toggleNotificationCenter(event, 'wt')" title="ศูนย์แจ้งเตือน"
+                  class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+            <i class="fa-solid fa-bell text-[#2491FA]"></i>
+            <span id="badgeWtNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+          </button>
 
           <!-- Online Users Counter & View Button -->
           <button id="btnOnlineUsers" onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
@@ -1908,6 +1922,51 @@
     <div class="bg-white p-5 rounded-2xl shadow-xl flex items-center gap-3 border border-slate-100">
       <div class="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
       <span class="text-sm font-medium text-slate-700">กำลังโหลดข้อมูล...</span>
+    </div>
+  </div>
+
+  <!-- ================= SHARED NOTIFICATION CENTER POPOVER (iOS Liquid Glass - แบบที่ 1) ================= -->
+  <div id="notificationCenterPopover" class="hidden fixed z-50 top-18 right-4 sm:right-8 w-[calc(100vw-32px)] sm:w-[390px] lg-popover rounded-[32px] p-5 shadow-2xl flex flex-col gap-3.5 border border-white/80 transition-all duration-200">
+    <!-- Header -->
+    <div class="flex items-center justify-between pb-2.5 border-b border-black/5">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 lg-circle bg-gradient-to-tr from-amber-400 to-orange-500 text-white text-xs shadow-xs">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+        <div>
+          <h3 class="text-xs sm:text-sm font-bold text-[#1d1b19] leading-tight">ศูนย์แจ้งเตือน</h3>
+          <p id="notifSubtitle" class="text-[10px] text-rose-500 font-semibold">กำลังตรวจสอบการแจ้งเตือน...</p>
+        </div>
+      </div>
+      <button type="button" onclick="markAllNotificationsAsRead()" class="text-[11px] text-[#0a84ff] hover:underline font-bold cursor-pointer">
+        อ่านทั้งหมด
+      </button>
+    </div>
+
+    <!-- Segmented Filter Tabs (ทั้งหมด / ยังไม่อ่าน) -->
+    <div class="flex items-center gap-1 bg-black/5 p-1 rounded-full text-xs">
+      <button type="button" id="notifTabAll" onclick="switchNotifTab('all')" class="flex-1 py-1 rounded-full bg-white text-[#1d1b19] font-bold shadow-xs text-center text-[11px] transition-all cursor-pointer">
+        ทั้งหมด (<span id="notifCountAll">0</span>)
+      </button>
+      <button type="button" id="notifTabUnread" onclick="switchNotifTab('unread')" class="flex-1 py-1 rounded-full text-[#6e6862] hover:text-[#1d1b19] font-medium text-center text-[11px] transition-all cursor-pointer">
+        ยังไม่อ่าน (<span id="notifCountUnread">0</span>)
+      </button>
+    </div>
+
+    <!-- Notification Items Scrollable List -->
+    <div id="notifListContainer" class="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+      <!-- Rendered dynamically -->
+    </div>
+
+    <!-- Footer -->
+    <div class="pt-2 border-t border-black/5 flex items-center justify-between text-[11px] text-[#6e6862]">
+      <span class="flex items-center gap-1">
+        <i class="fa-solid fa-circle-info text-[10px] text-[#0a84ff]"></i>
+        <span>คลิกนอกกรอบเพื่อปิด</span>
+      </span>
+      <button type="button" onclick="clearAllNotifications()" class="text-rose-500 hover:underline cursor-pointer">
+        ล้างทั้งหมด
+      </button>
     </div>
   </div>
 
