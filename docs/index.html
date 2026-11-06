@@ -8391,49 +8391,88 @@ function closeViewArchivedTaskModal() {
 }
 
 function handleArchiveCompletedPrompt() {
-  const doneTasks = state.tasks.filter(t => t.status === 'เสร็จสิ้น');
+  const filteredTasks = getFilteredTasks();
+  const doneTasks = filteredTasks.filter(t => t.status === 'เสร็จสิ้น');
+
   if (doneTasks.length === 0) {
     Swal.fire({
       icon: 'info',
       title: 'ไม่พบงานที่เสร็จสิ้น',
-      text: 'ไม่มีงานสถานะ "เสร็จสิ้น" บนกระดานที่ต้องจัดเก็บในขณะนี้',
+      text: 'ไม่มีงานสถานะ "เสร็จสิ้น" ที่แสดงอยู่บนกระดานตามตัวกรองในขณะนี้',
       confirmButtonColor: '#2491FA'
     });
     return;
   }
 
+  // รวบรวมเงื่อนไขตัวกรองที่เปิดใช้งานอยู่
+  const activeFilterLabels = [];
+  if (state.filters.site && state.filters.site !== 'ALL') activeFilterLabels.push('ไซต์งาน: ' + state.filters.site);
+  if (state.filters.assignee && state.filters.assignee !== 'ALL') activeFilterLabels.push('ผู้รับผิดชอบ: ' + state.filters.assignee);
+  if (state.filters.priority && state.filters.priority !== 'ALL') activeFilterLabels.push('ความสำคัญ: ' + state.filters.priority);
+  if (state.filters.dueDateFrom || state.filters.dueDateTo) activeFilterLabels.push('วันครบกำหนด');
+  if (state.filters.search) activeFilterLabels.push('ค้นหา: "' + state.filters.search + '"');
+  const isFiltered = activeFilterLabels.length > 0;
+
+  // คำนวณช่วงอายุงานเฉพาะในกลุ่มงานที่กรองแล้ว
+  const now = Date.now();
+  function getTaskAgeDays(t) {
+    const dateStr = t.completedAt || t.updatedAt || t.dueDate || t.createdAt;
+    if (!dateStr) return 9999;
+    const time = new Date(dateStr).getTime();
+    if (isNaN(time)) return 9999;
+    return (now - time) / 86400000;
+  }
+
+  const done7Days = doneTasks.filter(t => getTaskAgeDays(t) >= 7);
+  const done30Days = doneTasks.filter(t => getTaskAgeDays(t) >= 30);
+  const totalAllDone = state.tasks.filter(t => t.status === 'เสร็จสิ้น').length;
+
+  let filterBannerHtml = '';
+  if (isFiltered) {
+    const tagsHtml = activeFilterLabels.map(l => '<span class="bg-white px-2 py-0.5 rounded-md border border-amber-300/60 font-semibold text-amber-900">' + escapeHtml(l) + '</span>').join(' ');
+    filterBannerHtml = '<div class="mb-3 px-3 py-2 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs text-left">' +
+      '<div class="font-bold flex items-center gap-1.5 mb-1 text-amber-800"><i class="fa-solid fa-filter text-[11px]"></i><span>เงื่อนไขการกรองที่แสดงอยู่บนหน้าจอ:</span></div>' +
+      '<div class="text-[11px] text-[#4A4540] pl-4 font-medium flex flex-wrap gap-1">' + tagsHtml + '</div>' +
+      '</div>';
+  }
+
+  const introText = isFiltered
+    ? ('พบงานที่เสร็จสิ้น<b>ตามตัวกรองที่เลือก</b>ทั้งหมด <b>' + doneTasks.length + '</b> รายการ (จากงานเสร็จสิ้นทั้งหมดในระบบ ' + totalAllDone + ' รายการ) กรุณาเลือกเงื่อนไขในการจัดเก็บเข้าคลังถาวร:')
+    : ('พบงานที่เสร็จสิ้นบนกระดานทั้งหมด <b>' + doneTasks.length + '</b> รายการ กรุณาเลือกเงื่อนไขในการจัดเก็บเข้าคลังถาวร:');
+
+  const subTextAll = isFiltered ? 'ย้ายเฉพาะงานเสร็จสิ้นที่แสดงอยู่เข้าคลังถาวรทันที' : 'ย้ายงานเสร็จสิ้นทั้งหมดเข้าคลังถาวรทันที';
+
   Swal.fire({
     title: '📦 จัดเก็บงานเสร็จสิ้นเข้าคลัง',
-    html: `
-      <p class="text-sm text-[#6E6862] mb-3">พบงานที่เสร็จสิ้นบนกระดานทั้งหมด <b>${doneTasks.length}</b> รายการ กรุณาเลือกเงื่อนไขในการจัดเก็บเข้าคลังถาวร:</p>
-      <div class="text-left space-y-2 text-xs bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC]">
-        <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer">
-          <input type="radio" name="archiveOption" value="ALL" checked class="text-[#2491FA] focus:ring-0">
-          <div>
-            <div class="font-bold text-[#201E1C]">จัดเก็บงานเสร็จสิ้นทั้งหมด (${doneTasks.length} รายการ)</div>
-            <div class="text-[#6E6862] text-[11px]">ย้ายงานเสร็จสิ้นทั้งหมดเข้าคลังถาวรทันที</div>
-          </div>
-        </label>
-        <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer">
-          <input type="radio" name="archiveOption" value="7" class="text-[#2491FA] focus:ring-0">
-          <div>
-            <div class="font-bold text-[#201E1C]">เฉพาะงานที่เสร็จสิ้นเกิน 7 วัน</div>
-            <div class="text-[#6E6862] text-[11px]">คงเหลืองานที่เพิ่งเสร็จใน 7 วันล่าสุดไว้บนกระดาน</div>
-          </div>
-        </label>
-        <label class="flex items-center gap-2 p-1.5 rounded-lg hover:bg-white cursor-pointer">
-          <input type="radio" name="archiveOption" value="30" class="text-[#2491FA] focus:ring-0">
-          <div>
-            <div class="font-bold text-[#201E1C]">เฉพาะงานที่เสร็จสิ้นเกิน 30 วัน</div>
-            <div class="text-[#6E6862] text-[11px]">จัดเก็บเฉพาะงานเก่าที่จบไปแล้วเกิน 1 เดือน</div>
-          </div>
-        </label>
-      </div>
-      <p class="text-[11px] text-emerald-700 mt-2"><i class="fa-solid fa-circle-info mr-1"></i> ข้อมูลและไฟล์แนบจะไม่สูญหาย และสามารถค้นหาหรือกู้คืนได้ตลอดเวลา</p>
-    `,
+    html: filterBannerHtml +
+      '<p class="text-sm text-[#6E6862] mb-3 text-left">' + introText + '</p>' +
+      '<div class="text-left space-y-2 text-xs bg-[#FAF8F2] p-3 rounded-2xl border border-[#EFE9DC]">' +
+        '<label class="flex items-start gap-2.5 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors border border-transparent hover:border-[#EFE9DC]">' +
+          '<input type="radio" name="archiveOption" value="ALL" checked class="mt-0.5 text-amber-600 focus:ring-0">' +
+          '<div>' +
+            '<div class="font-bold text-[#201E1C]">จัดเก็บงานเสร็จสิ้นที่กรองไว้ทั้งหมด (' + doneTasks.length + ' รายการ)</div>' +
+            '<div class="text-[#6E6862] text-[11px]">' + subTextAll + '</div>' +
+          '</div>' +
+        '</label>' +
+        '<label class="flex items-start gap-2.5 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors border border-transparent hover:border-[#EFE9DC]">' +
+          '<input type="radio" name="archiveOption" value="7" class="mt-0.5 text-amber-600 focus:ring-0">' +
+          '<div>' +
+            '<div class="font-bold text-[#201E1C]">เฉพาะงานที่เสร็จสิ้นเกิน 7 วัน (' + done7Days.length + ' รายการ)</div>' +
+            '<div class="text-[#6E6862] text-[11px]">คงเหลืองานที่เพิ่งเสร็จใน 7 วันล่าสุดไว้บนกระดาน</div>' +
+          '</div>' +
+        '</label>' +
+        '<label class="flex items-start gap-2.5 p-2 rounded-xl hover:bg-white cursor-pointer transition-colors border border-transparent hover:border-[#EFE9DC]">' +
+          '<input type="radio" name="archiveOption" value="30" class="mt-0.5 text-amber-600 focus:ring-0">' +
+          '<div>' +
+            '<div class="font-bold text-[#201E1C]">เฉพาะงานที่เสร็จสิ้นเกิน 30 วัน (' + done30Days.length + ' รายการ)</div>' +
+            '<div class="text-[#6E6862] text-[11px]">จัดเก็บเฉพาะงานเก่าที่จบไปแล้วเกิน 1 เดือน</div>' +
+          '</div>' +
+        '</label>' +
+      '</div>' +
+      '<p class="text-[11px] text-emerald-700 mt-2 text-left flex items-center gap-1.5"><i class="fa-solid fa-circle-info mr-1"></i> ข้อมูลและไฟล์แนบจะไม่สูญหาย และสามารถค้นหาหรือกู้คืนได้ตลอดเวลา</p>',
     icon: 'question',
     showCancelButton: true,
-    confirmButtonText: 'ยืนยันการจัดเก็บ',
+    confirmButtonText: isFiltered ? ('ยืนยันการจัดเก็บ (' + doneTasks.length + ' รายการ)') : 'ยืนยันการจัดเก็บ',
     cancelButtonText: 'ยกเลิก',
     confirmButtonColor: '#d97706',
     cancelButtonColor: '#6E6862'
@@ -8441,6 +8480,22 @@ function handleArchiveCompletedPrompt() {
     if (result.isConfirmed) {
       const selected = document.querySelector('input[name="archiveOption"]:checked');
       const val = selected ? selected.value : 'ALL';
+
+      let targetTasks = doneTasks;
+      if (val === '7') targetTasks = done7Days;
+      else if (val === '30') targetTasks = done30Days;
+
+      if (targetTasks.length === 0) {
+        Swal.fire({
+          icon: 'warning',
+          title: 'ไม่พบงานที่เข้าเงื่อนไข',
+          text: 'ไม่มีงานที่เสร็จสิ้นเกิน ' + val + ' วันในรายการที่แสดงอยู่บนกระดาน',
+          confirmButtonColor: '#2491FA'
+        });
+        return;
+      }
+
+      const targetTaskIds = targetTasks.map(t => t.id);
 
       showLoading(true);
       google.script.run
@@ -8458,7 +8513,7 @@ function handleArchiveCompletedPrompt() {
           Swal.fire({
             icon: 'success',
             title: 'จัดเก็บเข้าคลังสำเร็จ!',
-            text: `ได้ย้ายงานที่เสร็จสิ้นจำนวน ${res.archivedCount} รายการเข้าสู่คลังถาวรเรียบร้อยแล้ว`,
+            text: 'ได้ย้ายงานที่เสร็จสิ้นจำนวน ' + res.archivedCount + ' รายการเข้าสู่คลังถาวรเรียบร้อยแล้ว',
             confirmButtonColor: '#2491FA'
           });
 
@@ -8468,7 +8523,7 @@ function handleArchiveCompletedPrompt() {
           showLoading(false);
           Swal.fire({ icon: 'error', title: 'ข้อผิดพลาด', text: err.message });
         })
-        .archiveCompletedTasks(val);
+        .archiveCompletedTasks(val, targetTaskIds);
     }
   });
 }

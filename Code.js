@@ -1472,7 +1472,7 @@ function getArchiveSheet_(ss) {
  * @param {number|string} daysThreshold - 0 หรือ 'ALL' หมายถึงทั้งหมด, หรือตัวเลขจำนวนวัน เช่น 7 หรือ 30 วัน
  * @returns {Object} { success: boolean, archivedCount: number, message: string }
  */
-function archiveCompletedTasks(daysThreshold) {
+function archiveCompletedTasks(daysThreshold, taskIds) {
   try {
     const ss = getDb_();
     const taskSheet = ss.getSheetByName(SHEET_TASKS);
@@ -1488,6 +1488,9 @@ function archiveCompletedTasks(daysThreshold) {
     const thresholdDays = (daysThreshold === 'ALL' || daysThreshold === undefined || daysThreshold === null) ? 0 : parseInt(daysThreshold, 10);
     const cutoffTime = thresholdDays > 0 ? (now.getTime() - (thresholdDays * 86400000)) : now.getTime() + 86400000;
 
+    // ตรวจสอบชุด taskIds ที่ส่งมาจาก Client (หากมี)
+    const targetIdSet = (Array.isArray(taskIds) && taskIds.length > 0) ? new Set(taskIds.map(String)) : null;
+
     const rowsToArchive = [];
     const rowIndicesToDelete = [];
     const archivedAtStr = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
@@ -1495,15 +1498,21 @@ function archiveCompletedTasks(daysThreshold) {
     // วนลูปจากแถวล่างขึ้นบน เพื่อให้ลบแถวได้ถูกต้องโดยไม่ต้องคำนวณ offset ใหม่
     for (let i = data.length - 1; i >= 1; i--) {
       const row = data[i];
+      const taskId = String(row[0]);
       const status = String(row[6] || '').trim();
+
+      // หากมีการระบุชุด taskIds เฉพาะที่กรองไว้ แล้วงานนี้ไม่อยู่ในชุด ให้ข้าม
+      if (targetIdSet && !targetIdSet.has(taskId)) {
+        continue;
+      }
 
       if (status === 'เสร็จสิ้น') {
         let shouldArchive = false;
         if (thresholdDays <= 0) {
           shouldArchive = true;
         } else {
-          // ตรวจสอบจาก UpdatedAt (row[9]) หรือ DueDate (row[7]) หรือ CreatedAt (row[8])
-          const dateVal = row[9] || row[7] || row[8];
+          // ตรวจสอบจาก CompletedAt (row[15]) ก่อน หรือ UpdatedAt (row[9]) หรือ DueDate (row[7]) หรือ CreatedAt (row[8])
+          const dateVal = (row.length >= 16 && row[15]) ? row[15] : (row[9] || row[7] || row[8]);
           if (dateVal) {
             const parsedTime = new Date(dateVal).getTime();
             if (!isNaN(parsedTime) && parsedTime <= cutoffTime) {
