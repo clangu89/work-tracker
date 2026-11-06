@@ -2565,6 +2565,25 @@ function getPriorityBadgeStyle(priority) {
   }
 }
 
+/**
+ * คืนค่า CSS Classes สำหรับสไตล์ Badge สีประจำสถานะงาน
+ */
+function getStatusBadgeStyle(status) {
+  switch (status) {
+    case 'เสร็จสิ้น':
+      return 'bg-emerald-100 text-emerald-800 border border-emerald-300';
+    case 'กำลังดำเนินการ':
+      return 'bg-blue-100 text-blue-800 border border-blue-300';
+    case 'รอตรวจสอบ':
+      return 'bg-amber-100 text-amber-800 border border-amber-300';
+    case 'รอดำเนินการ':
+      return 'bg-slate-100 text-slate-700 border border-slate-300';
+    default:
+      return 'bg-slate-100 text-slate-700 border border-slate-300';
+  }
+}
+window.getStatusBadgeStyle = getStatusBadgeStyle;
+
 function formatDateDisplay(dateStr) {
   if (!dateStr) return 'ไม่ระบุ';
   try {
@@ -4977,7 +4996,12 @@ function onReportDataLoaded(response) {
   }
 
   reportDataState = response;
-  renderReportPreview(response);
+  try {
+    renderReportPreview(response);
+  } catch (renderErr) {
+    console.error('Error rendering report preview:', renderErr);
+    showToast('เกิดข้อผิดพลาดในการแสดงผลตัวอย่างรายงาน: ' + renderErr.message, 'warning');
+  }
 }
 
 function onReportDataError(error) {
