@@ -3894,6 +3894,9 @@ function onDataLoaded(response) {
   }
 
   state.tasks = response.tasks || [];
+  if (typeof diffAndRecordTaskNotifications === 'function') {
+    diffAndRecordTaskNotifications(state.tasks, 'initial');
+  }
   state.sites = response.sites || [];
   state.allSites = response.allSites || response.sites || [];
   state.users = response.users || [];
@@ -4633,6 +4636,9 @@ function handleDrop(e, targetStatus) {
   task.status = targetStatus;
   state.lastOwnActionTime = Date.now();
   state.lastOwnTaskId = taskId;
+  if (typeof recordStatusChangeEvent === 'function') {
+    recordStatusChangeEvent(task, oldStatus, targetStatus);
+  }
   renderDashboard();
 
   // ส่งบันทึกไปยังเซิร์ฟเวอร์
@@ -4663,6 +4669,9 @@ function quickChangeStatus(taskId, newStatus) {
   task.status = newStatus;
   state.lastOwnActionTime = Date.now();
   state.lastOwnTaskId = taskId;
+  if (typeof recordStatusChangeEvent === 'function') {
+    recordStatusChangeEvent(task, oldStatus, newStatus);
+  }
   renderDashboard();
 
   google.script.run
@@ -6865,6 +6874,9 @@ function handleRealtimeSyncResponse(res) {
   if (res.data && res.data.success) {
     const data = res.data;
     state.tasks = data.tasks || [];
+    if (typeof diffAndRecordTaskNotifications === 'function') {
+      diffAndRecordTaskNotifications(state.tasks, 'sync');
+    }
     state.sites = data.sites || [];
     state.allSites = data.allSites || state.allSites;
     state.users = data.users || state.users;
@@ -9772,6 +9784,168 @@ function enterApp(appKey) {
 // ================= NOTIFICATION CENTER (iOS LIQUID GLASS) =================
 let currentNotifTab = 'all';
 let activeNotifications = [];
+let taskSnapshotMap = new Map();
+
+function formatTimeAgoThai(timestamp) {
+  if (!timestamp) return 'เมื่อสักครู่';
+  const diffSec = Math.floor((Date.now() - Number(timestamp)) / 1000);
+  if (diffSec < 60) return 'เมื่อสักครู่';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return diffMin + ' น. ที่แล้ว';
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return diffHour + ' ชม. ที่แล้ว';
+  const d = new Date(Number(timestamp));
+  const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+  return `${d.getDate()} ${months[d.getMonth()]} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')} น.`;
+}
+
+function getEventNotifications() {
+  try {
+    const raw = localStorage.getItem('wt_event_notifications');
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveEventNotifications(events) {
+  try {
+    localStorage.setItem('wt_event_notifications', JSON.stringify(events.slice(0, 50)));
+  } catch (e) {
+    console.warn('Failed saving event notifications', e);
+  }
+}
+
+function recordTaskEventNotification(eventData) {
+  const events = getEventNotifications();
+  // Prevent exact duplicate event ID
+  if (events.some(e => e.id === eventData.id)) return;
+  events.unshift(eventData);
+  saveEventNotifications(events);
+  updateAllNotificationBadges();
+}
+
+function getStatusNotificationConfig(status) {
+  switch (status) {
+    case 'กำลังทำ':
+      return {
+        category: 'เปลี่ยนสถานะ ➔ กำลังทำ',
+        badgeBg: 'bg-amber-100 text-amber-900',
+        cardBg: 'bg-amber-50/80 border-amber-200/90 hover:bg-amber-100/70',
+        iconClass: 'fa-solid fa-person-digging text-white',
+        iconBg: 'bg-amber-500'
+      };
+    case 'รอตรวจงาน':
+      return {
+        category: 'เปลี่ยนสถานะ ➔ รอตรวจงาน',
+        badgeBg: 'bg-purple-100 text-purple-900',
+        cardBg: 'bg-purple-50/80 border-purple-200/90 hover:bg-purple-100/70',
+        iconClass: 'fa-solid fa-magnifying-glass text-white',
+        iconBg: 'bg-purple-600'
+      };
+    case 'เสร็จสิ้น':
+      return {
+        category: 'เปลี่ยนสถานะ ➔ เสร็จสิ้น',
+        badgeBg: 'bg-emerald-100 text-emerald-900',
+        cardBg: 'bg-emerald-50/80 border-emerald-200/90 hover:bg-emerald-100/70',
+        iconClass: 'fa-solid fa-check text-white',
+        iconBg: 'bg-[#30d158]'
+      };
+    case 'รอดำเนินการ':
+      return {
+        category: 'เปลี่ยนสถานะ ➔ รอดำเนินการ',
+        badgeBg: 'bg-slate-200 text-slate-800',
+        cardBg: 'bg-slate-50/80 border-slate-200 hover:bg-slate-100/70',
+        iconClass: 'fa-solid fa-rotate-left text-white',
+        iconBg: 'bg-slate-500'
+      };
+    default:
+      return {
+        category: 'เปลี่ยนสถานะ ➔ ' + (status || 'ทั่วไป'),
+        badgeBg: 'bg-blue-100 text-blue-800',
+        cardBg: 'bg-blue-50/80 border-blue-200/90 hover:bg-blue-100/70',
+        iconClass: 'fa-solid fa-arrows-rotate text-white',
+        iconBg: 'bg-[#0a84ff]'
+      };
+  }
+}
+
+function recordStatusChangeEvent(task, oldStatus, newStatus) {
+  if (!task || oldStatus === newStatus) return;
+  const cfg = getStatusNotificationConfig(newStatus);
+  const now = Date.now();
+  recordTaskEventNotification({
+    id: `evt_status_${task.id}_${now}`,
+    taskId: task.id,
+    system: 'Work Tracker',
+    type: 'status_change',
+    category: cfg.category,
+    badgeBg: cfg.badgeBg,
+    cardBg: cfg.cardBg,
+    iconClass: cfg.iconClass,
+    iconBg: cfg.iconBg,
+    title: task.title || 'งานไม่มีชื่อ',
+    subtitle: `${oldStatus || 'รอดำเนินการ'} ➔ ${newStatus} • ไซต์ ${task.site || '-'}`,
+    timeAgo: 'เมื่อสักครู่',
+    timestamp: now,
+    read: false
+  });
+  if (taskSnapshotMap) {
+    taskSnapshotMap.set(task.id, { id: task.id, title: task.title, status: newStatus, site: task.site, assignee: task.assignee });
+  }
+}
+
+function recordNewTaskEvent(task) {
+  if (!task) return;
+  const now = Date.now();
+  recordTaskEventNotification({
+    id: `evt_new_${task.id}_${now}`,
+    taskId: task.id,
+    system: 'Work Tracker',
+    type: 'new_task',
+    category: 'งานเพิ่มใหม่',
+    badgeBg: 'bg-sky-100 text-sky-800',
+    cardBg: 'bg-sky-50/80 border-sky-200/90 hover:bg-sky-100/70',
+    iconClass: 'fa-solid fa-circle-plus text-white text-sm',
+    iconBg: 'bg-[#0a84ff]',
+    title: task.title || 'งานไม่มีชื่อ',
+    subtitle: `ไซต์: ${task.site || '-'} • ผู้รับผิดชอบ: ${task.assignee || 'ไม่ระบุ'}${task.dueDate ? ' • ส่ง ' + task.dueDate : ''}`,
+    timeAgo: 'เมื่อสักครู่',
+    timestamp: now,
+    read: false
+  });
+  if (taskSnapshotMap) {
+    taskSnapshotMap.set(task.id, { id: task.id, title: task.title, status: task.status, site: task.site, assignee: task.assignee });
+  }
+}
+
+function diffAndRecordTaskNotifications(incomingTasks, source = 'sync') {
+  if (!Array.isArray(incomingTasks) || incomingTasks.length === 0) return;
+
+  // First cold load: populate snapshot baseline without bombarding 50 events
+  if (taskSnapshotMap.size === 0) {
+    incomingTasks.forEach(t => {
+      taskSnapshotMap.set(t.id, { id: t.id, title: t.title, status: t.status, site: t.site, assignee: t.assignee });
+    });
+    return;
+  }
+
+  // Compare incoming tasks against previous snapshot
+  incomingTasks.forEach(task => {
+    if (!taskSnapshotMap.has(task.id)) {
+      // 1. NEW TASK!
+      recordNewTaskEvent(task);
+    } else {
+      const prev = taskSnapshotMap.get(task.id);
+      if (prev && prev.status && task.status && prev.status !== task.status) {
+        // 2. STATUS CHANGED!
+        recordStatusChangeEvent(task, prev.status, task.status);
+      }
+    }
+    // Update snapshot
+    taskSnapshotMap.set(task.id, { id: task.id, title: task.title, status: task.status, site: task.site, assignee: task.assignee });
+  });
+}
 
 function getReadNotificationIds() {
   try {
@@ -9815,15 +9989,25 @@ function generateSystemNotifications() {
 
   const todayStr = new Date().toISOString().split('T')[0];
 
-  // 1. Scan Work Tracker tasks
+  // 1. Load recorded Event Notifications (New Tasks & Status Changes)
+  const eventNotifs = getEventNotifications();
+  eventNotifs.forEach(ev => {
+    if (!dismissedIds.has(ev.id)) {
+      list.push({
+        ...ev,
+        timeAgo: formatTimeAgoThai(ev.timestamp),
+        read: ev.read || readIds.has(ev.id)
+      });
+    }
+  });
+
+  // 2. Scan Work Tracker tasks for Overdue and Assigned-to-me
   if (Array.isArray(state.tasks)) {
     state.tasks.forEach(task => {
       if (task.status === 'เสร็จสิ้น' || task.status === 'ยกเลิก') return;
 
       const isOverdue = task.dueDate && task.dueDate < todayStr;
-      const isDueToday = task.dueDate && task.dueDate === todayStr;
       const isAssignedToMe = currentUser && task.assignee && (task.assignee.toLowerCase().includes(currentUser.toLowerCase()) || currentUser.toLowerCase().includes(task.assignee.toLowerCase()));
-      const isUrgent = task.priority === 'ด่วนที่สุด' || task.priority === 'ด่วนมาก';
 
       // (a) Overdue alert
       if (isOverdue) {
@@ -9842,6 +10026,7 @@ function generateSystemNotifications() {
             title: task.title || 'งานไม่มีชื่อ',
             subtitle: `กำหนดส่ง: ${task.dueDate} • ผู้รับผิดชอบ: ${task.assignee || 'ไม่ระบุ'}`,
             timeAgo: 'เกินกำหนดส่ง',
+            timestamp: Date.now() - 3600000,
             read: readIds.has(notifId)
           });
         }
@@ -9862,28 +10047,8 @@ function generateSystemNotifications() {
             iconBg: 'bg-[#0a84ff]',
             title: task.title || 'งานไม่มีชื่อ',
             subtitle: `สถานะ: ${task.status || 'รอดำเนินการ'} • ไซต์งาน: ${task.site || '-'}`,
-            timeAgo: isDueToday ? 'ครบกำหนดวันนี้' : (task.dueDate ? `ส่ง ${task.dueDate}` : 'งานที่มอบหมาย'),
-            read: readIds.has(notifId)
-          });
-        }
-      }
-      // (c) Urgent task alert
-      else if (isUrgent) {
-        const notifId = 'notif_urgent_' + task.id;
-        if (!dismissedIds.has(notifId)) {
-          list.push({
-            id: notifId,
-            taskId: task.id,
-            system: 'Work Tracker',
-            type: 'warning',
-            category: 'งานเร่งด่วน (' + task.priority + ')',
-            badgeBg: 'bg-amber-100 text-amber-800',
-            cardBg: 'bg-amber-50/70 border-amber-200/90 hover:bg-amber-100/70',
-            iconClass: 'fa-solid fa-fire text-amber-500',
-            iconBg: 'bg-amber-500',
-            title: task.title || 'งานไม่มีชื่อ',
-            subtitle: `ไซต์งาน: ${task.site || '-'} • กำหนดส่ง: ${task.dueDate || '-'}`,
-            timeAgo: 'ความสำคัญสูง',
+            timeAgo: task.dueDate ? `ส่ง ${task.dueDate}` : 'งานที่มอบหมาย',
+            timestamp: Date.now() - 7200000,
             read: readIds.has(notifId)
           });
         }
@@ -9891,7 +10056,7 @@ function generateSystemNotifications() {
     });
   }
 
-  // 2. Scan RDP Sites (if any offline or error)
+  // 3. Scan RDP Sites
   if (Array.isArray(state.rdpSites)) {
     state.rdpSites.forEach(site => {
       if (site.status === 'error' || site.status === 'offline') {
@@ -9909,6 +10074,7 @@ function generateSystemNotifications() {
             title: `ไซต์ ${site.name || site.id} ขาดการเชื่อมต่อ`,
             subtitle: `IP: ${site.ip || '-'} (พอร์ต ${site.port || 3389})`,
             timeAgo: 'ต้องการตรวจสอบ',
+            timestamp: Date.now() - 10800000,
             read: readIds.has(notifId)
           });
         }
@@ -9916,24 +10082,8 @@ function generateSystemNotifications() {
     });
   }
 
-  // 3. Welcome / System Ready Announcement
-  const welcomeId = 'notif_sys_welcome';
-  if (!dismissedIds.has(welcomeId)) {
-    list.push({
-      id: welcomeId,
-      system: 'Portal',
-      type: 'info',
-      category: 'ระบบพร้อมใช้งาน',
-      badgeBg: 'bg-emerald-100 text-emerald-700',
-      cardBg: 'bg-emerald-50/70 border-emerald-200/90 hover:bg-emerald-100/70',
-      iconClass: 'fa-solid fa-shield-halved text-emerald-500',
-      iconBg: 'bg-[#30d158]',
-      title: 'เชื่อมต่อศูนย์ข้อมูลระบบเรียบร้อย',
-      subtitle: 'ยินดีต้อนรับสู่ Work Tracker & Remote Portal (iOS Liquid Glass)',
-      timeAgo: 'วันนี้',
-      read: readIds.has(welcomeId)
-    });
-  }
+  // Sort by timestamp newest first
+  list.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
   activeNotifications = list;
   return list;
@@ -10143,6 +10293,9 @@ function markAllNotificationsAsRead() {
   const readIds = getReadNotificationIds();
   activeNotifications.forEach(n => readIds.add(n.id));
   saveReadNotificationIds(readIds);
+  const events = getEventNotifications();
+  events.forEach(e => e.read = true);
+  saveEventNotifications(events);
   updateAllNotificationBadges();
   renderNotificationCenter();
   if (typeof showToast === 'function') {
@@ -10154,6 +10307,7 @@ function clearAllNotifications() {
   const dismissedIds = getDismissedNotificationIds();
   activeNotifications.forEach(n => dismissedIds.add(n.id));
   saveDismissedNotificationIds(dismissedIds);
+  saveEventNotifications([]);
   updateAllNotificationBadges();
   renderNotificationCenter();
   if (typeof showToast === 'function') {
