@@ -176,6 +176,7 @@
                   <select id="admin-user-role" onchange="handleAdminUserRoleChange()"
                           class="w-full px-3 py-2 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] text-[#201E1C] cursor-pointer">
                     <option value="Member">Member (ผู้ใช้ทั่วไป)</option>
+                    <option value="Supervisor">Supervisor (หัวหน้างาน/ผู้ควบคุม)</option>
                     <option value="Admin">Admin (ผู้ดูแลระบบ)</option>
                   </select>
                 </div>
@@ -212,7 +213,7 @@
                 </label>
                 <p class="text-[11px] text-[#6E6862]">เลือกให้ผู้ใช้นี้มองเห็นและเปิดใช้งานระบบใดได้บ้างบนหน้า App Launcher:</p>
 
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
                   <label class="flex items-center gap-2 p-2.5 rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/60 cursor-pointer text-xs">
                     <input type="checkbox" id="perm-app-worktracker" checked class="rounded text-[#2491FA] focus:ring-[#2491FA]">
                     <span class="font-bold text-[#201E1C]">📋 ระบบติดตามงาน</span>
@@ -220,6 +221,10 @@
                   <label class="flex items-center gap-2 p-2.5 rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/60 cursor-pointer text-xs">
                     <input type="checkbox" id="perm-app-rdp" checked class="rounded text-[#2491FA] focus:ring-[#2491FA]">
                     <span class="font-bold text-[#201E1C]">🖥️ ระบบรีโมตไซต์งาน</span>
+                  </label>
+                  <label class="flex items-center gap-2 p-2.5 rounded-xl border border-emerald-200/80 bg-emerald-50/50 hover:bg-emerald-50 cursor-pointer text-xs">
+                    <input type="checkbox" id="perm-app-calendar" checked class="rounded text-emerald-600 focus:ring-emerald-500">
+                    <span class="font-bold text-emerald-800">📅 ปฏิทินเข้าไซต์งาน</span>
                   </label>
                   <label class="flex items-center gap-2 p-2.5 rounded-xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/60 cursor-pointer text-xs">
                     <input type="checkbox" id="perm-app-admin" class="rounded text-[#2491FA] focus:ring-[#2491FA]">

@@ -6067,7 +6067,7 @@ function renderAppLauncher() {
 
   const cardCal = document.getElementById('launcherCardCalendar');
   if (cardCal) {
-    if (allowedApps.includes('site_calendar') || isAdmin || user.role === 'Supervisor' || user.role === 'Member') {
+    if (allowedApps.includes('site_calendar') || isAdmin) {
       cardCal.classList.remove('opacity-40', 'pointer-events-none');
     } else {
       cardCal.classList.add('opacity-40', 'pointer-events-none');
@@ -6128,6 +6128,18 @@ function enterApp(appKey) {
       initAdminApp();
     }
   } else if (appKey === 'site_calendar') {
+    let allowedApps = [];
+    if (Array.isArray(state.currentUser?.allowedApps)) allowedApps = state.currentUser.allowedApps;
+    else if (typeof state.currentUser?.allowedApps === 'string') {
+      try { allowedApps = JSON.parse(state.currentUser.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar']; }
+    } else allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar'];
+
+    if (!allowedApps.includes('site_calendar') && state.currentUser?.role !== 'Admin') {
+      showToast('ท่านไม่มีสิทธิ์เข้าใช้งานระบบปฏิทินเข้าไซต์งาน กรุณาติดต่อผู้ดูแลระบบ', 'warning');
+      openAppLauncher();
+      return;
+    }
+
     if (calApp) calApp.classList.remove('hidden');
     if (wtApp) wtApp.classList.add('hidden');
     if (rdpApp) rdpApp.classList.add('hidden');

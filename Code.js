@@ -2839,7 +2839,7 @@ function saveUser(userData) {
       }
     }
 
-    let allowedAppsVal = JSON.stringify(['work_tracker', 'rdp_manager']);
+    let allowedAppsVal = JSON.stringify(['work_tracker', 'rdp_manager', 'site_calendar']);
     if (userData.allowedApps && Array.isArray(userData.allowedApps)) {
       allowedAppsVal = JSON.stringify(userData.allowedApps);
     }

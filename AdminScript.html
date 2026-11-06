@@ -197,6 +197,7 @@ function renderAdminUsersTable() {
     const appBadges = [];
     if (allowedApps.includes('work_tracker')) appBadges.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">WT</span>');
     if (allowedApps.includes('rdp_manager')) appBadges.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-800 border border-blue-200">RDP</span>');
+    if (allowedApps.includes('site_calendar')) appBadges.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">Calendar</span>');
     if (allowedApps.includes('admin') || u.role === 'Admin') appBadges.push('<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">Admin</span>');
 
     // Sites permissions summary
@@ -228,7 +229,7 @@ function renderAdminUsersTable() {
         </td>
         <td class="px-4 py-3 align-middle">
           <div class="font-bold text-[#201E1C]">${escapeHtml(u.fullName)}</div>
-          <div class="text-[10px] font-bold uppercase ${u.role === 'Admin' ? 'text-purple-600' : 'text-[#6E6862]'}">
+          <div class="text-[10px] font-bold uppercase ${u.role === 'Admin' ? 'text-purple-600' : (u.role === 'Supervisor' ? 'text-blue-600' : 'text-[#6E6862]')}">
             ${escapeHtml(u.role)}
           </div>
         </td>
@@ -296,11 +297,12 @@ function openAdminUserForm(user = null) {
     let allowedApps = [];
     if (Array.isArray(user.allowedApps)) allowedApps = user.allowedApps;
     else if (typeof user.allowedApps === 'string') {
-      try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager']; }
-    } else allowedApps = ['work_tracker', 'rdp_manager'];
+      try { allowedApps = JSON.parse(user.allowedApps); } catch(e) { allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar']; }
+    } else allowedApps = ['work_tracker', 'rdp_manager', 'site_calendar'];
 
     document.getElementById("perm-app-worktracker").checked = allowedApps.includes('work_tracker');
     document.getElementById("perm-app-rdp").checked = allowedApps.includes('rdp_manager');
+    document.getElementById("perm-app-calendar").checked = allowedApps.includes('site_calendar');
     document.getElementById("perm-app-admin").checked = allowedApps.includes('admin') || user.role === 'Admin';
 
     // Set WT Sites
@@ -322,6 +324,7 @@ function openAdminUserForm(user = null) {
 
     document.getElementById("perm-app-worktracker").checked = true;
     document.getElementById("perm-app-rdp").checked = true;
+    document.getElementById("perm-app-calendar").checked = true;
     document.getElementById("perm-app-admin").checked = false;
 
     renderWtSiteCheckboxes('ALL');
@@ -491,6 +494,7 @@ function handleAdminUserRoleChange() {
   if (role === 'Admin') {
     document.getElementById("perm-app-worktracker").checked = true;
     document.getElementById("perm-app-rdp").checked = true;
+    document.getElementById("perm-app-calendar").checked = true;
     document.getElementById("perm-app-admin").checked = true;
 
     // Admin ได้สิทธิ์เข้าถึงทุกไซต์งานอัตโนมัติ
@@ -501,6 +505,10 @@ function handleAdminUserRoleChange() {
     const rdpRadios = document.getElementsByName("rdpSiteAccessType");
     rdpRadios.forEach(r => { if (r.value === 'ALL') r.checked = true; });
     toggleRdpSiteCheckboxes(false);
+  } else if (role === 'Supervisor') {
+    document.getElementById("perm-app-worktracker").checked = true;
+    document.getElementById("perm-app-calendar").checked = true;
+    document.getElementById("perm-app-admin").checked = false;
   }
 }
 
@@ -548,6 +556,7 @@ function handleAdminUserSubmit(event) {
   const allowedApps = [];
   if (document.getElementById("perm-app-worktracker").checked) allowedApps.push("work_tracker");
   if (document.getElementById("perm-app-rdp").checked) allowedApps.push("rdp_manager");
+  if (document.getElementById("perm-app-calendar").checked) allowedApps.push("site_calendar");
   if (document.getElementById("perm-app-admin").checked || role === 'Admin') allowedApps.push("admin");
 
   if (allowedApps.length === 0) {
