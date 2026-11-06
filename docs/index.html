@@ -822,28 +822,54 @@
             <div id="launcherClockDate" class="lg-clock-date">กำลังโหลดวันเวลา...</div>
           </div>
 
-          <!-- Quick Actions 2x2 Tile -->
-          <div style="--beam-delay: -2.4s;" class="lg-glass lg-beam-card rounded-[32px] p-4 grid grid-cols-2 gap-3 place-items-center flex-1">
-            <button onclick="Swal.fire({ icon:'success', title:'ระบบพร้อมใช้งาน', text:'เชื่อมต่อกับเซิร์ฟเวอร์เรียบร้อย', timer:2000, showConfirmButton:false })"
-                    title="สถานะระบบ: ปกติ"
-                    class="w-12 h-12 lg-circle lg-fill-green lg-beam-icon text-base cursor-pointer shadow-md active:scale-90 transition-transform">
-              <i class="fa-solid fa-signal"></i>
-            </button>
-            <button onclick="openOnlineUsersModal()"
-                    title="ผู้ใช้งานออนไลน์"
-                    class="w-12 h-12 lg-circle lg-glass lg-beam-icon hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
-              <i class="fa-solid fa-users"></i>
-            </button>
-            <button onclick="renderAppLauncher()"
-                    title="รีเฟรชข้อมูลสิทธิ์ระบบ"
-                    class="w-12 h-12 lg-circle lg-glass lg-beam-icon hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
-              <i class="fa-solid fa-rotate"></i>
-            </button>
-            <button onclick="handleLogout()"
-                    title="ออกจากระบบ"
-                    class="w-12 h-12 lg-circle lg-fill-red lg-beam-icon text-base cursor-pointer shadow-md active:scale-90 transition-transform">
-              <i class="fa-solid fa-power-off"></i>
-            </button>
+          <!-- Real-time Location-based Weather Widget (Apple Weather Stats Badge - แบบ B) -->
+          <div style="--beam-delay: -2.4s;" class="lg-glass lg-beam-card rounded-[32px] p-5 flex flex-col justify-between flex-1 min-h-[145px]">
+            <!-- Header: Location & Refresh -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-xs">
+                <i class="fa-solid fa-location-arrow text-[#0a84ff] text-[11px]"></i>
+                <span class="text-[#1d1b19] font-bold">พยากรณ์อากาศ</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span id="weatherLocationName" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-[#0a84ff] font-semibold truncate max-w-[105px]">
+                  กำลังระบุ...
+                </span>
+                <button onclick="fetchWeatherByLocation(true)" title="รีเฟรชสภาพอากาศ"
+                        class="text-[#6e6862] hover:text-[#0a84ff] transition-colors cursor-pointer text-[11px] p-0.5">
+                  <i id="weatherRefreshIcon" class="fa-solid fa-rotate-right text-[10px]"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Main Info: Icon + Temp + Condition -->
+            <div class="flex items-center gap-3 my-1">
+              <div id="weatherIconBubble" class="w-12 h-12 lg-circle bg-gradient-to-tr from-amber-400 to-orange-500 text-white text-xl shadow-md">
+                <i id="weatherIcon" class="fa-solid fa-sun"></i>
+              </div>
+              <div>
+                <div class="flex items-baseline gap-1">
+                  <span id="weatherTemp" class="text-2xl font-black text-[#1d1b19]">--°</span>
+                  <span class="text-xs font-bold text-[#6e6862]">C</span>
+                </div>
+                <div id="weatherStatus" class="text-[11px] text-[#6e6862] font-medium">กำลังโหลด...</div>
+              </div>
+            </div>
+
+            <!-- 3 Stats Columns -->
+            <div class="grid grid-cols-3 gap-1 pt-2 border-t border-black/5 text-center">
+              <div class="bg-black/5 rounded-xl py-1 px-1">
+                <div class="text-[9px] text-[#6e6862] font-medium">สูงสุด/ต่ำสุด</div>
+                <div id="weatherTempRange" class="text-[11px] font-bold text-[#1d1b19]">--°/--°</div>
+              </div>
+              <div class="bg-black/5 rounded-xl py-1 px-1">
+                <div class="text-[9px] text-[#6e6862] font-medium">ความชื้น</div>
+                <div id="weatherHumidity" class="text-[11px] font-bold text-[#0a84ff]">--%</div>
+              </div>
+              <div class="bg-black/5 rounded-xl py-1 px-1">
+                <div class="text-[9px] text-[#6e6862] font-medium">ความเร็วลม</div>
+                <div id="weatherWind" class="text-[11px] font-bold text-[#1d1b19]">-- km/h</div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -9382,6 +9408,159 @@ function startLauncherClock() {
   }
 }
 
+
+// ================= WEATHER WIDGET (LOCATION-BASED OPEN-METEO) =================
+let isFetchingWeather = false;
+
+function initWeatherWidget() {
+  const cached = sessionStorage.getItem('cached_weather_data');
+  const cacheTime = sessionStorage.getItem('cached_weather_time');
+  const now = Date.now();
+
+  // Use cache if under 15 minutes
+  if (cached && cacheTime && (now - Number(cacheTime) < 15 * 60 * 1000)) {
+    try {
+      const data = JSON.parse(cached);
+      applyWeatherDataToUI(data);
+      return;
+    } catch (e) {
+      console.warn('Failed parsing cached weather data', e);
+    }
+  }
+
+  fetchWeatherByLocation(false);
+}
+
+function getWeatherConditionDetails(wmoCode) {
+  if (wmoCode === 0) {
+    return { text: 'ท้องฟ้าแจ่มใส', icon: 'fa-solid fa-sun', bg: 'from-amber-400 to-yellow-500' };
+  } else if (wmoCode === 1 || wmoCode === 2) {
+    return { text: 'ท้องฟ้าโปร่ง/เมฆบางส่วน', icon: 'fa-solid fa-cloud-sun', bg: 'from-amber-400 to-orange-400' };
+  } else if (wmoCode === 3) {
+    return { text: 'มีเมฆเป็นส่วนมาก', icon: 'fa-solid fa-cloud', bg: 'from-slate-400 to-slate-500' };
+  } else if (wmoCode === 45 || wmoCode === 48) {
+    return { text: 'หมอกลง', icon: 'fa-solid fa-smog', bg: 'from-slate-400 to-zinc-500' };
+  } else if (wmoCode >= 51 && wmoCode <= 55) {
+    return { text: 'ฝนตกปรอยๆ', icon: 'fa-solid fa-cloud-rain', bg: 'from-blue-400 to-cyan-500' };
+  } else if (wmoCode >= 61 && wmoCode <= 65) {
+    return { text: 'ฝนตก', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'from-blue-500 to-indigo-500' };
+  } else if (wmoCode >= 80 && wmoCode <= 82) {
+    return { text: 'ฝนฟ้าคะนองกระจาย', icon: 'fa-solid fa-cloud-showers-heavy', bg: 'from-blue-600 to-indigo-600' };
+  } else if (wmoCode >= 95) {
+    return { text: 'พายุฝนฟ้าคะนอง', icon: 'fa-solid fa-bolt-lightning', bg: 'from-amber-500 to-purple-600' };
+  }
+  return { text: 'สภาพอากาศปกติ', icon: 'fa-solid fa-cloud-sun', bg: 'from-amber-400 to-orange-400' };
+}
+
+function applyWeatherDataToUI(info) {
+  const locEl = document.getElementById('weatherLocationName');
+  const tempEl = document.getElementById('weatherTemp');
+  const statusEl = document.getElementById('weatherStatus');
+  const rangeEl = document.getElementById('weatherTempRange');
+  const humEl = document.getElementById('weatherHumidity');
+  const windEl = document.getElementById('weatherWind');
+  const iconEl = document.getElementById('weatherIcon');
+  const bubbleEl = document.getElementById('weatherIconBubble');
+
+  if (locEl) locEl.textContent = info.locationName || 'กรุงเทพฯ';
+  if (tempEl) tempEl.textContent = info.temp + '°';
+  if (statusEl) statusEl.textContent = info.conditionText || 'สภาพอากาศปกติ';
+  if (rangeEl) rangeEl.textContent = `${info.maxTemp}°/${info.minTemp}°`;
+  if (humEl) humEl.textContent = info.humidity + '%';
+  if (windEl) windEl.textContent = info.windSpeed + ' km/h';
+
+  if (iconEl && info.iconClass) {
+    iconEl.className = info.iconClass;
+  }
+  if (bubbleEl && info.bgGradient) {
+    bubbleEl.className = `w-12 h-12 lg-circle bg-gradient-to-tr ${info.bgGradient} text-white text-xl shadow-md`;
+  }
+}
+
+async function fetchWeatherByLocation(forceRefresh = false) {
+  if (isFetchingWeather) return;
+  isFetchingWeather = true;
+
+  const refreshIcon = document.getElementById('weatherRefreshIcon');
+  if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
+  async function loadCoords(lat, lon, fallbackName = 'กรุงเทพฯ') {
+    let locationName = fallbackName;
+    try {
+      const geoRes = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=th`);
+      if (geoRes.ok) {
+        const geoData = await geoRes.json();
+        locationName = geoData.city || geoData.principalSubdivision || geoData.locality || fallbackName;
+        locationName = locationName.replace(/^จังหวัด/g, '').trim();
+      }
+    } catch (e) {
+      console.warn('Geocoding fallback used', e);
+    }
+
+    const weatherUrl = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+    const wRes = await fetch(weatherUrl);
+    if (!wRes.ok) throw new Error('Open-Meteo response not ok');
+    const wData = await wRes.json();
+
+    const current = wData.current || {};
+    const daily = wData.daily || {};
+    const cond = getWeatherConditionDetails(current.weather_code);
+
+    const weatherInfo = {
+      locationName: locationName,
+      temp: Math.round(current.temperature_2m ?? 30),
+      conditionText: cond.text,
+      iconClass: cond.icon,
+      bgGradient: cond.bg,
+      maxTemp: Math.round(daily.temperature_2m_max?.[0] ?? current.temperature_2m ?? 32),
+      minTemp: Math.round(daily.temperature_2m_min?.[0] ?? (current.temperature_2m ? current.temperature_2m - 5 : 25)),
+      humidity: current.relative_humidity_2m ?? 50,
+      windSpeed: Math.round(current.wind_speed_10m ?? 5)
+    };
+
+    sessionStorage.setItem('cached_weather_data', JSON.stringify(weatherInfo));
+    sessionStorage.setItem('cached_weather_time', String(Date.now()));
+    applyWeatherDataToUI(weatherInfo);
+  }
+
+  if ('geolocation' in navigator) {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          await loadCoords(pos.coords.latitude, pos.coords.longitude, 'ตำแหน่งปัจจุบัน');
+        } catch (err) {
+          console.warn('Weather fetch error with GPS, trying default', err);
+          await loadCoords(13.7563, 100.5018, 'กรุงเทพมหานคร');
+        } finally {
+          isFetchingWeather = false;
+          if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+        }
+      },
+      async (err) => {
+        console.warn('Geolocation permission not granted or error:', err.message);
+        try {
+          await loadCoords(13.7563, 100.5018, 'กรุงเทพมหานคร');
+        } catch (e) {
+          console.error('Weather load completely failed', e);
+        } finally {
+          isFetchingWeather = false;
+          if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+        }
+      },
+      { timeout: 7000, maximumAge: 600000 }
+    );
+  } else {
+    try {
+      await loadCoords(13.7563, 100.5018, 'กรุงเทพมหานคร');
+    } catch (e) {
+      console.error('Weather load failed', e);
+    } finally {
+      isFetchingWeather = false;
+      if (refreshIcon) refreshIcon.classList.remove('fa-spin');
+    }
+  }
+}
+
 function openAppLauncher() {
   state.currentApp = 'launcher';
   sessionStorage.setItem('current_active_app', 'launcher');
@@ -9394,6 +9573,7 @@ function openAppLauncher() {
   const launcher = document.getElementById('appLauncherScreen');
   if (launcher) launcher.classList.remove('hidden');
   startLauncherClock();
+  initWeatherWidget();
 
   renderAppLauncher();
   updateNavbarUser();

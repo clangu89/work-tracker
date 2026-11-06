@@ -332,28 +332,54 @@
             <div id="launcherClockDate" class="lg-clock-date">กำลังโหลดวันเวลา...</div>
           </div>
 
-          <!-- Quick Actions 2x2 Tile -->
-          <div style="--beam-delay: -2.4s;" class="lg-glass lg-beam-card rounded-[32px] p-4 grid grid-cols-2 gap-3 place-items-center flex-1">
-            <button onclick="Swal.fire({ icon:'success', title:'ระบบพร้อมใช้งาน', text:'เชื่อมต่อกับเซิร์ฟเวอร์เรียบร้อย', timer:2000, showConfirmButton:false })"
-                    title="สถานะระบบ: ปกติ"
-                    class="w-12 h-12 lg-circle lg-fill-green lg-beam-icon text-base cursor-pointer shadow-md active:scale-90 transition-transform">
-              <i class="fa-solid fa-signal"></i>
-            </button>
-            <button onclick="openOnlineUsersModal()"
-                    title="ผู้ใช้งานออนไลน์"
-                    class="w-12 h-12 lg-circle lg-glass lg-beam-icon hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
-              <i class="fa-solid fa-users"></i>
-            </button>
-            <button onclick="renderAppLauncher()"
-                    title="รีเฟรชข้อมูลสิทธิ์ระบบ"
-                    class="w-12 h-12 lg-circle lg-glass lg-beam-icon hover:bg-white text-base text-[#1d1b19] cursor-pointer shadow-sm active:scale-90 transition-transform">
-              <i class="fa-solid fa-rotate"></i>
-            </button>
-            <button onclick="handleLogout()"
-                    title="ออกจากระบบ"
-                    class="w-12 h-12 lg-circle lg-fill-red lg-beam-icon text-base cursor-pointer shadow-md active:scale-90 transition-transform">
-              <i class="fa-solid fa-power-off"></i>
-            </button>
+          <!-- Real-time Location-based Weather Widget (Apple Weather Stats Badge - แบบ B) -->
+          <div style="--beam-delay: -2.4s;" class="lg-glass lg-beam-card rounded-[32px] p-5 flex flex-col justify-between flex-1 min-h-[145px]">
+            <!-- Header: Location & Refresh -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-1.5 text-xs">
+                <i class="fa-solid fa-location-arrow text-[#0a84ff] text-[11px]"></i>
+                <span class="text-[#1d1b19] font-bold">พยากรณ์อากาศ</span>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <span id="weatherLocationName" class="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 text-[#0a84ff] font-semibold truncate max-w-[105px]">
+                  กำลังระบุ...
+                </span>
+                <button onclick="fetchWeatherByLocation(true)" title="รีเฟรชสภาพอากาศ"
+                        class="text-[#6e6862] hover:text-[#0a84ff] transition-colors cursor-pointer text-[11px] p-0.5">
+                  <i id="weatherRefreshIcon" class="fa-solid fa-rotate-right text-[10px]"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Main Info: Icon + Temp + Condition -->
+            <div class="flex items-center gap-3 my-1">
+              <div id="weatherIconBubble" class="w-12 h-12 lg-circle bg-gradient-to-tr from-amber-400 to-orange-500 text-white text-xl shadow-md">
+                <i id="weatherIcon" class="fa-solid fa-sun"></i>
+              </div>
+              <div>
+                <div class="flex items-baseline gap-1">
+                  <span id="weatherTemp" class="text-2xl font-black text-[#1d1b19]">--°</span>
+                  <span class="text-xs font-bold text-[#6e6862]">C</span>
+                </div>
+                <div id="weatherStatus" class="text-[11px] text-[#6e6862] font-medium">กำลังโหลด...</div>
+              </div>
+            </div>
+
+            <!-- 3 Stats Columns -->
+            <div class="grid grid-cols-3 gap-1 pt-2 border-t border-black/5 text-center">
+              <div class="bg-black/5 rounded-xl py-1 px-1">
+                <div class="text-[9px] text-[#6e6862] font-medium">สูงสุด/ต่ำสุด</div>
+                <div id="weatherTempRange" class="text-[11px] font-bold text-[#1d1b19]">--°/--°</div>
+              </div>
+              <div class="bg-black/5 rounded-xl py-1 px-1">
+                <div class="text-[9px] text-[#6e6862] font-medium">ความชื้น</div>
+                <div id="weatherHumidity" class="text-[11px] font-bold text-[#0a84ff]">--%</div>
+              </div>
+              <div class="bg-black/5 rounded-xl py-1 px-1">
+                <div class="text-[9px] text-[#6e6862] font-medium">ความเร็วลม</div>
+                <div id="weatherWind" class="text-[11px] font-bold text-[#1d1b19]">-- km/h</div>
+              </div>
+            </div>
           </div>
         </div>
 
