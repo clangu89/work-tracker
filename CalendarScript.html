@@ -29,12 +29,17 @@ const THAI_DAY_NAMES = [
 ];
 
 /**
- * ตรวจสอบสิทธิ์ว่าผู้ใช้ปัจจุบันมีสิทธิ์จัดการตารางเข้าไซต์หรือไม่ (Admin หรือ Supervisor)
+ * ตรวจสอบสิทธิ์ว่าผู้ใช้ปัจจุบันมีสิทธิ์จัดการตารางเข้าไซต์หรือไม่ (Admin, Supervisor หรือ Member เมื่อเปิดให้ลงคิวตนเองได้)
  */
 function canManageCalendar() {
   if (!state.currentUser) return false;
   const role = String(state.currentUser.role || '').trim();
-  return role === 'Admin' || role === 'Supervisor';
+  if (role === 'Admin' || role === 'Supervisor') return true;
+  const settings = state.settings || (window.adminState && adminState.settings) || {};
+  if (settings.CALENDAR_MEMBER_CAN_SCHEDULE === true || settings.CALENDAR_MEMBER_CAN_SCHEDULE === 'true') {
+    return true;
+  }
+  return false;
 }
 
 /**
@@ -292,8 +297,41 @@ function renderCalendarGrid() {
   const year = calendarState.currentYear;
   const month = calendarState.currentMonth; // 1 - 12
 
-  // วันแรกของเดือน (0 = อาทิตย์, 1 = จันทร์, ..., 6 = เสาร์)
-  const firstDay = new Date(year, month - 1, 1).getDay();
+  const settings = state.settings || (window.adminState && adminState.settings) || {};
+  const firstDaySetting = parseInt(settings.CALENDAR_FIRST_DAY_OF_WEEK !== undefined ? settings.CALENDAR_FIRST_DAY_OF_WEEK : '0', 10); // 0=Sun, 1=Mon
+  const maxChips = parseInt(settings.CALENDAR_MAX_CHIPS_PER_CELL !== undefined ? settings.CALENDAR_MAX_CHIPS_PER_CELL : '3', 10);
+
+  // อัปเดตหัวตารางวัน (Sun-Sat หรือ Mon-Sun)
+  const headerContainer = document.getElementById('calGridWeekdayHeaders');
+  if (headerContainer) {
+    if (firstDaySetting === 1) {
+      headerContainer.innerHTML = `
+        <div>จันทร์</div>
+        <div>อังคาร</div>
+        <div>พุธ</div>
+        <div>พฤหัสบดี</div>
+        <div>ศุกร์</div>
+        <div class="text-indigo-600">เสาร์</div>
+        <div class="text-rose-600">อาทิตย์</div>
+      `;
+    } else {
+      headerContainer.innerHTML = `
+        <div class="text-rose-600">อาทิตย์</div>
+        <div>จันทร์</div>
+        <div>อังคาร</div>
+        <div>พุธ</div>
+        <div>พฤหัสบดี</div>
+        <div>ศุกร์</div>
+        <div class="text-indigo-600">เสาร์</div>
+      `;
+    }
+  }
+
+  // วันในสัปดาห์ของวันที่ 1 ของเดือน (0 = อาทิตย์, 1 = จันทร์, ..., 6 = เสาร์)
+  const dayOfWeek = new Date(year, month - 1, 1).getDay();
+  // คำนวณจำนวนวันว่าง Leading Days ตามวันเริ่มต้นสัปดาห์
+  const leadingDays = (firstDaySetting === 1) ? ((dayOfWeek + 6) % 7) : dayOfWeek;
+
   // จำนวนวันในเดือนนี้
   const daysInMonth = new Date(year, month, 0).getDate();
   // จำนวนวันในเดือนก่อนหน้า
@@ -313,14 +351,14 @@ function renderCalendarGrid() {
   let html = '';
 
   // 1. เติมวันของเดือนก่อนหน้า (Padding Leading Days)
-  for (let i = firstDay - 1; i >= 0; i--) {
+  for (let i = leadingDays - 1; i >= 0; i--) {
     const prevDayNum = daysInPrevMonth - i;
     const prevMonth = month === 1 ? 12 : month - 1;
     const prevYear = month === 1 ? year - 1 : year;
     const dateStr = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(prevDayNum).padStart(2, '0')}`;
     const dayItems = scheduleByDate[dateStr] || [];
 
-    html += renderCalendarCellHtml(prevDayNum, dateStr, dayItems, false, false);
+    html += renderCalendarCellHtml(prevDayNum, dateStr, dayItems, false, false, maxChips);
   }
 
   // 2. เติมวันของเดือนปัจจุบัน
@@ -329,11 +367,11 @@ function renderCalendarGrid() {
     const isToday = (dateStr === todayIso);
     const dayItems = scheduleByDate[dateStr] || [];
 
-    html += renderCalendarCellHtml(day, dateStr, dayItems, true, isToday);
+    html += renderCalendarCellHtml(day, dateStr, dayItems, true, isToday, maxChips);
   }
 
   // 3. เติมวันของเดือนถัดไป (Padding Trailing Days เพื่อให้ครบสัปดาห์)
-  const totalCells = firstDay + daysInMonth;
+  const totalCells = leadingDays + daysInMonth;
   const nextDaysCount = (7 - (totalCells % 7)) % 7;
   for (let day = 1; day <= nextDaysCount; day++) {
     const nextMonth = month === 12 ? 1 : month + 1;
@@ -341,7 +379,7 @@ function renderCalendarGrid() {
     const dateStr = `${nextYear}-${String(nextMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const dayItems = scheduleByDate[dateStr] || [];
 
-    html += renderCalendarCellHtml(day, dateStr, dayItems, false, false);
+    html += renderCalendarCellHtml(day, dateStr, dayItems, false, false, maxChips);
   }
 
   container.innerHTML = html;
@@ -350,13 +388,12 @@ function renderCalendarGrid() {
 /**
  * สร้าง HTML สำหรับช่องวันในปฏิทิน 1 ช่อง
  */
-function renderCalendarCellHtml(dayNum, dateStr, items, isCurrentMonth, isToday) {
+function renderCalendarCellHtml(dayNum, dateStr, items, isCurrentMonth, isToday, badgeLimit = 3) {
   const canManage = canManageCalendar();
   const bgClass = isCurrentMonth 
     ? (isToday ? 'bg-emerald-50/40 hover:bg-emerald-50/70' : 'bg-white hover:bg-[#FAF8F2]') 
     : 'bg-[#F7F4EA]/40 text-[#9E9890] hover:bg-[#F7F4EA]';
 
-  const badgeLimit = 3;
   const visibleItems = items.slice(0, badgeLimit);
   const overflowCount = items.length - badgeLimit;
 
@@ -622,9 +659,16 @@ function openScheduleModal(dateStr, scheduleId) {
 
   syncCalendarDropdowns();
 
+  const userRole = String(state.currentUser?.role || '').trim();
+  const isAdminOrSup = (userRole === 'Admin' || userRole === 'Supervisor');
+
   if (scheduleId) {
     const item = calendarState.schedules.find(s => s.id === scheduleId);
     if (item) {
+      if (!isAdminOrSup && item.username !== state.currentUser?.username) {
+        showToast('คุณสามารถแก้ไขเฉพาะรายการของตนเองได้เท่านั้น', 'warning');
+        return;
+      }
       if (titleEl) titleEl.textContent = 'แก้ไขตารางเข้าไซต์งาน';
       if (submitTextEl) submitTextEl.textContent = 'บันทึกการแก้ไข';
       if (idInput) idInput.value = item.id;
@@ -643,10 +687,15 @@ function openScheduleModal(dateStr, scheduleId) {
     const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     if (dateInput) dateInput.value = dateStr || todayIso;
     if (siteSelect) siteSelect.value = (calendarState.siteFilter !== 'ALL') ? calendarState.siteFilter : '';
-    if (userSelect) userSelect.value = (calendarState.userFilter !== 'ALL') ? calendarState.userFilter : '';
+    if (userSelect) userSelect.value = !isAdminOrSup ? (state.currentUser?.username || '') : ((calendarState.userFilter !== 'ALL') ? calendarState.userFilter : '');
     if (purposeInput) purposeInput.value = '';
     if (taskSelect) taskSelect.value = '';
     if (notifyCheck) notifyCheck.checked = true;
+  }
+
+  // ล็อค Dropdown ผู้ปฏิบัติงาน หากเป็น Member ลงคิวตนเอง
+  if (userSelect) {
+    userSelect.disabled = !isAdminOrSup;
   }
 
   if (modal) modal.classList.remove('hidden');
@@ -658,6 +707,8 @@ function openScheduleModal(dateStr, scheduleId) {
 function closeScheduleModal() {
   const modal = document.getElementById('modalSiteSchedule');
   if (modal) modal.classList.add('hidden');
+  const userSelect = document.getElementById('calFormUser');
+  if (userSelect) userSelect.disabled = false;
 }
 
 /**
@@ -703,8 +754,19 @@ function handleScheduleFormSubmit(event) {
   const date = document.getElementById('calFormDate')?.value || '';
   const site = document.getElementById('calFormSite')?.value || '';
   const userSelect = document.getElementById('calFormUser');
-  const username = userSelect?.value || '';
-  const fullName = userSelect?.options[userSelect.selectedIndex]?.getAttribute('data-fullname') || '';
+  const userRole = String(state.currentUser?.role || '').trim();
+  const isAdminOrSup = (userRole === 'Admin' || userRole === 'Supervisor');
+
+  let username = userSelect?.value || '';
+  if (!isAdminOrSup && state.currentUser) {
+    username = state.currentUser.username;
+  }
+
+  let fullName = userSelect?.options[userSelect.selectedIndex]?.getAttribute('data-fullname') || '';
+  if (!isAdminOrSup && state.currentUser) {
+    fullName = state.currentUser.fullName || state.currentUser.username;
+  }
+
   const purpose = document.getElementById('calFormPurpose')?.value || '';
   const taskId = document.getElementById('calFormTaskId')?.value || '';
   const notifyTelegram = document.getElementById('calFormNotifyTelegram')?.checked ?? true;
@@ -773,6 +835,16 @@ function confirmDeleteSiteSchedule(scheduleId) {
   if (!canManageCalendar()) {
     showToast('จำกัดเฉพาะสิทธิ์ Admin หรือ Supervisor เท่านั้น', 'warning');
     return;
+  }
+
+  const userRole = String(state.currentUser?.role || '').trim();
+  const isAdminOrSup = (userRole === 'Admin' || userRole === 'Supervisor');
+  if (!isAdminOrSup) {
+    const item = calendarState.schedules.find(s => s.id === scheduleId);
+    if (item && item.username !== state.currentUser?.username) {
+      showToast('คุณสามารถลบได้เฉพาะรายการของตนเองเท่านั้น', 'warning');
+      return;
+    }
   }
 
   if (typeof Swal !== 'undefined') {

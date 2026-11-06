@@ -120,6 +120,12 @@
             <span>🖥️ ตั้งค่าระบบรีโมต & กลุ่ม</span>
           </button>
 
+          <button type="button" onclick="switchAdminScreen('calendar')" id="admin-nav-calendar"
+                  class="admin-nav-btn w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-left cursor-pointer">
+            <i class="fa-solid fa-calendar-days text-sm w-4 text-center text-emerald-600"></i>
+            <span>📅 ตั้งค่าระบบปฏิทินเข้าไซต์</span>
+          </button>
+
           <button type="button" onclick="switchAdminScreen('migration')" id="admin-nav-migration"
                   class="admin-nav-btn w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-2xl text-xs font-semibold text-left cursor-pointer">
             <i class="fa-solid fa-clock-rotate-left text-sm w-4 text-center"></i>
@@ -678,7 +684,180 @@
         </div>
 
         <!-- ---------------------------------------------------- -->
-        <!-- SCREEN 5: AUDIT LOGS & LEGACY DATA MIGRATION -->
+        <!-- SCREEN 5: SITE CALENDAR SETTINGS -->
+        <!-- ---------------------------------------------------- -->
+        <div id="admin-screen-calendar" class="hidden space-y-5">
+          <div class="bg-[#FAF8F2] p-4 rounded-3xl border border-[#EFE9DC] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-sm shadow-xs">
+                  <i class="fa-solid fa-calendar-days"></i>
+                </div>
+                <h3 class="text-base font-bold text-[#201E1C]">ตั้งค่าระบบปฏิทินเข้าไซต์งาน (Site Calendar Settings)</h3>
+              </div>
+              <p class="text-xs text-[#6E6862] mt-1">กำหนดการแจ้งเตือนล่วงหน้าทาง Telegram, นโยบายสิทธิ์การลงตาราง, และการแสดงผลปฏิทิน</p>
+            </div>
+          </div>
+
+          <!-- CARD 1: การแจ้งเตือนล่วงหน้ารอบเช้า (Advance Morning Reminders) -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-4 shadow-2xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#EFE9DC]/70 pb-3">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center text-sm">
+                  <i class="fa-solid fa-clock-rotate-left"></i>
+                </div>
+                <div>
+                  <h4 class="text-xs font-bold text-[#201E1C]">1. ระบบเตือนความจำล่วงหน้ารอบเช้า (Advance Morning Reminders)</h4>
+                  <p class="text-[11px] text-[#6E6862]">แจ้งเตือนผู้รับผิดชอบงานผ่าน Telegram อัตโนมัติก่อนถึงวันเข้าไซต์</p>
+                </div>
+              </div>
+              
+              <!-- Action Buttons -->
+              <div class="flex items-center gap-2">
+                <button type="button" onclick="testCalendarReminderNow()" title="ทดสอบยิงเตือนความจำทันที"
+                        class="px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300/80 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center gap-1.5 active:scale-95">
+                  <i class="fa-solid fa-paper-plane text-[11px] text-amber-600"></i>
+                  <span>ทดสอบยิงเตือนทันที</span>
+                </button>
+                <button type="button" onclick="setupCalendarTrigger()" title="ตรวจสอบ/ติดตั้ง Time Trigger รอบเช้า"
+                        class="px-3 py-1.5 text-xs font-bold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300/80 rounded-xl transition-all cursor-pointer shadow-2xs flex items-center gap-1.5 active:scale-95">
+                  <i class="fa-solid fa-bolt text-[11px] text-emerald-600"></i>
+                  <span>ติดตั้ง Time Trigger</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Settings Fields -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+              <!-- เปิด/ปิด -->
+              <div class="bg-[#FAF8F2] p-3.5 rounded-2xl border border-[#EFE9DC] flex flex-col justify-between gap-2">
+                <span class="text-xs font-bold text-[#201E1C]">สถานะการเตือนล่วงหน้า</span>
+                <label class="flex items-center gap-2 cursor-pointer mt-1">
+                  <input type="checkbox" id="cal-cfg-enable-advance-reminder" checked class="rounded text-emerald-600 focus:ring-emerald-500">
+                  <span class="text-xs font-semibold text-[#201E1C]">เปิดใช้งานการแจ้งเตือน</span>
+                </label>
+              </div>
+
+              <!-- จำนวนวันล่วงหน้า -->
+              <div class="bg-[#FAF8F2] p-3.5 rounded-2xl border border-[#EFE9DC] flex flex-col justify-between gap-1.5">
+                <label class="text-xs font-bold text-[#201E1C]" for="cal-cfg-reminder-days">เตือนล่วงหน้ากี่วัน</label>
+                <select id="cal-cfg-reminder-days"
+                        class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-[#201E1C] cursor-pointer">
+                  <option value="1">1 วันล่วงหน้า (ค่าเริ่มต้น แนะนำ)</option>
+                  <option value="2">2 วันล่วงหน้า</option>
+                  <option value="0">ในวันงาน (วันเดียวกัน)</option>
+                </select>
+              </div>
+
+              <!-- เวลาที่ส่ง -->
+              <div class="bg-[#FAF8F2] p-3.5 rounded-2xl border border-[#EFE9DC] flex flex-col justify-between gap-1.5">
+                <label class="text-xs font-bold text-[#201E1C]" for="cal-cfg-reminder-time">เวลาส่งรอบเช้า (ชั่วโมง)</label>
+                <div class="flex items-center gap-2">
+                  <input type="text" id="cal-cfg-reminder-time" placeholder="07:00" value="07:00"
+                         class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-[#201E1C] font-mono">
+                  <span class="text-xs text-[#6E6862] font-semibold whitespace-nowrap">น.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARD 2: การแจ้งเตือนทันทีเมื่อลงตาราง (Immediate Alerts) -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-3.5 shadow-2xs">
+            <div class="flex items-center gap-2.5 border-b border-[#EFE9DC]/70 pb-3">
+              <div class="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-sm">
+                <i class="fa-solid fa-bell"></i>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-[#201E1C]">2. การแจ้งเตือนทันทีเมื่อลงตารางงาน (Immediate Alerts)</h4>
+                <p class="text-[11px] text-[#6E6862]">ส่งข้อความ Telegram ทันทีที่ Admin หรือ Supervisor บันทึกมอบหมายคิวงาน</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              <label class="flex items-start gap-2.5 p-3 rounded-2xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/50 cursor-pointer text-xs">
+                <input type="checkbox" id="cal-cfg-notify-immediate" checked class="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500">
+                <div>
+                  <span class="font-bold text-[#201E1C] block">📱 แชตส่วนตัว</span>
+                  <span class="text-[11px] text-[#6E6862] block mt-0.5">ส่งเข้า Telegram ของผู้รับผิดชอบ</span>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-2.5 p-3 rounded-2xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/50 cursor-pointer text-xs">
+                <input type="checkbox" id="cal-cfg-notify-site-group" checked class="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500">
+                <div>
+                  <span class="font-bold text-[#201E1C] block">👥 กลุ่มประจำไซต์</span>
+                  <span class="text-[11px] text-[#6E6862] block mt-0.5">ส่งเข้ากลุ่ม Telegram ประจำไซต์งาน</span>
+                </div>
+              </label>
+
+              <label class="flex items-start gap-2.5 p-3 rounded-2xl border border-[#EFE9DC] bg-[#FAF8F2] hover:bg-[#EDE7DA]/50 cursor-pointer text-xs">
+                <input type="checkbox" id="cal-cfg-notify-main-group" class="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500">
+                <div>
+                  <span class="font-bold text-[#201E1C] block">📢 กลุ่มส่วนกลาง</span>
+                  <span class="text-[11px] text-[#6E6862] block mt-0.5">ส่งเข้ากลุ่ม Telegram หลักเสมอ</span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- CARD 3: นโยบายและรูปแบบการแสดงผลปฏิทิน (Policies & Display) -->
+          <div class="bg-white p-5 rounded-3xl border border-[#EFE9DC] space-y-3.5 shadow-2xs">
+            <div class="flex items-center gap-2.5 border-b border-[#EFE9DC]/70 pb-3">
+              <div class="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-sm">
+                <i class="fa-solid fa-sliders"></i>
+              </div>
+              <div>
+                <h4 class="text-xs font-bold text-[#201E1C]">3. นโยบายสิทธิ์และรูปแบบการแสดงผล (Policies & Display)</h4>
+                <p class="text-[11px] text-[#6E6862]">ปรับแต่งเงื่อนไขการใช้งานและมุมมองปฏิทิน</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+              <!-- วันเริ่มต้นสัปดาห์ -->
+              <div class="bg-[#FAF8F2] p-3.5 rounded-2xl border border-[#EFE9DC] space-y-1.5">
+                <label class="text-xs font-bold text-[#201E1C]" for="cal-cfg-first-day">วันเริ่มต้นสัปดาห์</label>
+                <select id="cal-cfg-first-day"
+                        class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-[#201E1C] cursor-pointer">
+                  <option value="0">วันอาทิตย์ (Sunday - ค่าเริ่มต้น)</option>
+                  <option value="1">วันจันทร์ (Monday)</option>
+                </select>
+              </div>
+
+              <!-- นโยบาย Member ลงตาราง -->
+              <div class="bg-[#FAF8F2] p-3.5 rounded-2xl border border-[#EFE9DC] space-y-2">
+                <span class="text-xs font-bold text-[#201E1C] block">สิทธิ์การลงตารางของ Member</span>
+                <label class="flex items-center gap-2 cursor-pointer mt-1">
+                  <input type="checkbox" id="cal-cfg-member-schedule" class="rounded text-emerald-600 focus:ring-emerald-500">
+                  <span class="text-xs font-medium text-[#201E1C]">อนุญาตให้ Member ลงคิวงานตนเองได้</span>
+                </label>
+              </div>
+
+              <!-- จำนวนชิปสูงสุด -->
+              <div class="bg-[#FAF8F2] p-3.5 rounded-2xl border border-[#EFE9DC] space-y-1.5">
+                <label class="text-xs font-bold text-[#201E1C]" for="cal-cfg-max-chips">จำนวนชิปสูงสุดในช่องวัน</label>
+                <select id="cal-cfg-max-chips"
+                        class="w-full px-3 py-2 text-xs bg-white border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-[#201E1C] cursor-pointer">
+                  <option value="2">2 รายการ</option>
+                  <option value="3" selected>3 รายการ (ค่าเริ่มต้น)</option>
+                  <option value="4">4 รายการ</option>
+                  <option value="5">5 รายการ</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Save Button Bar -->
+          <div class="flex items-center justify-end gap-3 pt-2">
+            <button type="button" onclick="saveCalendarSettings()" id="btnSaveCalendarSettings"
+                    class="px-6 py-2.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-md shadow-emerald-600/25 transition-all flex items-center gap-2 cursor-pointer active:scale-95">
+              <i class="fa-solid fa-floppy-disk text-xs"></i>
+              <span>บันทึกการตั้งค่าระบบปฏิทิน</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- ---------------------------------------------------- -->
+        <!-- SCREEN 6: AUDIT LOGS & LEGACY DATA MIGRATION -->
         <!-- ---------------------------------------------------- -->
         <div id="admin-screen-migration" class="hidden space-y-5">
           <div class="bg-[#FAF8F2] p-4 rounded-3xl border border-[#EFE9DC]">

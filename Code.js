@@ -480,7 +480,16 @@ function getSettings_() {
     PIN_EXPIRE_MINUTES: '5',
     MAX_PIN_ATTEMPTS: '3',
     RDP_DEFAULT_CONN_MODE: 'protocol',
-    RDP_DEFAULT_SHARE_DRIVES: true
+    RDP_DEFAULT_SHARE_DRIVES: true,
+    CALENDAR_ENABLE_ADVANCE_REMINDER: true,
+    CALENDAR_REMINDER_DAYS_BEFORE: '1',
+    CALENDAR_REMINDER_TIME: '07:00',
+    CALENDAR_NOTIFY_ON_SCHEDULE: true,
+    CALENDAR_NOTIFY_SITE_GROUP: true,
+    CALENDAR_NOTIFY_MAIN_GROUP: false,
+    CALENDAR_FIRST_DAY_OF_WEEK: '0',
+    CALENDAR_MEMBER_CAN_SCHEDULE: false,
+    CALENDAR_MAX_CHIPS_PER_CELL: '3'
   };
 
   for (let i = 1; i < values.length; i++) {
@@ -497,6 +506,15 @@ function getSettings_() {
     if (key === 'MAX_PIN_ATTEMPTS') settings.MAX_PIN_ATTEMPTS = val;
     if (key === 'RDP_DEFAULT_CONN_MODE') settings.RDP_DEFAULT_CONN_MODE = val;
     if (key === 'RDP_DEFAULT_SHARE_DRIVES') settings.RDP_DEFAULT_SHARE_DRIVES = (val.toLowerCase() !== 'false');
+    if (key === 'CALENDAR_ENABLE_ADVANCE_REMINDER') settings.CALENDAR_ENABLE_ADVANCE_REMINDER = (val.toLowerCase() !== 'false');
+    if (key === 'CALENDAR_REMINDER_DAYS_BEFORE') settings.CALENDAR_REMINDER_DAYS_BEFORE = val || '1';
+    if (key === 'CALENDAR_REMINDER_TIME') settings.CALENDAR_REMINDER_TIME = val || '07:00';
+    if (key === 'CALENDAR_NOTIFY_ON_SCHEDULE') settings.CALENDAR_NOTIFY_ON_SCHEDULE = (val.toLowerCase() !== 'false');
+    if (key === 'CALENDAR_NOTIFY_SITE_GROUP') settings.CALENDAR_NOTIFY_SITE_GROUP = (val.toLowerCase() !== 'false');
+    if (key === 'CALENDAR_NOTIFY_MAIN_GROUP') settings.CALENDAR_NOTIFY_MAIN_GROUP = (val.toLowerCase() === 'true');
+    if (key === 'CALENDAR_FIRST_DAY_OF_WEEK') settings.CALENDAR_FIRST_DAY_OF_WEEK = val || '0';
+    if (key === 'CALENDAR_MEMBER_CAN_SCHEDULE') settings.CALENDAR_MEMBER_CAN_SCHEDULE = (val.toLowerCase() === 'true');
+    if (key === 'CALENDAR_MAX_CHIPS_PER_CELL') settings.CALENDAR_MAX_CHIPS_PER_CELL = val || '3';
     if (key === 'SITE_TELEGRAM_CHAT_IDS') {
       try {
         const parsed = JSON.parse(val);
@@ -593,6 +611,33 @@ function saveSettings(newSettings) {
     }
     if (newSettings.SITES !== undefined && Array.isArray(newSettings.SITES)) {
       updateOrAdd('SITES', JSON.stringify(newSettings.SITES), 'รายชื่อไซต์งานทั้งหมด');
+    }
+    if (newSettings.CALENDAR_ENABLE_ADVANCE_REMINDER !== undefined) {
+      updateOrAdd('CALENDAR_ENABLE_ADVANCE_REMINDER', String(newSettings.CALENDAR_ENABLE_ADVANCE_REMINDER), 'เปิดเตือนความจำล่วงหน้ารอบเช้า (true/false)');
+    }
+    if (newSettings.CALENDAR_REMINDER_DAYS_BEFORE !== undefined) {
+      updateOrAdd('CALENDAR_REMINDER_DAYS_BEFORE', String(newSettings.CALENDAR_REMINDER_DAYS_BEFORE), 'จำนวนวันเตือนล่วงหน้า');
+    }
+    if (newSettings.CALENDAR_REMINDER_TIME !== undefined) {
+      updateOrAdd('CALENDAR_REMINDER_TIME', String(newSettings.CALENDAR_REMINDER_TIME), 'เวลาส่งแจ้งเตือนรอบเช้า');
+    }
+    if (newSettings.CALENDAR_NOTIFY_ON_SCHEDULE !== undefined) {
+      updateOrAdd('CALENDAR_NOTIFY_ON_SCHEDULE', String(newSettings.CALENDAR_NOTIFY_ON_SCHEDULE), 'แจ้งเตือนทันทีเมื่อลงตาราง (true/false)');
+    }
+    if (newSettings.CALENDAR_NOTIFY_SITE_GROUP !== undefined) {
+      updateOrAdd('CALENDAR_NOTIFY_SITE_GROUP', String(newSettings.CALENDAR_NOTIFY_SITE_GROUP), 'ส่งเข้ากลุ่มไซต์งานด้วย (true/false)');
+    }
+    if (newSettings.CALENDAR_NOTIFY_MAIN_GROUP !== undefined) {
+      updateOrAdd('CALENDAR_NOTIFY_MAIN_GROUP', String(newSettings.CALENDAR_NOTIFY_MAIN_GROUP), 'ส่งเข้ากลุ่มหลักส่วนกลางด้วย (true/false)');
+    }
+    if (newSettings.CALENDAR_FIRST_DAY_OF_WEEK !== undefined) {
+      updateOrAdd('CALENDAR_FIRST_DAY_OF_WEEK', String(newSettings.CALENDAR_FIRST_DAY_OF_WEEK), 'วันเริ่มต้นสัปดาห์ในปฏิทิน (0=อาทิตย์, 1=จันทร์)');
+    }
+    if (newSettings.CALENDAR_MEMBER_CAN_SCHEDULE !== undefined) {
+      updateOrAdd('CALENDAR_MEMBER_CAN_SCHEDULE', String(newSettings.CALENDAR_MEMBER_CAN_SCHEDULE), 'อนุญาตให้ Member ทั่วไปลงตารางคิวงานตนเองได้ (true/false)');
+    }
+    if (newSettings.CALENDAR_MAX_CHIPS_PER_CELL !== undefined) {
+      updateOrAdd('CALENDAR_MAX_CHIPS_PER_CELL', String(newSettings.CALENDAR_MAX_CHIPS_PER_CELL), 'จำนวนชิปรายชื่อสูงสุดในช่องวัน');
     }
 
     return { success: true, message: 'บันทึกการตั้งค่าสำเร็จ' };

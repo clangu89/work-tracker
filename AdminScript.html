@@ -72,6 +72,7 @@ function switchAdminScreen(screenId) {
     { id: 'global', el: document.getElementById('admin-screen-global') },
     { id: 'worktracker', el: document.getElementById('admin-screen-worktracker') },
     { id: 'rdp', el: document.getElementById('admin-screen-rdp') },
+    { id: 'calendar', el: document.getElementById('admin-screen-calendar') },
     { id: 'migration', el: document.getElementById('admin-screen-migration') }
   ];
 
@@ -96,6 +97,7 @@ function switchAdminScreen(screenId) {
     populateRdpSettings();
     renderAdminGroupsTable();
   }
+  if (screenId === 'calendar') populateCalendarSettings();
   if (screenId === 'migration') renderAdminAuditLogs();
 }
 
@@ -1366,5 +1368,173 @@ function renderAdminAuditLogs() {
       </tr>
     `;
   }).join("");
+}
+
+// --------------------------------------------------------------------
+// SCREEN 5: SITE CALENDAR SETTINGS
+// --------------------------------------------------------------------
+
+/**
+ * เติมค่าการตั้งค่าระบบปฏิทินเข้าไซต์งานลงในฟอร์ม Admin Center
+ */
+function populateCalendarSettings() {
+  const s = adminState.settings || {};
+
+  const enableAdvance = document.getElementById("cal-cfg-enable-advance-reminder");
+  const reminderDays = document.getElementById("cal-cfg-reminder-days");
+  const reminderTime = document.getElementById("cal-cfg-reminder-time");
+
+  const notifyImmediate = document.getElementById("cal-cfg-notify-immediate");
+  const notifySiteGroup = document.getElementById("cal-cfg-notify-site-group");
+  const notifyMainGroup = document.getElementById("cal-cfg-notify-main-group");
+
+  const firstDay = document.getElementById("cal-cfg-first-day");
+  const memberSchedule = document.getElementById("cal-cfg-member-schedule");
+  const maxChips = document.getElementById("cal-cfg-max-chips");
+
+  if (enableAdvance) {
+    enableAdvance.checked = (s.CALENDAR_ENABLE_ADVANCE_REMINDER !== false && s.CALENDAR_ENABLE_ADVANCE_REMINDER !== "false");
+  }
+  if (reminderDays) {
+    reminderDays.value = String(s.CALENDAR_REMINDER_DAYS_BEFORE !== undefined ? s.CALENDAR_REMINDER_DAYS_BEFORE : "1");
+  }
+  if (reminderTime) {
+    reminderTime.value = String(s.CALENDAR_REMINDER_TIME || "07:00");
+  }
+
+  if (notifyImmediate) {
+    notifyImmediate.checked = (s.CALENDAR_NOTIFY_ON_SCHEDULE !== false && s.CALENDAR_NOTIFY_ON_SCHEDULE !== "false");
+  }
+  if (notifySiteGroup) {
+    notifySiteGroup.checked = (s.CALENDAR_NOTIFY_SITE_GROUP !== false && s.CALENDAR_NOTIFY_SITE_GROUP !== "false");
+  }
+  if (notifyMainGroup) {
+    notifyMainGroup.checked = (s.CALENDAR_NOTIFY_MAIN_GROUP === true || s.CALENDAR_NOTIFY_MAIN_GROUP === "true");
+  }
+
+  if (firstDay) {
+    firstDay.value = String(s.CALENDAR_FIRST_DAY_OF_WEEK !== undefined ? s.CALENDAR_FIRST_DAY_OF_WEEK : "0");
+  }
+  if (memberSchedule) {
+    memberSchedule.checked = (s.CALENDAR_MEMBER_CAN_SCHEDULE === true || s.CALENDAR_MEMBER_CAN_SCHEDULE === "true");
+  }
+  if (maxChips) {
+    maxChips.value = String(s.CALENDAR_MAX_CHIPS_PER_CELL !== undefined ? s.CALENDAR_MAX_CHIPS_PER_CELL : "3");
+  }
+}
+
+/**
+ * บันทึกการตั้งค่าระบบปฏิทินเข้าไซต์งาน
+ */
+function saveCalendarSettings() {
+  const btn = document.getElementById("btnSaveCalendarSettings");
+  const origHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>กำลังบันทึก...';
+  }
+
+  const newSettings = {
+    CALENDAR_ENABLE_ADVANCE_REMINDER: document.getElementById("cal-cfg-enable-advance-reminder")?.checked ?? true,
+    CALENDAR_REMINDER_DAYS_BEFORE: document.getElementById("cal-cfg-reminder-days")?.value || "1",
+    CALENDAR_REMINDER_TIME: document.getElementById("cal-cfg-reminder-time")?.value?.trim() || "07:00",
+    CALENDAR_NOTIFY_ON_SCHEDULE: document.getElementById("cal-cfg-notify-immediate")?.checked ?? true,
+    CALENDAR_NOTIFY_SITE_GROUP: document.getElementById("cal-cfg-notify-site-group")?.checked ?? true,
+    CALENDAR_NOTIFY_MAIN_GROUP: document.getElementById("cal-cfg-notify-main-group")?.checked ?? false,
+    CALENDAR_FIRST_DAY_OF_WEEK: document.getElementById("cal-cfg-first-day")?.value || "0",
+    CALENDAR_MEMBER_CAN_SCHEDULE: document.getElementById("cal-cfg-member-schedule")?.checked ?? false,
+    CALENDAR_MAX_CHIPS_PER_CELL: document.getElementById("cal-cfg-max-chips")?.value || "3"
+  };
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+      if (res && res.success) {
+        showToast("บันทึกการตั้งค่าระบบปฏิทินเข้าไซต์งานเรียบร้อย", "success");
+        if (!adminState.settings) adminState.settings = {};
+        Object.assign(adminState.settings, newSettings);
+        if (window.state && state.settings) {
+          Object.assign(state.settings, newSettings);
+        }
+      } else {
+        showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึก", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      }
+      showToast("บันทึกไม่สำเร็จ: " + (err.message || err), "error");
+    })
+    .saveSettings(newSettings);
+}
+
+/**
+ * ทดสอบยิงแจ้งเตือนล่วงหน้ารอบเช้าทันที (ไม่ต้องรอเวลา Trigger)
+ */
+function testCalendarReminderNow() {
+  const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
+  showToast("กำลังส่งการแจ้งเตือนรอบเช้า...", "info", 2000);
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: 'ทดสอบส่งแจ้งเตือนสำเร็จ!',
+            html: `<div class="text-xs text-left space-y-1.5 bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC]">
+                     <p><b>ข้อความ:</b> ${escapeHtml(res.message || '')}</p>
+                     <p><b>ส่งสำเร็จ:</b> ${res.sentCount || 0} รายการ</p>
+                     <p><b>พบรายการ:</b> ${res.foundCount || 0} รายการ</p>
+                   </div>`,
+            icon: 'success',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#059669'
+          });
+        } else {
+          showToast(res.message || "ส่งแจ้งเตือนสำเร็จ", "success");
+        }
+      } else {
+        showToast((res && res.message) || "ไม่สามารถส่งแจ้งเตือนได้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("เกิดข้อผิดพลาดในการทดสอบ: " + (err.message || err), "error");
+    })
+    .triggerDailySiteScheduleRemindersNow(currentUsername);
+}
+
+/**
+ * ติดตั้งหรือรีเซ็ต Apps Script Time-driven Trigger รอบเช้า
+ */
+function setupCalendarTrigger() {
+  showToast("กำลังตรวจสอบและติดตั้ง Time Trigger...", "info", 2000);
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res && res.success) {
+        if (typeof Swal !== 'undefined') {
+          Swal.fire({
+            title: 'ติดตั้ง Time Trigger สำเร็จ!',
+            text: res.message || 'ระบบจะส่งแจ้งเตือนรอบเช้าทุกวันตามเวลาที่กำหนด',
+            icon: 'success',
+            confirmButtonText: 'ตกลง',
+            confirmButtonColor: '#059669'
+          });
+        } else {
+          showToast(res.message || "ติดตั้ง Trigger สำเร็จ", "success");
+        }
+      } else {
+        showToast((res && res.message) || "ไม่สามารถติดตั้ง Trigger ได้", "error");
+      }
+    })
+    .withFailureHandler(err => {
+      showToast("เกิดข้อผิดพลาดในการติดตั้ง Trigger: " + (err.message || err), "error");
+    })
+    .setupScheduleReminderTrigger();
 }
 </script>
