@@ -443,80 +443,95 @@
             </button>
           </div>
 
-        <!-- Action Buttons -->
-        <div class="flex items-center gap-2 sm:gap-3">
-          <!-- Logged-in User Profile Badge -->
-          <div id="userProfileBadge" class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC]">
-            <i class="fa-solid fa-circle-user text-[#2491FA] text-sm"></i>
-            <span id="navUserFullName" class="font-semibold max-w-[120px] truncate">-</span>
-            <span id="navUserRole" class="text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
+        <!-- Action Buttons (Logical Functional Zones - Style 1) -->
+        <div class="flex items-center gap-2 sm:gap-2.5">
+          <!-- Zone 1: Feature Tools & Sync -->
+          <div class="flex items-center gap-1.5">
+            <!-- Archive Modal Button -->
+            <button id="btnOpenArchiveModal" onclick="openArchiveModal()" title="เปิดดูคลังงานที่จัดเก็บถาวร (Archive)"
+                    class="h-9 flex items-center gap-1.5 px-2.5 sm:px-3 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+              <i class="fa-solid fa-box-archive text-amber-700 text-xs"></i>
+              <span class="font-semibold hidden sm:inline">คลังงาน</span>
+            </button>
+
+            <!-- Task Report Modal Button -->
+            <button id="btnOpenReportModal" onclick="openReportModal()" title="ออกรายงานสถานะงาน (PDF / Excel)"
+                    class="h-9 flex items-center gap-1.5 px-2.5 sm:px-3 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+              <i class="fa-solid fa-chart-column text-indigo-600 text-xs"></i>
+              <span class="font-semibold hidden sm:inline">รายงาน</span>
+            </button>
+
+            <!-- Real-time Live Sync Status Indicator -->
+            <div id="liveSyncStatus" title="ระบบเชื่อมต่อแบบ Real-time (ซิงค์อัตโนมัติ)"
+                 class="h-9 flex items-center gap-1.5 px-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all">
+              <span class="relative flex h-2 w-2">
+                <span id="liveSyncPulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span id="liveSyncDot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span class="hidden md:inline font-bold text-[11px]" id="liveSyncText">Live Sync</span>
+            </div>
+
+            <!-- Refresh Data -->
+            <button onclick="loadInitialData()" title="รีเฟรชข้อมูล (หรือรอระบบซิงค์ Real-time อัตโนมัติ)"
+                    class="w-9 h-9 flex items-center justify-center text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] bg-[#FAF8F2] rounded-xl transition-colors border border-[#EFE9DC] cursor-pointer shadow-2xs active:scale-95">
+              <i class="fa-solid fa-arrows-rotate text-xs" id="btnRefreshIcon"></i>
+            </button>
           </div>
 
-          <!-- Notification Center Bell Button -->
-          <button id="btnWtNotification" onclick="toggleNotificationCenter(event, 'wt')" title="ศูนย์แจ้งเตือน"
-                  class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
-            <i class="fa-solid fa-bell text-[#2491FA]"></i>
-            <span id="badgeWtNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
-          </button>
-
-          <!-- Online Users Counter & View Button -->
-          <button id="btnOnlineUsers" onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
-                  class="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
-            <span class="relative flex h-2 w-2">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span class="font-semibold text-xs text-[#201E1C]"><span id="onlineUsersCount">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
-          </button>
-
-          <!-- Archive Modal Button -->
-          <button id="btnOpenArchiveModal" onclick="openArchiveModal()" title="เปิดดูคลังงานที่จัดเก็บถาวร (Archive)"
-                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
-            <i class="fa-solid fa-box-archive text-amber-700 text-xs"></i>
-            <span class="font-semibold hidden sm:inline">คลังงาน</span>
-          </button>
-
-          <!-- Task Report Modal Button -->
-          <button id="btnOpenReportModal" onclick="openReportModal()" title="ออกรายงานสถานะงาน (PDF / Excel)"
-                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
-            <i class="fa-solid fa-chart-column text-indigo-600 text-xs"></i>
-            <span class="font-semibold hidden sm:inline">รายงาน</span>
-          </button>
-
-          <!-- Real-time Live Sync Status Indicator -->
-          <div id="liveSyncStatus" title="ระบบเชื่อมต่อแบบ Real-time (ซิงค์อัตโนมัติ)"
-               class="flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all">
-            <span class="relative flex h-2 w-2">
-              <span id="liveSyncPulse" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span id="liveSyncDot" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span class="hidden md:inline font-bold text-[11px]" id="liveSyncText">Live Sync</span>
-          </div>
-
-          <!-- Refresh Data -->
-          <button onclick="loadInitialData()" title="รีเฟรชข้อมูล (หรือรอระบบซิงค์ Real-time อัตโนมัติ)"
-                  class="p-2 text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-xl transition-colors border border-[#EFE9DC]">
-            <i class="fa-solid fa-arrows-rotate" id="btnRefreshIcon"></i>
-          </button>
-
-          <!-- Settings Button -->
-          <button onclick="openSettingsModal()" title="ตั้งค่าระบบ / สมาชิก / Telegram"
-                  class="p-2 text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] rounded-xl transition-colors border border-[#EFE9DC]">
-            <i class="fa-solid fa-gear"></i>
-          </button>
-
-          <!-- Add Task Button (Primary) -->
+          <!-- Zone 2: Primary CTA -->
           <button onclick="openCreateTaskModal()"
-                  class="inline-flex items-center gap-2 px-4 py-2 text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all hover:shadow-lg active:scale-95 cursor-pointer">
+                  class="h-9 inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 text-xs sm:text-sm font-bold text-white bg-[#2491FA] hover:bg-[#1A7CE0] rounded-xl shadow-md shadow-blue-500/20 transition-all hover:shadow-lg active:scale-95 cursor-pointer">
             <i class="fa-solid fa-plus text-xs"></i>
             <span>เพิ่มงานใหม่</span>
           </button>
 
-          <!-- Logout Button -->
-          <button onclick="handleLogout()" title="ออกจากระบบ"
-                  class="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          </button>
+          <!-- Zone Separator 1 -->
+          <div class="h-6 w-px bg-[#E5DFD4]"></div>
+
+          <!-- Zone 3: Communication & Utilities -->
+          <div class="flex items-center gap-1.5">
+            <!-- Notification Center Bell Button -->
+            <button id="btnWtNotification" onclick="toggleNotificationCenter(event, 'wt')" title="ศูนย์แจ้งเตือน"
+                    class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+              <i class="fa-solid fa-bell text-[#2491FA]"></i>
+              <span id="badgeWtNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+            </button>
+
+            <!-- Online Users Counter & View Button -->
+            <button id="btnOnlineUsers" onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
+                    class="h-9 flex items-center gap-1.5 px-2.5 sm:px-3 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span class="font-semibold text-xs text-[#201E1C]"><span id="onlineUsersCount">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
+            </button>
+
+            <!-- Settings Button -->
+            <button onclick="openSettingsModal()" title="ตั้งค่าระบบ / สมาชิก / Telegram"
+                    class="w-9 h-9 flex items-center justify-center text-[#6E6862] hover:text-[#201E1C] hover:bg-[#EDE7DA] bg-[#FAF8F2] rounded-xl transition-colors border border-[#EFE9DC] cursor-pointer shadow-2xs active:scale-95">
+              <i class="fa-solid fa-gear text-xs"></i>
+            </button>
+          </div>
+
+          <!-- Zone Separator 2 -->
+          <div class="h-6 w-px bg-[#E5DFD4]"></div>
+
+          <!-- Zone 4: Account & Session (Far Right) -->
+          <div class="flex items-center gap-1.5">
+            <!-- Logged-in User Profile Badge -->
+            <div id="userProfileBadge" class="h-9 hidden sm:flex items-center gap-2 px-3 bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC]">
+              <i class="fa-solid fa-circle-user text-[#2491FA] text-sm"></i>
+              <span id="navUserFullName" class="font-semibold max-w-[120px] truncate">-</span>
+              <span id="navUserRole" class="text-[10px] bg-white text-[#2491FA] px-1.5 py-0.2 rounded-md font-bold uppercase border border-black/5">Member</span>
+            </div>
+
+            <!-- Logout Button -->
+            <button onclick="handleLogout()" title="ออกจากระบบ"
+                    class="w-9 h-9 flex items-center justify-center text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors border border-rose-200 cursor-pointer shadow-2xs active:scale-95">
+              <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+            </button>
+          </div>
         </div>
 
       </div>

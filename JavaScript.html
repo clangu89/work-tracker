@@ -3265,25 +3265,25 @@ function updateLiveSyncBadge(mode) {
   if (!container || !dot || !pulse) return;
 
   if (mode === 'active') {
-    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    container.className = 'h-9 flex items-center gap-1.5 px-2.5 bg-emerald-50 text-emerald-700 border border-emerald-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
     dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
     pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
     if (text) text.innerText = 'Live Sync';
     container.title = 'ระบบ Real-time กำลังทำงานปกติ';
   } else if (mode === 'syncing') {
-    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-blue-50 text-[#2491FA] border border-blue-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    container.className = 'h-9 flex items-center gap-1.5 px-2.5 bg-blue-50 text-[#2491FA] border border-blue-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
     dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-[#2491FA]';
     pulse.className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75';
     if (text) text.innerText = 'Syncing...';
     container.title = 'กำลังตรวจสอบการเปลี่ยนแปลง...';
   } else if (mode === 'warning') {
-    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    container.className = 'h-9 flex items-center gap-1.5 px-2.5 bg-amber-50 text-amber-700 border border-amber-200/80 rounded-xl text-xs font-semibold shadow-2xs transition-all';
     dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
     pulse.className = 'hidden';
     if (text) text.innerText = 'Sync Warning';
     container.title = 'การเชื่อมต่อขัดข้อง กำลังลองใหม่รอบถัดไป';
   } else if (mode === 'paused') {
-    container.className = 'flex items-center gap-1.5 px-2.5 py-1.5 bg-[#EDE7DA] text-[#6E6862] border border-[#EFE9DC] rounded-xl text-xs font-semibold shadow-2xs transition-all';
+    container.className = 'h-9 flex items-center gap-1.5 px-2.5 bg-[#EDE7DA] text-[#6E6862] border border-[#EFE9DC] rounded-xl text-xs font-semibold shadow-2xs transition-all';
     dot.className = 'relative inline-flex rounded-full h-2 w-2 bg-[#6E6862]';
     pulse.className = 'hidden';
     if (text) text.innerText = 'Sync Paused';

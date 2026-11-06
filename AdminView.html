@@ -29,44 +29,56 @@
           </button>
         </div>
 
-        <!-- Action Tools -->
+        <!-- Action Tools (Option 1 Aligned) -->
         <div class="flex items-center gap-2 sm:gap-2.5">
-          <!-- Admin Badge -->
-          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-purple-50 rounded-xl text-xs text-purple-900 border border-purple-200/80">
-            <i class="fa-solid fa-user-shield text-purple-600 text-sm"></i>
-            <span class="user-display-name-nav font-semibold max-w-[120px] truncate">-</span>
-            <span class="text-[10px] bg-purple-600 text-white px-1.5 py-0.2 rounded-md font-bold uppercase">ADMIN</span>
-          </div>
-
-          <!-- Notification Center Bell Button -->
-          <button id="btnAdminNotification" onclick="toggleNotificationCenter(event, 'admin')" title="ศูนย์แจ้งเตือน"
-                  class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
-            <i class="fa-solid fa-bell text-purple-600"></i>
-            <span id="badgeAdminNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
-          </button>
-
-          <!-- Online Users Counter & View Button -->
-          <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
-                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
-            <span class="relative flex h-2 w-2">
-              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-            </span>
-            <span class="font-semibold text-xs text-[#201E1C]"><span class="online-users-count-badge">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
-          </button>
-
-          <!-- Sheet Direct Link -->
+          <!-- Zone 1: Feature Link -->
           <a id="adminSheetLinkBtn" href="#" target="_blank" title="เปิด Google Sheets ฐานข้อมูลหลัก"
-             class="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-100/70 hover:bg-emerald-100 border border-emerald-300/60 rounded-xl transition-colors">
-            <i class="fa-solid fa-file-excel text-emerald-700"></i>
+             class="h-9 hidden sm:inline-flex items-center gap-1.5 px-3 text-xs font-semibold text-emerald-800 bg-emerald-100/70 hover:bg-emerald-100 border border-emerald-300/60 rounded-xl transition-colors shadow-2xs active:scale-95">
+            <i class="fa-solid fa-file-excel text-emerald-700 text-xs"></i>
             <span>Google Sheet</span>
           </a>
 
-          <!-- Logout Button -->
-          <button onclick="handleLogout()" title="ออกจากระบบ"
-                  class="p-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-xl transition-colors border border-rose-200 cursor-pointer">
-            <i class="fa-solid fa-arrow-right-from-bracket"></i>
-          </button>
+          <!-- Zone Separator 1 -->
+          <div class="h-6 w-px bg-[#E5DFD4]"></div>
+
+          <!-- Zone 2: Communication & Utilities -->
+          <div class="flex items-center gap-1.5">
+            <!-- Notification Center Bell Button -->
+            <button id="btnAdminNotification" onclick="toggleNotificationCenter(event, 'admin')" title="ศูนย์แจ้งเตือน"
+                    class="relative flex items-center justify-center w-9 h-9 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-sm text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs hover:shadow-xs active:scale-95">
+              <i class="fa-solid fa-bell text-purple-600"></i>
+              <span id="badgeAdminNotification" class="absolute -top-1 -right-1 z-10 min-w-[18px] h-4.5 px-1 rounded-full bg-[#ff3b30] text-white text-[9px] font-bold flex items-center justify-center border-2 border-white shadow-2xs hidden notification-count-badge">0</span>
+            </button>
+
+            <!-- Online Users Counter & View Button -->
+            <button onclick="openOnlineUsersModal()" title="ดูรายชื่อผู้ใช้งานที่กำลังออนไลน์"
+                    class="h-9 flex items-center gap-1.5 px-2.5 sm:px-3 bg-[#FAF8F2] hover:bg-[#EDE7DA] rounded-xl text-xs text-[#201E1C] border border-[#EFE9DC] transition-all cursor-pointer shadow-2xs active:scale-95">
+              <span class="relative flex h-2 w-2">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              </span>
+              <span class="font-semibold text-xs text-[#201E1C]"><span class="online-users-count-badge">1</span> <span class="hidden sm:inline">ออนไลน์</span></span>
+            </button>
+          </div>
+
+          <!-- Zone Separator 2 -->
+          <div class="h-6 w-px bg-[#E5DFD4]"></div>
+
+          <!-- Zone 3: Account & Session (Far Right) -->
+          <div class="flex items-center gap-1.5">
+            <!-- Admin Badge -->
+            <div class="h-9 hidden sm:flex items-center gap-2 px-3 bg-purple-50 rounded-xl text-xs text-purple-900 border border-purple-200/80">
+              <i class="fa-solid fa-user-shield text-purple-600 text-sm"></i>
+              <span class="user-display-name-nav font-semibold max-w-[120px] truncate">-</span>
+              <span class="text-[10px] bg-purple-600 text-white px-1.5 py-0.2 rounded-md font-bold uppercase">ADMIN</span>
+            </div>
+
+            <!-- Logout Button -->
+            <button onclick="handleLogout()" title="ออกจากระบบ"
+                    class="w-9 h-9 flex items-center justify-center text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-xl transition-colors border border-rose-200 cursor-pointer shadow-2xs active:scale-95">
+              <i class="fa-solid fa-arrow-right-from-bracket text-xs"></i>
+            </button>
+          </div>
         </div>
 
       </div>
