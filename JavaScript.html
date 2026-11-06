@@ -196,11 +196,10 @@ function onDataLoaded(response) {
     updateNavbarUser();
   }
 
-  // อัปเดตลิงก์ไปยัง Google Sheet
-  const sheetLinkBtn = document.getElementById('sheetLinkBtn');
-  if (sheetLinkBtn && state.sheetUrl) {
-    sheetLinkBtn.href = state.sheetUrl;
-    sheetLinkBtn.classList.remove('hidden');
+  // อัปเดตลิงก์ไปยัง Google Sheet สำหรับ Admin
+  const wtAdminSheet = document.getElementById('adminWtSheetLinkBtn');
+  if (wtAdminSheet && state.sheetUrl) {
+    wtAdminSheet.href = state.sheetUrl;
   }
 
   state.wtInitialized = true;

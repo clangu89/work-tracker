@@ -143,6 +143,10 @@ function loadAdminData(forceRefresh = false) {
         if (sheetLink && adminState.spreadsheetUrl) {
           sheetLink.href = adminState.spreadsheetUrl;
         }
+        const wtSheetLink = document.getElementById("adminWtSheetLinkBtn");
+        if (wtSheetLink && adminState.spreadsheetUrl) {
+          wtSheetLink.href = adminState.spreadsheetUrl;
+        }
 
         // Render หน้าจอปัจจุบัน
         switchAdminScreen(adminState.currentScreen);

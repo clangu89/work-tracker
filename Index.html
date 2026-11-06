@@ -376,17 +376,9 @@
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex items-center justify-between h-16 gap-4">
           
-          <!-- App Switcher & Logo & Title -->
+          <!-- Logo & Title & App Switcher -->
           <div class="flex items-center gap-2.5 sm:gap-3.5">
-            <!-- App Switcher Button -->
-            <button onclick="openAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
-                    class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
-              <i class="fa-solid fa-grip text-[#2491FA] text-sm"></i>
-              <span class="hidden sm:inline">เลือกระบบ</span>
-            </button>
-
-            <div class="h-6 w-px bg-[#EFE9DC]"></div>
-
+            <!-- Brand Logo & Title -->
             <div class="flex items-center gap-3">
               <div class="w-10 h-10 rounded-2xl bg-[#2491FA] flex items-center justify-center text-white shadow-md shadow-blue-500/25 p-1.5 flex-shrink-0">
                 <!-- Modern Work Tracker Logo SVG -->
@@ -407,6 +399,15 @@
                 <p class="text-[11px] text-[#6E6862] font-medium">Work Tracker System</p>
               </div>
             </div>
+
+            <div class="h-6 w-px bg-[#EFE9DC]"></div>
+
+            <!-- App Switcher Button -->
+            <button onclick="openAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
+                    class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
+              <i class="fa-solid fa-grip text-[#2491FA] text-sm"></i>
+              <span class="hidden sm:inline">เลือกระบบ</span>
+            </button>
           </div>
 
         <!-- Action Buttons -->
@@ -441,13 +442,6 @@
             <i class="fa-solid fa-chart-column text-indigo-600 text-xs"></i>
             <span class="font-semibold hidden sm:inline">รายงาน</span>
           </button>
-
-          <!-- Link to Google Sheet -->
-          <a id="sheetLinkBtn" href="#" target="_blank" title="เปิดดูข้อมูลใน Google Sheets"
-             class="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-emerald-800 bg-emerald-100/70 hover:bg-emerald-100 border border-emerald-300/60 rounded-xl transition-colors">
-            <i class="fa-solid fa-file-excel text-emerald-700"></i>
-            <span>Google Sheet</span>
-          </a>
 
           <!-- Real-time Live Sync Status Indicator -->
           <div id="liveSyncStatus" title="ระบบเชื่อมต่อแบบ Real-time (ซิงค์อัตโนมัติ)"

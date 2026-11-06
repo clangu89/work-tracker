@@ -8,17 +8,8 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16 gap-3">
         
-        <!-- App Switcher & Title -->
+        <!-- Logo & System Name & App Switcher -->
         <div class="flex items-center gap-2.5 sm:gap-3.5">
-          <!-- App Switcher Button -->
-          <button onclick="openAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
-                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
-            <i class="fa-solid fa-grip text-[#2491FA] text-sm"></i>
-            <span class="hidden sm:inline">เลือกระบบ</span>
-          </button>
-
-          <div class="h-6 w-px bg-[#EFE9DC]"></div>
-
           <!-- Logo & System Name -->
           <div class="flex items-center gap-2.5">
             <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-[#2491FA] text-white flex items-center justify-center shadow-md shadow-blue-500/20 text-sm sm:text-base flex-shrink-0">
@@ -29,6 +20,15 @@
               <p class="text-[10px] sm:text-[11px] text-[#6E6862] font-medium">Remote Desktop Manager</p>
             </div>
           </div>
+
+          <div class="h-6 w-px bg-[#EFE9DC]"></div>
+
+          <!-- App Switcher Button -->
+          <button onclick="openAppLauncher()" title="กลับหน้าจอหลัก / สลับระบบ"
+                  class="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-bold text-[#201E1C] bg-[#FAF8F2] hover:bg-[#EDE7DA] border border-[#EFE9DC] rounded-xl transition-all cursor-pointer shadow-2xs active:scale-95">
+            <i class="fa-solid fa-grip text-[#2491FA] text-sm"></i>
+            <span class="hidden sm:inline">เลือกระบบ</span>
+          </button>
         </div>
 
         <!-- Action Tools -->
