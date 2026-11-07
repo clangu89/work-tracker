@@ -6,10 +6,20 @@
  * =========================================================================
  */
 
+// Client Fallback สำหรับไซต์งานเริ่มต้น (ป้องกันกรณีออฟไลน์หรือชีตยังไม่ตอบกลับ)
+window.DEFAULT_SITES = window.DEFAULT_SITES || [
+  'ไซต์ A - อาคารสำนักงานใหญ่',
+  'ไซต์ B - โครงการคอนโดสุขุมวิท',
+  'ไซต์ C - โรงงานนิคมชลบุรี',
+  'งานซ่อมบำรุงและบริการทั่วไป'
+];
+
 const calendarState = {
   currentYear: new Date().getFullYear(),
   currentMonth: new Date().getMonth() + 1, // 1 - 12
   schedules: [],
+  sites: [],
+  tasks: [],
   usersList: [],
   selectedDate: null,
   siteFilter: 'ALL',
@@ -57,13 +67,86 @@ function initCalendarApp() {
   if (btnAdd) btnAdd.classList.toggle('hidden', !canManage);
   if (btnModalAdd) btnModalAdd.classList.toggle('hidden', !canManage);
 
-  // เตรียมตัวเลือกใน Dropdown ฟิลเตอร์และฟอร์ม
+  // เตรียมตัวเลือกใน Dropdown ฟิลเตอร์และฟอร์มเบื้องต้น
   syncCalendarDropdowns();
 
-  // โหลดข้อมูลปฏิทิน
-  loadCalendarSchedules();
+  // โหลดข้อมูล Bootstrap แบบครบวงจรสำหรับปฏิทิน (Schedules, Sites, Tasks, Users, Settings)
+  loadCalendarBootstrapData();
   calendarState.isInitialized = true;
 }
+
+/**
+ * โหลดข้อมูลเริ่มต้นแบบครบวงจรสำหรับระบบปฏิทิน (Schedules, Sites, Tasks, Users, Settings)
+ */
+function loadCalendarBootstrapData() {
+  if (calendarState.isLoading) return;
+  calendarState.isLoading = true;
+
+  const refreshIcon = document.getElementById('calRefreshIcon');
+  if (refreshIcon) refreshIcon.classList.add('animate-spin');
+
+  updateCalendarMonthTitle();
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) {
+    calendarState.isLoading = false;
+    if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+    renderCalendarGrid();
+    return;
+  }
+
+  const curUsername = state.currentUser ? state.currentUser.username : '';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      calendarState.isLoading = false;
+      if (refreshIcon) refreshIcon.classList.remove('animate-spin');
+      if (res && res.success) {
+        // 1. กำหนด Schedules
+        calendarState.schedules = res.schedules || [];
+
+        // 2. กำหนด Sites
+        if (res.sites && res.sites.length > 0) {
+          calendarState.sites = res.sites;
+          if (!state.sites || state.sites.length === 0) state.sites = res.sites;
+          if (!state.allSites || state.allSites.length === 0) state.allSites = res.sites;
+        }
+
+        // 3. กำหนด Active Tasks สำหรับเชื่อมโยง
+        if (res.tasks && res.tasks.length > 0) {
+          calendarState.tasks = res.tasks;
+          if (!state.tasks || state.tasks.length === 0) state.tasks = res.tasks;
+        }
+
+        // 4. กำหนด Users
+        if (res.users && res.users.length > 0) {
+          calendarState.usersList = res.users;
+          populateCalendarUserDropdowns(res.users);
+        }
+
+        // 5. กำหนด Settings
+        if (res.settings) {
+          if (!state.settings) state.settings = {};
+          Object.assign(state.settings, res.settings);
+        }
+
+        // ซิงค์ Dropdown ใหม่ทั้งหมดด้วยข้อมูลที่สดใหม่
+        syncCalendarDropdowns();
+
+        renderCalendarGrid();
+        renderCalendarAgenda();
+        updateTodayDutyCountBadge();
+      } else {
+        // หาก getCalendarBootstrapData มีปัญหา ให้ fallback ไปเรียก getSiteSchedules
+        loadCalendarSchedules();
+      }
+    })
+    .withFailureHandler(function(err) {
+      console.warn('loadCalendarBootstrapData fallback: ' + err.message);
+      loadCalendarSchedules();
+    })
+    .getCalendarBootstrapData(calendarState.currentYear, calendarState.currentMonth, calendarState.siteFilter, calendarState.userFilter, curUsername);
+}
+window.loadCalendarBootstrapData = loadCalendarBootstrapData;
 
 /**
  * อัปเดตข้อมูลผู้ใช้งานบน Navbar ของปฏิทิน
@@ -87,23 +170,35 @@ function updateCalendarNavbarUser() {
 
 /**
  * ซิงค์ข้อมูลไซต์งาน ผู้ใช้งาน และ Task ไปยัง Dropdown ทั้งหมดในปฏิทิน
+ * @param {string} [siteForTaskFilter] ไซต์งานที่ต้องการจัดกลุ่มงานให้แสดงด้านบนในฟอร์ม
  */
-function syncCalendarDropdowns() {
+function syncCalendarDropdowns(siteForTaskFilter) {
   // 1. ซิงค์ไซต์งาน
-  const sites = state.sites && state.sites.length > 0 ? state.sites : (window.DEFAULT_SITES || []);
+  const sourceSites = (calendarState.sites && calendarState.sites.length > 0)
+    ? calendarState.sites
+    : ((state.sites && state.sites.length > 0)
+        ? state.sites
+        : ((state.allSites && state.allSites.length > 0)
+            ? state.allSites
+            : (window.DEFAULT_SITES || [])));
+
   const filterSiteEl = document.getElementById('calFilterSite');
   const formSiteEl = document.getElementById('calFormSite');
 
   if (filterSiteEl) {
     const currentVal = filterSiteEl.value;
     filterSiteEl.innerHTML = '<option value="ALL">🏢 ทุกไซต์งาน</option>' +
-      sites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
-    if (sites.includes(currentVal)) filterSiteEl.value = currentVal;
+      sourceSites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    if (sourceSites.includes(currentVal)) filterSiteEl.value = currentVal;
   }
 
   if (formSiteEl) {
+    const currentFormVal = formSiteEl.value;
     formSiteEl.innerHTML = '<option value="">-- กรุณาเลือกไซต์งาน --</option>' +
-      sites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+      sourceSites.map(s => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+    if (currentFormVal && sourceSites.includes(currentFormVal)) {
+      formSiteEl.value = currentFormVal;
+    }
   }
 
   // 2. ดึงรายชื่อผู้ใช้ถ้ายังไม่มี
@@ -115,12 +210,89 @@ function syncCalendarDropdowns() {
 
   // 3. ซิงค์ Task เชื่อมโยงในฟอร์ม
   const formTaskEl = document.getElementById('calFormTaskId');
-  if (formTaskEl && state.tasks && state.tasks.length > 0) {
-    const activeTasks = state.tasks.filter(t => t.status !== 'เสร็จสิ้น');
-    formTaskEl.innerHTML = '<option value="">-- ไม่ระบุงานเชื่อมโยง --</option>' +
-      activeTasks.map(t => `<option value="${t.id}">[${t.id}] ${escapeHtml(t.title)} (${escapeHtml(t.site)})</option>`).join('');
+  if (formTaskEl) {
+    const currentTaskVal = formTaskEl.value;
+    const allTasks = (calendarState.tasks && calendarState.tasks.length > 0)
+      ? calendarState.tasks
+      : (state.tasks || []);
+
+    const activeTasks = allTasks.filter(t => t.status !== 'เสร็จสิ้น');
+
+    if (activeTasks.length === 0) {
+      formTaskEl.innerHTML = '<option value="">-- ไม่ระบุงานเชื่อมโยง (ไม่มีงานค้าง) --</option>';
+    } else {
+      let optionsHtml = '<option value="">-- ไม่ระบุงานเชื่อมโยง --</option>';
+      const targetSite = siteForTaskFilter || (formSiteEl ? formSiteEl.value : '');
+
+      if (targetSite) {
+        const siteTasks = activeTasks.filter(t => t.site === targetSite);
+        const otherTasks = activeTasks.filter(t => t.site !== targetSite);
+
+        if (siteTasks.length > 0) {
+          optionsHtml += `<optgroup label="📌 งานในไซต์นี้ (${escapeHtml(targetSite)} - ${siteTasks.length} งาน)">` +
+            siteTasks.map(t => `<option value="${escapeHtml(t.id)}">[${escapeHtml(t.id)}] ${escapeHtml(t.title)} (${escapeHtml(t.status)})</option>`).join('') +
+            '</optgroup>';
+        }
+
+        if (otherTasks.length > 0) {
+          optionsHtml += `<optgroup label="📋 งานในไซต์อื่นๆ (${otherTasks.length} งาน)">` +
+            otherTasks.map(t => `<option value="${escapeHtml(t.id)}">[${escapeHtml(t.id)}] ${escapeHtml(t.title)} (${escapeHtml(t.site || 'ไม่ระบุ')})</option>`).join('') +
+            '</optgroup>';
+        }
+      } else {
+        optionsHtml += activeTasks.map(t => `<option value="${escapeHtml(t.id)}">[${escapeHtml(t.id)}] ${escapeHtml(t.title)} (${escapeHtml(t.site || 'ไม่ระบุไซต์')})</option>`).join('');
+      }
+
+      formTaskEl.innerHTML = optionsHtml;
+      if (currentTaskVal) {
+        formTaskEl.value = currentTaskVal;
+      }
+    }
   }
 }
+
+/**
+ * เมื่อมีการเลือกเปลี่ยนไซต์งานเป้าหมายในฟอร์ม
+ * ปรับปรุงรายการงานใน calFormTaskId ให้จัดกลุ่มงานของไซต์ที่เลือกมาไว้ด้านบน
+ */
+function onCalFormSiteChanged(selectedSite) {
+  syncCalendarDropdowns(selectedSite);
+}
+window.onCalFormSiteChanged = onCalFormSiteChanged;
+
+/**
+ * เมื่อมีการเลือกงานที่เชื่อมโยงใน calFormTaskId
+ * ปรับปรุงให้ auto-select calFormSite ตามไซต์ของงานนั้น และแนะนำวัตถุประสงค์งาน
+ */
+function onCalFormTaskChanged(selectedTaskId) {
+  if (!selectedTaskId) return;
+
+  const allTasks = (calendarState.tasks && calendarState.tasks.length > 0)
+    ? calendarState.tasks
+    : (state.tasks || []);
+
+  const task = allTasks.find(t => String(t.id) === String(selectedTaskId));
+  if (!task) return;
+
+  // 1. Auto-select Site ถ้างานนั้นมีไซต์ระบุไว้
+  const formSiteEl = document.getElementById('calFormSite');
+  if (formSiteEl && task.site) {
+    if (formSiteEl.value !== task.site) {
+      formSiteEl.value = task.site;
+      // รีเฟรช dropdown task เพื่อให้ optgroup ตรงกับไซต์ใหม่
+      syncCalendarDropdowns(task.site);
+      const updatedTaskEl = document.getElementById('calFormTaskId');
+      if (updatedTaskEl) updatedTaskEl.value = selectedTaskId;
+    }
+  }
+
+  // 2. แนะนำวัตถุประสงค์งานลงในช่อง calFormPurpose ถ้ายังว่างอยู่
+  const purposeEl = document.getElementById('calFormPurpose');
+  if (purposeEl && (!purposeEl.value || purposeEl.value.trim() === '')) {
+    purposeEl.value = task.title ? `[${task.id}] ${task.title}` : `เข้าดำเนินการงาน ${task.id}`;
+  }
+}
+window.onCalFormTaskChanged = onCalFormTaskChanged;
 
 /**
  * ดึงรายชื่อผู้ใช้จากระบบ
@@ -854,7 +1026,12 @@ function openScheduleModal(dateStr, scheduleId) {
   const notifyCheck = document.getElementById('calFormNotifyTelegram');
   const searchInput = document.getElementById('calUserSearchInput');
 
-  syncCalendarDropdowns();
+  // โหลด Bootstrap Data ทันทีหากยังไม่มีข้อมูลไซต์หรืองาน
+  if (!calendarState.sites || calendarState.sites.length === 0 || !calendarState.tasks || calendarState.tasks.length === 0) {
+    if (typeof loadCalendarBootstrapData === 'function') {
+      loadCalendarBootstrapData();
+    }
+  }
 
   const userRole = String(state.currentUser?.role || '').trim();
   const isAdminOrSup = (userRole === 'Admin' || userRole === 'Supervisor');
@@ -874,6 +1051,9 @@ function openScheduleModal(dateStr, scheduleId) {
       if (submitTextEl) submitTextEl.textContent = 'บันทึกการแก้ไข';
       if (idInput) idInput.value = item.id;
       if (dateInput) dateInput.value = item.date;
+      
+      // ซิงค์ตัวเลือกและจัดกลุ่มงานตามไซต์ของรายการนี้
+      syncCalendarDropdowns(item.site);
       if (siteSelect) siteSelect.value = item.site;
       if (purposeInput) purposeInput.value = item.purpose || '';
       if (taskSelect) taskSelect.value = item.taskId || '';
@@ -889,7 +1069,10 @@ function openScheduleModal(dateStr, scheduleId) {
     const today = new Date();
     const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     if (dateInput) dateInput.value = dateStr || todayIso;
-    if (siteSelect) siteSelect.value = (calendarState.siteFilter !== 'ALL') ? calendarState.siteFilter : '';
+    
+    const initialSite = (calendarState.siteFilter !== 'ALL') ? calendarState.siteFilter : '';
+    syncCalendarDropdowns(initialSite);
+    if (siteSelect) siteSelect.value = initialSite;
     if (purposeInput) purposeInput.value = '';
     if (taskSelect) taskSelect.value = '';
     if (notifyCheck) notifyCheck.checked = true;

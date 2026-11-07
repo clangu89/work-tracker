@@ -210,6 +210,9 @@ function onDataLoaded(response) {
 
   // อัปเดตตัวเลือก Dropdown ไซต์งาน และ ผู้รับผิดชอบ ทั้งหมด
   syncWorkTrackerDropdowns();
+  if (typeof syncCalendarDropdowns === 'function') {
+    syncCalendarDropdowns();
+  }
 
   // กำหนดค่าเริ่มต้นช่วงวันครบกำหนดส่ง (ดีฟอลต์เป็นทั้งหมดทุกช่วงเวลา)
   initDueDateFilter(false);
@@ -6144,6 +6147,12 @@ function enterApp(appKey) {
     if (wtApp) wtApp.classList.add('hidden');
     if (rdpApp) rdpApp.classList.add('hidden');
     if (adminApp) adminApp.classList.add('hidden');
+
+    if (!state.tasks || state.tasks.length === 0 || !state.sites || state.sites.length === 0) {
+      if (typeof loadInitialData === 'function') {
+        loadInitialData();
+      }
+    }
 
     if (typeof initCalendarApp === 'function') {
       initCalendarApp();

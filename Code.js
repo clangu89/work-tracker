@@ -149,6 +149,7 @@ function doPost(e) {
       saveSettings: saveSettings,
       saveSitesList: saveSitesList,
       getSiteSchedules: getSiteSchedules,
+      getCalendarBootstrapData: getCalendarBootstrapData,
       saveSiteSchedule: saveSiteSchedule,
       deleteSiteSchedule: deleteSiteSchedule,
       sendDailySiteScheduleReminders: sendDailySiteScheduleReminders,

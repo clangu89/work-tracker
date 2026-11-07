@@ -185,6 +185,112 @@ function getSiteSchedules(year, month, siteFilter, userFilter) {
 }
 
 /**
+ * ดึงข้อมูลตั้งต้นแบบครบวงจรสำหรับระบบปฏิทินเข้าไซต์งาน (Bootstrap Data)
+ * คืนค่าทั้ง: schedules (ตารางงาน), sites (ไซต์งานทั้งหมด), tasks (งานที่ยังไม่เสร็จสำหรับเชื่อมโยง),
+ * users (ผู้ใช้ที่ Active), และ settings (การตั้งค่าปฏิทิน) ในการเรียกครั้งเดียว
+ */
+function getCalendarBootstrapData(year, month, siteFilter, userFilter, operatorUsername) {
+  try {
+    const ss = getDb_();
+
+    // 1. ดึงตารางงานเข้าไซต์ (Schedules)
+    const schedulesRes = getSiteSchedules(year, month, siteFilter, userFilter);
+    const schedules = (schedulesRes && schedulesRes.success) ? schedulesRes.schedules : [];
+
+    // 2. ดึงการตั้งค่าระบบ (Settings) และรายชื่อไซต์งาน (Sites)
+    let settings = {};
+    if (typeof getSettings_ === 'function') {
+      try { settings = getSettings_(); } catch (e) {}
+    }
+    const siteSet = new Set();
+    if (settings && Array.isArray(settings.SITES)) {
+      settings.SITES.forEach(s => { if (s && String(s).trim()) siteSet.add(String(s).trim()); });
+    }
+    if (typeof DEFAULT_SITES !== 'undefined' && Array.isArray(DEFAULT_SITES)) {
+      DEFAULT_SITES.forEach(s => { if (s && String(s).trim()) siteSet.add(String(s).trim()); });
+    }
+
+    // 3. ดึงงานที่ยังไม่เสร็จสิ้น (Active Tasks) จากชีต Tasks
+    const activeTasks = [];
+    const taskSheet = ss.getSheetByName(typeof SHEET_TASKS !== 'undefined' ? SHEET_TASKS : 'Tasks');
+    if (taskSheet) {
+      const taskData = taskSheet.getDataRange().getValues();
+      for (let i = 1; i < taskData.length; i++) {
+        const row = taskData[i];
+        if (!row[0]) continue;
+        const status = String(row[6] || '').trim();
+        const taskSite = String(row[1] || '').trim();
+        if (taskSite) siteSet.add(taskSite);
+
+        // ดึงเฉพาะงานที่ยังไม่เสร็จสิ้น (รอดำเนินการ, กำลังดำเนินการ, รอตรวจสอบ)
+        if (status !== 'เสร็จสิ้น') {
+          activeTasks.push({
+            id: String(row[0]).trim(),
+            site: taskSite,
+            title: String(row[2] || '').trim(),
+            description: String(row[3] || '').trim(),
+            assignee: String(row[4] || '').trim(),
+            priority: String(row[5] || 'ทั่วไป').trim(),
+            status: status || 'รอดำเนินการ',
+            dueDate: row[7] ? (typeof normalizeDateToIso_ === 'function' ? normalizeDateToIso_(row[7]) : String(row[7])) : ''
+          });
+        }
+      }
+    }
+
+    // 4. ดึงรายชื่อผู้ใช้งานที่เปิดใช้งาน (Active Users)
+    const activeUsers = [];
+    const userSheet = ss.getSheetByName(typeof SHEET_USERS !== 'undefined' ? SHEET_USERS : 'Users');
+    if (userSheet) {
+      const uData = userSheet.getDataRange().getValues();
+      for (let i = 1; i < uData.length; i++) {
+        const uRow = uData[i];
+        if (!uRow[0]) continue;
+        const uStatus = String(uRow[4] || 'Active').trim();
+        if (uStatus === 'Inactive') continue;
+        activeUsers.push({
+          username: String(uRow[0]).trim(),
+          fullName: String(uRow[1] || uRow[0]).trim(),
+          role: String(uRow[3] || 'Member').trim(),
+          status: uStatus
+        });
+      }
+    }
+
+    const sitesList = Array.from(siteSet);
+
+    return {
+      success: true,
+      schedules: schedules,
+      sites: sitesList,
+      tasks: activeTasks,
+      users: activeUsers,
+      settings: {
+        CALENDAR_ENABLE_ADVANCE_REMINDER: settings.CALENDAR_ENABLE_ADVANCE_REMINDER !== false,
+        CALENDAR_REMINDER_DAYS_BEFORE: settings.CALENDAR_REMINDER_DAYS_BEFORE || '1',
+        CALENDAR_REMINDER_TIME: settings.CALENDAR_REMINDER_TIME || '07:00',
+        CALENDAR_NOTIFY_ON_SCHEDULE: settings.CALENDAR_NOTIFY_ON_SCHEDULE !== false,
+        CALENDAR_NOTIFY_SITE_GROUP: settings.CALENDAR_NOTIFY_SITE_GROUP !== false,
+        CALENDAR_NOTIFY_MAIN_GROUP: settings.CALENDAR_NOTIFY_MAIN_GROUP === true,
+        CALENDAR_FIRST_DAY_OF_WEEK: settings.CALENDAR_FIRST_DAY_OF_WEEK || '0',
+        CALENDAR_MEMBER_CAN_SCHEDULE: settings.CALENDAR_MEMBER_CAN_SCHEDULE === true,
+        CALENDAR_MAX_CHIPS_PER_CELL: settings.CALENDAR_MAX_CHIPS_PER_CELL || '3'
+      }
+    };
+  } catch (error) {
+    console.error('getCalendarBootstrapData error: ' + error.message);
+    return {
+      success: false,
+      message: error.message,
+      schedules: [],
+      sites: typeof DEFAULT_SITES !== 'undefined' ? DEFAULT_SITES : [],
+      tasks: [],
+      users: []
+    };
+  }
+}
+
+/**
  * บันทึกกำหนดการเข้าไซต์งาน (เฉพาะ Admin / Supervisor)
  * @param {Object} scheduleData ข้อมูลกำหนดการ
  * @param {string} operatorUsername ผู้ทำรายการ

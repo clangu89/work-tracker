@@ -263,7 +263,7 @@
           <label class="block font-bold text-[#201E1C] mb-1.5">
             ไซต์งานเป้าหมาย <span class="text-rose-500">*</span>
           </label>
-          <select id="calFormSite" required
+          <select id="calFormSite" required onchange="onCalFormSiteChanged(this.value)"
                   class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
             <option value="">-- กรุณาเลือกไซต์งาน --</option>
           </select>
@@ -320,7 +320,7 @@
           <label class="block font-bold text-[#201E1C] mb-1.5">
             เชื่อมโยงกับงาน / Plan (ถ้ามี)
           </label>
-          <select id="calFormTaskId"
+          <select id="calFormTaskId" onchange="onCalFormTaskChanged(this.value)"
                   class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
             <option value="">-- ไม่ระบุงานเชื่อมโยง --</option>
           </select>
