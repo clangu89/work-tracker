@@ -772,10 +772,13 @@ function renderCalendarCellHtml(dayNum, dateStr, items, isCurrentMonth, isToday,
       : { bg: 'bg-emerald-50', text: 'text-emerald-800', border: 'border-emerald-200' };
 
     return `
-      <div class="px-1.5 py-0.5 rounded-lg text-[10px] font-semibold truncate border ${siteColor.bg} ${siteColor.text} ${siteColor.border} flex items-center gap-1 shadow-2xs"
-           title="[${escapeHtml(item.site)}] ${escapeHtml(item.fullName)}: ${escapeHtml(item.purpose || 'เข้าไซต์งาน')}">
+      <div class="px-1.5 py-0.5 rounded-lg text-[10px] font-semibold border ${siteColor.bg} ${siteColor.text} ${siteColor.border} flex items-center gap-1 shadow-2xs overflow-hidden"
+           title="[${escapeHtml(item.site)}] ${escapeHtml(item.fullName || item.username)}: ${escapeHtml(item.purpose || 'เข้าไซต์งาน')}">
         <span class="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0"></span>
-        <span class="truncate font-bold">${escapeHtml(item.fullName || item.username)}</span>
+        <span class="truncate font-bold flex-1 min-w-0">
+          ${escapeHtml(item.fullName || item.username)}
+          <span class="font-normal opacity-85 text-[9px] ml-1">(${escapeHtml(item.site || '-')})</span>
+        </span>
       </div>
     `;
   }).join('');
