@@ -269,15 +269,41 @@
           </select>
         </div>
 
-        <!-- ผู้ปฏิบัติงาน -->
+        <!-- ผู้ปฏิบัติงาน (Multi-Select) -->
         <div>
-          <label class="block font-bold text-[#201E1C] mb-1.5">
-            ผู้ปฏิบัติงาน (User) <span class="text-rose-500">*</span>
-          </label>
-          <select id="calFormUser" required
-                  class="w-full px-3 py-2.5 bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl text-[#201E1C] font-medium focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 focus:bg-white outline-none cursor-pointer">
-            <option value="">-- กรุณาเลือกผู้ปฏิบัติงาน --</option>
-          </select>
+          <div class="flex items-center justify-between mb-1.5">
+            <label class="block font-bold text-[#201E1C]">
+              ผู้ปฏิบัติงาน (เลือกได้หลายคน) <span class="text-rose-500">*</span>
+            </label>
+            <div class="flex items-center gap-2">
+              <span id="calSelectedUsersCount" class="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                เลือกแล้ว 0 คน
+              </span>
+              <div id="calUserQuickSelectBtns" class="flex items-center gap-1.5 text-[11px]">
+                <button type="button" onclick="selectAllCalModalUsers(true)" class="text-[#2491FA] hover:underline font-bold cursor-pointer">เลือกทั้งหมด</button>
+                <span class="text-[#D6CEBF]">|</span>
+                <button type="button" onclick="selectAllCalModalUsers(false)" class="text-[#6E6862] hover:text-[#201E1C] hover:underline font-medium cursor-pointer">ล้าง</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- กล่องค้นหาผู้ปฏิบัติงาน -->
+          <div class="relative mb-2">
+            <i class="fa-solid fa-magnifying-glass absolute left-3 top-2.5 text-[#9E9890] text-xs"></i>
+            <input type="text" id="calUserSearchInput" placeholder="ค้นหาชื่อช่าง / ผู้ปฏิบัติงาน..." oninput="filterCalModalUsers(this.value)"
+                   class="w-full pl-8 pr-3 py-1.5 text-xs bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 text-[#201E1C]">
+          </div>
+
+          <!-- ชิปแสดงรายชื่อช่างที่เลือก (Selected User Chips) -->
+          <div id="calSelectedUsersTags" class="flex flex-wrap gap-1 mb-2 empty:hidden"></div>
+
+          <!-- รายการผู้ปฏิบัติงานแบบ Scrollable Checklist -->
+          <div id="calUsersChecklist" class="max-h-44 overflow-y-auto space-y-1.5 pr-1 border border-[#EFE9DC] rounded-2xl p-2 bg-[#FAF8F2]/60">
+            <!-- Dynamic Users Checklist Items -->
+          </div>
+
+          <!-- Hidden Input for Form Submission Fallback -->
+          <input type="hidden" id="calFormUser" value="">
         </div>
 
         <!-- วัตถุประสงค์ / งานที่ต้องทำ -->

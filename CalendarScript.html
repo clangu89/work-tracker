@@ -15,6 +15,8 @@ const calendarState = {
   siteFilter: 'ALL',
   userFilter: 'ALL',
   myScheduleOnly: false,
+  modalSelectedUsers: new Set(),
+  modalUserSearchKeyword: '',
   isLoading: false,
   isInitialized: false
 };
@@ -158,6 +160,201 @@ function populateCalendarUserDropdowns(users) {
     formUserEl.innerHTML = '<option value="">-- กรุณาเลือกผู้ปฏิบัติงาน --</option>' +
       activeUsers.map(u => `<option value="${escapeHtml(u.username)}" data-fullname="${escapeHtml(u.fullName || u.username)}">${escapeHtml(u.fullName || u.username)} (${u.role || 'Member'})</option>`).join('');
   }
+
+  // เรนเดอร์ Checklist ผู้ปฏิบัติงานใน Modal
+  renderModalUsersChecklist();
+}
+
+/**
+ * เรนเดอร์รายการผู้ปฏิบัติงานใน Modal ลงตารางเข้าไซต์งาน (รองรับเลือกหลายคน)
+ */
+function renderModalUsersChecklist() {
+  const container = document.getElementById('calUsersChecklist');
+  const countBadge = document.getElementById('calSelectedUsersCount');
+  const tagsContainer = document.getElementById('calSelectedUsersTags');
+  const hiddenInput = document.getElementById('calFormUser');
+  const quickBtns = document.getElementById('calUserQuickSelectBtns');
+  if (!container) return;
+
+  const users = (calendarState.usersList || []).filter(u => u.status !== 'Inactive');
+  const curUserRole = String(state.currentUser?.role || '').trim();
+  const isMember = (curUserRole !== 'Admin' && curUserRole !== 'Supervisor');
+  const curUsername = state.currentUser ? state.currentUser.username : '';
+
+  // หากเป็น Member ล็อกให้เลือกเฉพาะตนเองเท่านั้น
+  if (isMember) {
+    calendarState.modalSelectedUsers.clear();
+    if (curUsername) calendarState.modalSelectedUsers.add(curUsername);
+    if (quickBtns) quickBtns.classList.add('hidden');
+  } else {
+    if (quickBtns) quickBtns.classList.remove('hidden');
+  }
+
+  // 1. อัปเดตป้ายจำนวน
+  const selCount = calendarState.modalSelectedUsers.size;
+  if (countBadge) {
+    countBadge.textContent = `เลือกแล้ว ${selCount} คน`;
+    if (selCount > 0) {
+      countBadge.className = 'text-[11px] font-bold text-emerald-800 bg-emerald-100/90 px-2.5 py-0.5 rounded-full border border-emerald-300 shadow-2xs';
+    } else {
+      countBadge.className = 'text-[11px] font-bold text-[#6E6862] bg-[#FAF8F2] px-2.5 py-0.5 rounded-full border border-[#EFE9DC]';
+    }
+  }
+
+  if (hiddenInput) {
+    hiddenInput.value = Array.from(calendarState.modalSelectedUsers).join(',');
+  }
+
+  // 2. เรนเดอร์ชิปรายชื่อที่ถูกเลือก (Selected User Chips)
+  if (tagsContainer) {
+    if (selCount === 0) {
+      tagsContainer.innerHTML = '';
+      tagsContainer.classList.add('hidden');
+    } else {
+      tagsContainer.classList.remove('hidden');
+      const selectedChips = Array.from(calendarState.modalSelectedUsers).map(uName => {
+        const u = users.find(x => x.username.toLowerCase() === uName.toLowerCase()) || { username: uName, fullName: uName };
+        const displayName = escapeHtml(u.fullName || u.username);
+        return `
+          <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-900 border border-emerald-200/90 shadow-2xs animate-in fade-in duration-150">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>${displayName}</span>
+            ${!isMember ? `
+              <button type="button" onclick="event.stopPropagation(); removeCalSelectedUser('${escapeHtml(u.username)}')" 
+                      class="w-3.5 h-3.5 rounded-full hover:bg-emerald-200/80 text-emerald-700 flex items-center justify-center transition-colors cursor-pointer text-[10px] ml-0.5"
+                      title="ลบออก">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            ` : ''}
+          </span>
+        `;
+      }).join('');
+      tagsContainer.innerHTML = selectedChips;
+    }
+  }
+
+  // 3. กรองตามคำค้นหา
+  const query = (calendarState.modalUserSearchKeyword || '').toLowerCase().trim();
+  const filteredUsers = users.filter(u => {
+    if (!query) return true;
+    const fn = (u.fullName || '').toLowerCase();
+    const un = (u.username || '').toLowerCase();
+    return fn.includes(query) || un.includes(query);
+  });
+
+  if (filteredUsers.length === 0) {
+    container.innerHTML = `
+      <div class="py-6 text-center text-xs text-[#9E9890]">
+        <i class="fa-solid fa-user-slash text-base mb-1 block text-[#C4BEB4]"></i>
+        <span>ไม่พบรายชื่อผู้ปฏิบัติงานที่ค้นหา</span>
+      </div>
+    `;
+    return;
+  }
+
+  // 4. เรนเดอร์รายการช่างแบบ Checklist
+  container.innerHTML = filteredUsers.map(u => {
+    const isChecked = calendarState.modalSelectedUsers.has(u.username);
+    const initial = (u.fullName || u.username).substring(0, 1).toUpperCase();
+    
+    let roleBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-[#EDE7DA] text-[#6E6862]">Member</span>';
+    if (u.role === 'Admin') {
+      roleBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">Admin</span>';
+    } else if (u.role === 'Supervisor') {
+      roleBadge = '<span class="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">Supervisor</span>';
+    }
+
+    const rowBg = isChecked 
+      ? 'bg-emerald-50/80 border-emerald-300 ring-1 ring-emerald-500/20 shadow-2xs' 
+      : 'bg-white hover:bg-[#FAF8F2] border-[#EFE9DC]';
+
+    const isLockedMember = (isMember && u.username !== curUsername);
+    const disabledClass = isLockedMember ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-[0.99]';
+    const clickHandler = isLockedMember ? '' : `onclick="toggleCalModalUser('${escapeHtml(u.username)}')"` ;
+
+    return `
+      <div ${clickHandler}
+           class="flex items-center justify-between p-2 rounded-xl border transition-all select-none ${rowBg} ${disabledClass}">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <input type="checkbox" ${isChecked ? 'checked' : ''} ${isLockedMember ? 'disabled' : ''}
+                 onclick="event.stopPropagation(); toggleCalModalUser('${escapeHtml(u.username)}')"
+                 class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 border-[#D6CEBF] cursor-pointer">
+          <div class="w-7 h-7 rounded-full bg-[#EDE7DA] text-[#201E1C] font-bold text-xs flex items-center justify-center shrink-0">
+            ${escapeHtml(initial)}
+          </div>
+          <div class="min-w-0">
+            <div class="font-bold text-xs text-[#201E1C] truncate leading-tight">
+              ${escapeHtml(u.fullName || u.username)}
+            </div>
+            <div class="text-[10px] text-[#6E6862] font-mono truncate">
+              @${escapeHtml(u.username)}
+            </div>
+          </div>
+        </div>
+        <div class="shrink-0 ml-2">
+          ${roleBadge}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * สลับสถานะเลือกผู้ใช้ใน Modal
+ */
+function toggleCalModalUser(username) {
+  if (!username) return;
+  const curUserRole = String(state.currentUser?.role || '').trim();
+  if (curUserRole !== 'Admin' && curUserRole !== 'Supervisor') {
+    return; // Member ไม่สามารถเปลี่ยนเป็นคนอื่นได้
+  }
+
+  if (calendarState.modalSelectedUsers.has(username)) {
+    calendarState.modalSelectedUsers.delete(username);
+  } else {
+    calendarState.modalSelectedUsers.add(username);
+  }
+
+  renderModalUsersChecklist();
+}
+
+/**
+ * ลบผู้ใช้ที่เลือกออกจากชิป
+ */
+function removeCalSelectedUser(username) {
+  if (!username) return;
+  const curUserRole = String(state.currentUser?.role || '').trim();
+  if (curUserRole !== 'Admin' && curUserRole !== 'Supervisor') return;
+
+  calendarState.modalSelectedUsers.delete(username);
+  renderModalUsersChecklist();
+}
+
+/**
+ * เลือกทั้งหมด หรือ ล้างการเลือก
+ */
+function selectAllCalModalUsers(selectAll) {
+  const curUserRole = String(state.currentUser?.role || '').trim();
+  if (curUserRole !== 'Admin' && curUserRole !== 'Supervisor') return;
+
+  const users = (calendarState.usersList || []).filter(u => u.status !== 'Inactive');
+  if (selectAll) {
+    users.forEach(u => calendarState.modalSelectedUsers.add(u.username));
+    showToast(`เลือกผู้ปฏิบัติงานทั้งหมด ${calendarState.modalSelectedUsers.size} คน`, "info", 1200);
+  } else {
+    calendarState.modalSelectedUsers.clear();
+    showToast("ล้างรายชื่อผู้ปฏิบัติงานที่เลือกแล้ว", "info", 1000);
+  }
+
+  renderModalUsersChecklist();
+}
+
+/**
+ * ค้นหารายชื่อช่างใน Modal
+ */
+function filterCalModalUsers(query) {
+  calendarState.modalUserSearchKeyword = query || '';
+  renderModalUsersChecklist();
 }
 
 /**
@@ -652,15 +849,19 @@ function openScheduleModal(dateStr, scheduleId) {
   const idInput = document.getElementById('calFormScheduleId');
   const dateInput = document.getElementById('calFormDate');
   const siteSelect = document.getElementById('calFormSite');
-  const userSelect = document.getElementById('calFormUser');
   const purposeInput = document.getElementById('calFormPurpose');
   const taskSelect = document.getElementById('calFormTaskId');
   const notifyCheck = document.getElementById('calFormNotifyTelegram');
+  const searchInput = document.getElementById('calUserSearchInput');
 
   syncCalendarDropdowns();
 
   const userRole = String(state.currentUser?.role || '').trim();
   const isAdminOrSup = (userRole === 'Admin' || userRole === 'Supervisor');
+
+  // รีเซ็ตการค้นหาช่าง
+  calendarState.modalUserSearchKeyword = '';
+  if (searchInput) searchInput.value = '';
 
   if (scheduleId) {
     const item = calendarState.schedules.find(s => s.id === scheduleId);
@@ -674,10 +875,12 @@ function openScheduleModal(dateStr, scheduleId) {
       if (idInput) idInput.value = item.id;
       if (dateInput) dateInput.value = item.date;
       if (siteSelect) siteSelect.value = item.site;
-      if (userSelect) userSelect.value = item.username;
       if (purposeInput) purposeInput.value = item.purpose || '';
       if (taskSelect) taskSelect.value = item.taskId || '';
       if (notifyCheck) notifyCheck.checked = true;
+
+      // เลือกช่างของรายการนี้ไว้
+      calendarState.modalSelectedUsers = new Set([item.username]);
     }
   } else {
     if (titleEl) titleEl.textContent = 'ลงตารางเข้าไซต์งาน';
@@ -687,16 +890,22 @@ function openScheduleModal(dateStr, scheduleId) {
     const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     if (dateInput) dateInput.value = dateStr || todayIso;
     if (siteSelect) siteSelect.value = (calendarState.siteFilter !== 'ALL') ? calendarState.siteFilter : '';
-    if (userSelect) userSelect.value = !isAdminOrSup ? (state.currentUser?.username || '') : ((calendarState.userFilter !== 'ALL') ? calendarState.userFilter : '');
     if (purposeInput) purposeInput.value = '';
     if (taskSelect) taskSelect.value = '';
     if (notifyCheck) notifyCheck.checked = true;
+
+    // ค่าเริ่มต้นสำหรับเลือกช่าง
+    if (!isAdminOrSup && state.currentUser) {
+      calendarState.modalSelectedUsers = new Set([state.currentUser.username]);
+    } else if (calendarState.userFilter !== 'ALL') {
+      calendarState.modalSelectedUsers = new Set([calendarState.userFilter]);
+    } else {
+      calendarState.modalSelectedUsers = new Set();
+    }
   }
 
-  // ล็อค Dropdown ผู้ปฏิบัติงาน หากเป็น Member ลงคิวตนเอง
-  if (userSelect) {
-    userSelect.disabled = !isAdminOrSup;
-  }
+  // เรนเดอร์ Checklist ช่าง
+  renderModalUsersChecklist();
 
   if (modal) modal.classList.remove('hidden');
 }
@@ -707,8 +916,10 @@ function openScheduleModal(dateStr, scheduleId) {
 function closeScheduleModal() {
   const modal = document.getElementById('modalSiteSchedule');
   if (modal) modal.classList.add('hidden');
-  const userSelect = document.getElementById('calFormUser');
-  if (userSelect) userSelect.disabled = false;
+  calendarState.modalSelectedUsers.clear();
+  calendarState.modalUserSearchKeyword = '';
+  const searchInput = document.getElementById('calUserSearchInput');
+  if (searchInput) searchInput.value = '';
 }
 
 /**
@@ -753,35 +964,46 @@ function handleScheduleFormSubmit(event) {
   const id = document.getElementById('calFormScheduleId')?.value || '';
   const date = document.getElementById('calFormDate')?.value || '';
   const site = document.getElementById('calFormSite')?.value || '';
-  const userSelect = document.getElementById('calFormUser');
-  const userRole = String(state.currentUser?.role || '').trim();
-  const isAdminOrSup = (userRole === 'Admin' || userRole === 'Supervisor');
-
-  let username = userSelect?.value || '';
-  if (!isAdminOrSup && state.currentUser) {
-    username = state.currentUser.username;
-  }
-
-  let fullName = userSelect?.options[userSelect.selectedIndex]?.getAttribute('data-fullname') || '';
-  if (!isAdminOrSup && state.currentUser) {
-    fullName = state.currentUser.fullName || state.currentUser.username;
-  }
-
   const purpose = document.getElementById('calFormPurpose')?.value || '';
   const taskId = document.getElementById('calFormTaskId')?.value || '';
   const notifyTelegram = document.getElementById('calFormNotifyTelegram')?.checked ?? true;
 
-  if (!date || !site || !username) {
-    showToast('กรุณากรอก วันที่, ไซต์งาน, และผู้ปฏิบัติงานให้ครบถ้วน', 'warning');
+  const userRole = String(state.currentUser?.role || '').trim();
+  const isAdminOrSup = (userRole === 'Admin' || userRole === 'Supervisor');
+
+  // ตรวจสอบช่างที่เลือก
+  let usernames = Array.from(calendarState.modalSelectedUsers);
+  if (!isAdminOrSup && state.currentUser) {
+    usernames = [state.currentUser.username];
+  }
+
+  if (!date || !site) {
+    showToast('กรุณากรอก วันที่ และ ไซต์งาน ให้ครบถ้วน', 'warning');
     return;
   }
+
+  if (usernames.length === 0) {
+    showToast('กรุณาเลือกผู้ปฏิบัติงานอย่างน้อย 1 คน', 'warning');
+    return;
+  }
+
+  const usersList = calendarState.usersList || [];
+  const userDetails = usernames.map(uName => {
+    const found = usersList.find(u => String(u.username).toLowerCase() === String(uName).toLowerCase());
+    return {
+      username: uName,
+      fullName: found ? (found.fullName || found.username) : uName
+    };
+  });
 
   const scheduleData = {
     id: id,
     date: date,
     site: site,
-    username: username,
-    fullName: fullName,
+    usernames: usernames,
+    usersDetail: userDetails,
+    username: usernames[0], // backward compatibility
+    fullName: userDetails[0]?.fullName || usernames[0],
     purpose: purpose,
     taskId: taskId,
     notifyTelegram: notifyTelegram

@@ -198,8 +198,22 @@ function saveSiteSchedule(scheduleData, operatorUsername) {
     // 1. ตรวจสอบสิทธิ์ (เฉพาะ Admin / Supervisor หรือ Member ที่ได้รับอนุญาตให้ลงคิวตนเอง)
     const settings = (typeof getSettings_ === 'function') ? getSettings_() : null;
     const isAdminOrSup = checkIsAdminOrSupervisor_(operatorUsername);
+
+    // ดึงรายชื่อผู้ปฏิบัติงานที่ส่งมา (รองรับทั้ง usernames Array และ username String)
+    let usernames = [];
+    if (Array.isArray(scheduleData.usernames) && scheduleData.usernames.length > 0) {
+      usernames = scheduleData.usernames.map(u => String(u || '').trim()).filter(Boolean);
+    } else if (scheduleData.username) {
+      usernames = [String(scheduleData.username).trim()];
+    }
+
+    if (usernames.length === 0) {
+      return { success: false, message: 'กรุณาระบุผู้ปฏิบัติงานอย่างน้อย 1 คน' };
+    }
+
+    // หากเป็น Member ตรวจสอบว่าเลือกเฉพาะตัวเองหรือไม่
     const isMemberSelfSchedule = (settings && settings.CALENDAR_MEMBER_CAN_SCHEDULE === true && 
-      String(operatorUsername || '').trim().toLowerCase() === String(scheduleData.username || '').trim().toLowerCase());
+      usernames.length === 1 && String(operatorUsername || '').trim().toLowerCase() === usernames[0].toLowerCase());
 
     if (!isAdminOrSup && !isMemberSelfSchedule) {
       return { 
@@ -211,106 +225,166 @@ function saveSiteSchedule(scheduleData, operatorUsername) {
     // 2. ตรวจสอบข้อมูลบังคับ
     const dateIso = formatDateIso_(scheduleData.date);
     const site = String(scheduleData.site || '').trim();
-    const username = String(scheduleData.username || '').trim();
 
-    if (!dateIso || !site || !username) {
-      return { success: false, message: 'กรุณาระบุ วันที่, ไซต์งาน, และผู้ปฏิบัติงานให้ครบถ้วน' };
+    if (!dateIso || !site) {
+      return { success: false, message: 'กรุณาระบุ วันที่ และ ไซต์งาน ให้ครบถ้วน' };
     }
 
     const purpose = String(scheduleData.purpose || '').trim();
     const taskId = String(scheduleData.taskId || '').trim();
 
-    // ค้นหา FullName ของผู้ปฏิบัติงาน
-    let fullName = String(scheduleData.fullName || '').trim();
     const ss = getDb_();
-    if (!fullName) {
-      const uSheet = ss.getSheetByName(SHEET_USERS);
-      if (uSheet) {
-        const uData = uSheet.getDataRange().getValues();
-        for (let i = 1; i < uData.length; i++) {
-          if (String(uData[i][0] || '').trim().toLowerCase() === username.toLowerCase()) {
-            fullName = String(uData[i][1] || '').trim();
-            break;
-          }
-        }
-      }
-    }
-    if (!fullName) fullName = username;
-
     let sheet = ss.getSheetByName(SHEET_SITE_SCHEDULES);
     if (!sheet) {
       sheet = setupSiteSchedulesDatabase_(ss);
     }
 
-    const data = sheet.getDataRange().getValues();
-    let targetRow = -1;
-    let scheduleId = scheduleData.id ? String(scheduleData.id).trim() : '';
+    // ดึง FullName ของผู้ใช้งานจากชีต Users
+    const usersMap = {};
+    const uSheet = ss.getSheetByName(SHEET_USERS);
+    if (uSheet) {
+      const uData = uSheet.getDataRange().getValues();
+      for (let i = 1; i < uData.length; i++) {
+        const u = String(uData[i][0] || '').trim().toLowerCase();
+        usersMap[u] = String(uData[i][1] || '').trim();
+      }
+    }
+
+    const nowStr = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+    const savedRecords = [];
+    const scheduleId = scheduleData.id ? String(scheduleData.id).trim() : '';
 
     if (scheduleId) {
+      // โหมดแก้ไขรายการเดิม (Update single schedule)
+      const data = sheet.getDataRange().getValues();
+      let targetRow = -1;
       for (let i = 1; i < data.length; i++) {
         if (String(data[i][0] || '').trim() === scheduleId) {
           targetRow = i + 1;
           break;
         }
       }
-    }
 
-    const nowStr = Utilities.formatDate(new Date(), 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+      if (targetRow > 0) {
+        const uName = usernames[0];
+        const fName = usersMap[uName.toLowerCase()] || uName;
 
-    if (targetRow > 0) {
-      // อัปเดตรายการเดิม
-      sheet.getRange(targetRow, 2).setValue(dateIso);
-      sheet.getRange(targetRow, 3).setValue(site);
-      sheet.getRange(targetRow, 4).setValue(username);
-      sheet.getRange(targetRow, 5).setValue(fullName);
-      sheet.getRange(targetRow, 6).setValue(purpose);
-      sheet.getRange(targetRow, 7).setValue(taskId);
-      sheet.getRange(targetRow, 8).setValue(operatorUsername || 'admin');
-      sheet.getRange(targetRow, 9).setValue(nowStr);
-      // รีเซ็ต ReminderSent เป็น FALSE หากมีการเปลี่ยนวัน
-      sheet.getRange(targetRow, 10).setValue(false);
+        sheet.getRange(targetRow, 2).setValue(dateIso);
+        sheet.getRange(targetRow, 3).setValue(site);
+        sheet.getRange(targetRow, 4).setValue(uName);
+        sheet.getRange(targetRow, 5).setValue(fName);
+        sheet.getRange(targetRow, 6).setValue(purpose);
+        sheet.getRange(targetRow, 7).setValue(taskId);
+        sheet.getRange(targetRow, 8).setValue(operatorUsername || 'admin');
+        sheet.getRange(targetRow, 9).setValue(nowStr);
+        sheet.getRange(targetRow, 10).setValue(false);
+
+        savedRecords.push({
+          id: scheduleId,
+          date: dateIso,
+          site: site,
+          username: uName,
+          fullName: fName,
+          purpose: purpose,
+          taskId: taskId,
+          createdBy: operatorUsername || 'admin'
+        });
+
+        // หากมีการเลือกช่างเพิ่มในขณะแก้ไข ให้บันทึกเพิ่มเป็นแถวใหม่
+        for (let j = 1; j < usernames.length; j++) {
+          const addU = usernames[j];
+          const addF = usersMap[addU.toLowerCase()] || addU;
+          const addId = `SCH-${dateIso.replace(/-/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+          sheet.appendRow([
+            addId,
+            dateIso,
+            site,
+            addU,
+            addF,
+            purpose,
+            taskId,
+            operatorUsername || 'admin',
+            nowStr,
+            false
+          ]);
+
+          savedRecords.push({
+            id: addId,
+            date: dateIso,
+            site: site,
+            username: addU,
+            fullName: addF,
+            purpose: purpose,
+            taskId: taskId,
+            createdBy: operatorUsername || 'admin'
+          });
+        }
+      }
     } else {
-      // เพิ่มรายการใหม่
-      const randSuffix = Math.floor(1000 + Math.random() * 9000);
-      scheduleId = `SCH-${dateIso.replace(/-/g, '')}-${randSuffix}`;
-      sheet.appendRow([
-        scheduleId,
-        dateIso,
-        site,
-        username,
-        fullName,
-        purpose,
-        taskId,
-        operatorUsername || 'admin',
-        nowStr,
-        false
-      ]);
-    }
+      // โหมดสร้างรายการใหม่ (รองรับหลายคนพร้อมกันในคลิกเดียว)
+      for (let i = 0; i < usernames.length; i++) {
+        const uName = usernames[i];
+        const fName = usersMap[uName.toLowerCase()] || uName;
+        const randSuffix = Math.floor(1000 + Math.random() * 9000);
+        const newScheduleId = `SCH-${dateIso.replace(/-/g, '')}-${randSuffix}`;
 
-    const savedRecord = {
-      id: scheduleId,
-      date: dateIso,
-      site: site,
-      username: username,
-      fullName: fullName,
-      purpose: purpose,
-      taskId: taskId,
-      createdBy: operatorUsername || 'admin'
-    };
+        sheet.appendRow([
+          newScheduleId,
+          dateIso,
+          site,
+          uName,
+          fName,
+          purpose,
+          taskId,
+          operatorUsername || 'admin',
+          nowStr,
+          false
+        ]);
+
+        savedRecords.push({
+          id: newScheduleId,
+          date: dateIso,
+          site: site,
+          username: uName,
+          fullName: fName,
+          purpose: purpose,
+          taskId: taskId,
+          createdBy: operatorUsername || 'admin'
+        });
+      }
+    }
 
     // 3. ส่งการแจ้งเตือนทันทีทาง Telegram (Immediate Alert)
-    if (scheduleData.notifyTelegram !== false) {
+    if (scheduleData.notifyTelegram !== false && savedRecords.length > 0) {
       try {
-        notifyTelegramSiteSchedule_(savedRecord, operatorUsername);
+        if (savedRecords.length === 1) {
+          // หากมีคนเดียว ส่งตามปกติ (ทั้งส่วนตัวและกลุ่ม)
+          notifyTelegramSiteSchedule_(savedRecords[0], operatorUsername, false);
+        } else {
+          // หากมีหลายคน ส่งตรงส่วนตัวทีละคน (skipGroup = true)
+          savedRecords.forEach(rec => {
+            notifyTelegramSiteSchedule_(rec, operatorUsername, true);
+          });
+          // ส่งข้อความรวมสรุปรายชื่อทีมงานเข้ากลุ่มไซต์งานและกลุ่มหลักเพียง 1 ข้อความ (ไม่สแปมกลุ่ม)
+          notifyTelegramCombinedSiteSchedule_(savedRecords, operatorUsername);
+        }
       } catch (tgErr) {
         console.error('Telegram notification failed: ' + tgErr.message);
       }
     }
 
+    const count = savedRecords.length;
+    const msg = count > 1
+      ? `ลงตารางเข้าไซต์งานเรียบร้อยแล้ว (${count} คน)`
+      : 'บันทึกกำหนดการเข้าไซต์งานเรียบร้อยแล้ว';
+
     return { 
       success: true, 
-      schedule: savedRecord, 
-      message: 'บันทึกกำหนดการเข้าไซต์งานเรียบร้อยแล้ว' 
+      count: count,
+      schedule: savedRecords[0], 
+      schedules: savedRecords,
+      message: msg 
     };
   } catch (error) {
     console.error('saveSiteSchedule error: ' + error.message);
@@ -372,7 +446,7 @@ function deleteSiteSchedule(scheduleId, operatorUsername) {
 /**
  * ส่งแจ้งเตือนทาง Telegram เมื่อมีการลงตารางนัดหมายเข้าไซต์งาน (Immediate Alert)
  */
-function notifyTelegramSiteSchedule_(schedule, operatorUsername) {
+function notifyTelegramSiteSchedule_(schedule, operatorUsername, skipGroup = false) {
   try {
     const settings = (typeof getSettings_ === 'function') ? getSettings_() : null;
     if (!settings || !settings.TELEGRAM_BOT_TOKEN) return;
@@ -408,6 +482,9 @@ function notifyTelegramSiteSchedule_(schedule, operatorUsername) {
       }
     }
 
+    // หากระบุ skipGroup ให้ข้ามการส่งเข้ากลุ่มไซต์งานและกลุ่มส่วนกลาง (ใช้กรณีมีฟังก์ชัน combined ส่งให้แทน)
+    if (skipGroup) return;
+
     // 2. หากเปิดส่งเข้ากลุ่มไซต์งาน และไซต์นี้มี Telegram Group ให้ส่งด้วย
     if (settings.CALENDAR_NOTIFY_SITE_GROUP !== false && settings.SITE_TELEGRAM_CHAT_IDS && settings.SITE_TELEGRAM_CHAT_IDS[schedule.site]) {
       const siteChatId = String(settings.SITE_TELEGRAM_CHAT_IDS[schedule.site]).trim();
@@ -433,6 +510,68 @@ function notifyTelegramSiteSchedule_(schedule, operatorUsername) {
     }
   } catch (e) {
     console.error('notifyTelegramSiteSchedule_ error: ' + e.message);
+  }
+}
+
+/**
+ * ส่งแจ้งเตือนสรุปรายชื่อทีมงานเข้ากลุ่ม Telegram (Site Group & Main Group) เมื่อมีการลงตารางพร้อมกันหลายคน
+ */
+function notifyTelegramCombinedSiteSchedule_(schedules, operatorUsername) {
+  if (!schedules || schedules.length === 0) return;
+  if (schedules.length === 1) {
+    notifyTelegramSiteSchedule_(schedules[0], operatorUsername, false);
+    return;
+  }
+
+  try {
+    const settings = (typeof getSettings_ === 'function') ? getSettings_() : null;
+    if (!settings || !settings.TELEGRAM_BOT_TOKEN) return;
+    if (settings.CALENDAR_NOTIFY_ON_SCHEDULE === false) return;
+
+    const first = schedules[0];
+    const thaiDate = formatThaiDateLong_(first.date);
+    const escape = (typeof escapeHtml_ === 'function') ? escapeHtml_ : (t => String(t || ''));
+
+    const teamList = schedules.map(s => `  • <b>${escape(s.fullName || s.username)}</b> (@${escape(s.username)})`).join('\n');
+
+    const msg = (
+      `🗓️ <b>แจ้งเตือนกำหนดการเข้าไซต์งานใหม่ (ทีมงาน ${schedules.length} คน)</b>\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `🏢 <b>ไซต์งาน:</b> ${escape(first.site)}\n` +
+      `👷 <b>ผู้รับผิดชอบ:</b>\n${teamList}\n` +
+      `📅 <b>วันที่เข้าไซต์:</b> ${thaiDate}\n` +
+      (first.purpose ? `📝 <b>วัตถุประสงค์:</b> ${escape(first.purpose)}\n` : '') +
+      (first.taskId ? `🆔 <b>รหัสงาน/Plan:</b> <code>${escape(first.taskId)}</code>\n` : '') +
+      `📢 <b>ผู้มอบหมาย:</b> ${escape(operatorUsername || 'ผู้ดูแลระบบ')}\n` +
+      `━━━━━━━━━━━━━━━━━━\n` +
+      `👉 <i>บันทึกผ่านระบบ Work Tracker & Site Calendar</i>`
+    );
+
+    // 1. ส่งเข้ากลุ่มไซต์งาน (ถ้ามี)
+    if (settings.CALENDAR_NOTIFY_SITE_GROUP !== false && settings.SITE_TELEGRAM_CHAT_IDS && settings.SITE_TELEGRAM_CHAT_IDS[first.site]) {
+      const siteChatId = String(settings.SITE_TELEGRAM_CHAT_IDS[first.site]).trim();
+      if (siteChatId && typeof sendTelegramRaw_ === 'function') {
+        try {
+          sendTelegramRaw_(settings.TELEGRAM_BOT_TOKEN, siteChatId, msg);
+        } catch (err) {
+          console.error(`Send site group Telegram combined schedule alert failed: ${err.message}`);
+        }
+      }
+    }
+
+    // 2. ส่งเข้ากลุ่มหลักส่วนกลาง (ถ้าเปิดไว้)
+    if (settings.CALENDAR_NOTIFY_MAIN_GROUP === true && settings.TELEGRAM_CHAT_ID && typeof sendTelegramRaw_ === 'function') {
+      const mainChatId = String(settings.TELEGRAM_CHAT_ID).trim();
+      if (mainChatId && typeof sendTelegramRaw_ === 'function') {
+        try {
+          sendTelegramRaw_(settings.TELEGRAM_BOT_TOKEN, mainChatId, msg);
+        } catch (err) {
+          console.error(`Send main group Telegram combined schedule alert failed: ${err.message}`);
+        }
+      }
+    }
+  } catch (e) {
+    console.error('notifyTelegramCombinedSiteSchedule_ error: ' + e.message);
   }
 }
 
