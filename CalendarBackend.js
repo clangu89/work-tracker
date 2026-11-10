@@ -682,98 +682,420 @@ function notifyTelegramCombinedSiteSchedule_(schedules, operatorUsername) {
 }
 
 /**
- * ฟังก์ชันทำงานอัตโนมัติรอบเช้า (07:00 น.): ส่งแจ้งเตือนล่วงหน้า 1 วัน ก่อนถึงวันเข้าไซต์
- * รันผ่าน Google Apps Script Time-driven Trigger
+ * ฟังก์ชันทำงานอัตโนมัติ: ส่งแจ้งเตือนล่วงหน้าก่อนถึงวันเข้าไซต์ (รองรับทั้งแชตส่วนตัว, กลุ่มประจำไซต์ และกลุ่มส่วนกลาง)
+ * รันผ่าน Google Apps Script Time-driven Trigger หรือ Admin ทดสอบยิงทันที
+ * @param {Object} [options] ตัวเลือกเพิ่มเติม { forceResend: boolean, source: 'manual'|'trigger' }
  */
-function sendDailySiteScheduleReminders() {
+function sendDailySiteScheduleReminders(options) {
+  const opts = options || {};
+  const forceResend = opts.forceResend === true;
+
   try {
     const settings = (typeof getSettings_ === 'function') ? getSettings_() : null;
     if (!settings || !settings.TELEGRAM_BOT_TOKEN) {
       console.log('Skipping reminders: No Telegram bot token configured');
-      return { success: false, message: 'No Bot Token' };
+      return {
+        success: false,
+        message: 'ยังไม่ได้ตั้งค่า Telegram Bot Token ในระบบ',
+        sentCount: 0,
+        foundCount: 0,
+        totalForDate: 0,
+        alreadySentCount: 0
+      };
     }
 
     if (settings.CALENDAR_ENABLE_ADVANCE_REMINDER === false) {
       console.log('Advance reminder is disabled in Settings');
-      return { success: true, count: 0, message: 'การแจ้งเตือนล่วงหน้าถูกปิดใช้งานในการตั้งค่า' };
+      return {
+        success: true,
+        sentCount: 0,
+        foundCount: 0,
+        totalForDate: 0,
+        alreadySentCount: 0,
+        message: 'ระบบแจ้งเตือนล่วงหน้าถูกปิดใช้งานอยู่ในการตั้งค่า'
+      };
     }
 
     const ss = getDb_();
     const sheet = ss.getSheetByName(SHEET_SITE_SCHEDULES);
-    if (!sheet) return { success: true, count: 0 };
+    if (!sheet) {
+      return {
+        success: true,
+        sentCount: 0,
+        foundCount: 0,
+        totalForDate: 0,
+        alreadySentCount: 0,
+        message: 'ยังไม่มีข้อมูลตารางเข้าไซต์ในระบบ'
+      };
+    }
 
     // คำนวณวันที่เป้าหมายตามจำนวนวันเตือนล่วงหน้าที่กำหนด (Default: 1 วัน)
-    const daysBefore = parseInt(settings.CALENDAR_REMINDER_DAYS_BEFORE !== undefined ? settings.CALENDAR_REMINDER_DAYS_BEFORE : '1', 10);
+    let daysBefore = parseInt(settings.CALENDAR_REMINDER_DAYS_BEFORE !== undefined ? settings.CALENDAR_REMINDER_DAYS_BEFORE : '1', 10);
+    if (isNaN(daysBefore) || daysBefore < 0) daysBefore = 1;
+
     const now = new Date();
     const targetDateObj = new Date(now.getTime() + daysBefore * 24 * 60 * 60 * 1000);
     const targetIso = Utilities.formatDate(targetDateObj, 'Asia/Bangkok', 'yyyy-MM-dd');
     const targetThai = formatThaiDateLong_(targetIso);
 
-    let reminderHeader = '⏰ <b>เตือนความจำ: คุณมีกำหนดการเข้าไซต์งานในวันพรุ่งนี้!</b>';
+    let reminderHeader = '⏰ <b>เตือนความจำ: กำหนดการเข้าไซต์งานวันพรุ่งนี้!</b>';
+    let personalHeader = '⏰ <b>เตือนความจำ: คุณมีกำหนดการเข้าไซต์งานในวันพรุ่งนี้!</b>';
     let dateLine = `📅 <b>กำหนดเข้าไซต์:</b> พรุ่งนี้ (${targetThai})`;
     if (daysBefore === 0) {
-      reminderHeader = '⏰ <b>เตือนความจำ: คุณมีกำหนดการเข้าไซต์งานในวันนี้!</b>';
+      reminderHeader = '⏰ <b>เตือนความจำ: กำหนดการเข้าไซต์งานวันนี้!</b>';
+      personalHeader = '⏰ <b>เตือนความจำ: คุณมีกำหนดการเข้าไซต์งานในวันนี้!</b>';
       dateLine = `📅 <b>กำหนดเข้าไซต์:</b> วันนี้ (${targetThai})`;
     } else if (daysBefore > 1) {
-      reminderHeader = `⏰ <b>เตือนความจำ: คุณมีกำหนดการเข้าไซต์งานในอีก ${daysBefore} วัน!</b>`;
+      reminderHeader = `⏰ <b>เตือนความจำ: กำหนดการเข้าไซต์งานในอีก ${daysBefore} วัน!</b>`;
+      personalHeader = `⏰ <b>เตือนความจำ: คุณมีกำหนดการเข้าไซต์งานในอีก ${daysBefore} วัน!</b>`;
       dateLine = `📅 <b>กำหนดเข้าไซต์:</b> ${targetThai} (ในอีก ${daysBefore} วัน)`;
     }
 
     const data = sheet.getDataRange().getValues();
-    if (data.length <= 1) return { success: true, count: 0 };
+    if (data.length <= 1) {
+      return {
+        success: true,
+        targetDate: targetIso,
+        targetThai: targetThai,
+        daysBefore: daysBefore,
+        sentCount: 0,
+        foundCount: 0,
+        totalForDate: 0,
+        alreadySentCount: 0,
+        message: `ไม่พบรายการตารางเข้าไซต์สำหรับวันที่ ${targetThai} (${targetIso})`
+      };
+    }
 
-    let sentCount = 0;
-    const escape = (typeof escapeHtml_ === 'function') ? escapeHtml_ : (t => String(t || ''));
+    const pendingItems = [];
+    let totalForDate = 0;
+    let alreadySentCount = 0;
 
     for (let i = 1; i < data.length; i++) {
       const row = data[i];
+      if (!row[0] && !row[1]) continue;
+
       const dateIso = formatDateIso_(row[1]);
+      if (dateIso !== targetIso) continue;
+
+      totalForDate++;
       const reminderSent = Boolean(row[9] === true || String(row[9]).toUpperCase() === 'TRUE');
+      if (reminderSent && !forceResend) {
+        alreadySentCount++;
+        continue;
+      }
 
-      // ตรวจสอบว่าตรงกับวันที่เป้าหมาย และยังไม่เคยส่งเตือน
-      if (dateIso === targetIso && !reminderSent) {
-        const site = String(row[2] || '').trim();
-        const username = String(row[3] || '').trim();
-        const fullName = String(row[4] || '').trim() || username;
-        const purpose = String(row[5] || '').trim();
+      const site = String(row[2] || '').trim();
+      const username = String(row[3] || '').trim();
+      const fullName = String(row[4] || '').trim() || username;
+      const purpose = String(row[5] || '').trim();
+      const taskId = String(row[6] || '').trim();
 
-        const userChatId = (typeof getAssigneeTelegramChatId_ === 'function')
-          ? (getAssigneeTelegramChatId_(username) || getAssigneeTelegramChatId_(fullName))
-          : null;
+      const userChatId = (typeof getAssigneeTelegramChatId_ === 'function')
+        ? (getAssigneeTelegramChatId_(username) || getAssigneeTelegramChatId_(fullName))
+        : null;
 
-        if (userChatId && typeof sendTelegramRaw_ === 'function') {
-          const reminderMsg = (
-            `${reminderHeader}\n` +
-            `━━━━━━━━━━━━━━━━━━\n` +
-            `🏢 <b>ไซต์งาน:</b> ${escape(site)}\n` +
-            `${dateLine}\n` +
-            `👷 <b>ผู้รับผิดชอบ:</b> ${escape(fullName)}\n` +
-            (purpose ? `📝 <b>งานที่ต้องทำ:</b> ${escape(purpose)}\n` : '') +
-            `━━━━━━━━━━━━━━━━━━\n` +
-            `👉 <i>กรุณาเตรียมอุปกรณ์และวางแผนการเดินทางล่วงหน้า</i>`
-          );
+      pendingItems.push({
+        rowIdx: i + 1,
+        site: site,
+        username: username,
+        fullName: fullName,
+        purpose: purpose,
+        taskId: taskId,
+        userChatId: userChatId,
+        sentOk: false
+      });
+    }
 
-          try {
-            sendTelegramRaw_(settings.TELEGRAM_BOT_TOKEN, userChatId, reminderMsg);
-            sheet.getRange(i + 1, 10).setValue(true);
-            sentCount++;
-          } catch (sendErr) {
-            console.error(`Send reminder for row ${i + 1} failed: ${sendErr.message}`);
-          }
+    if (pendingItems.length === 0) {
+      const msgText = totalForDate > 0
+        ? `คิวงานวันที่ ${targetThai} (${totalForDate} รายการ) ได้ถูกส่งแจ้งเตือนล่วงหน้าไปแล้วทั้งหมด`
+        : `ไม่พบคิวงานเข้าไซต์สำหรับวันที่ ${targetThai} (ล่วงหน้า ${daysBefore} วัน)`;
+
+      return {
+        success: true,
+        targetDate: targetIso,
+        targetThai: targetThai,
+        daysBefore: daysBefore,
+        foundCount: 0,
+        totalForDate: totalForDate,
+        alreadySentCount: alreadySentCount,
+        sentCount: 0,
+        personalSentCount: 0,
+        siteGroupSentCount: 0,
+        mainGroupSentCount: 0,
+        missingChatIdUsers: [],
+        message: msgText
+      };
+    }
+
+    const escape = (typeof escapeHtml_ === 'function') ? escapeHtml_ : (t => String(t || ''));
+    let personalSentCount = 0;
+    let siteGroupSentCount = 0;
+    let mainGroupSentCount = 0;
+    const missingChatSet = new Set();
+    const errorsList = [];
+
+    // 1. ส่งแจ้งเตือนตรงเข้าแชตส่วนตัว (Personal DM)
+    pendingItems.forEach(item => {
+      if (!item.userChatId) {
+        missingChatSet.add(`${item.fullName} (@${item.username})`);
+        return;
+      }
+
+      const personalMsg = (
+        `${personalHeader}\n` +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `🏢 <b>ไซต์งาน:</b> ${escape(item.site)}\n` +
+        `${dateLine}\n` +
+        `👷 <b>ผู้รับผิดชอบ:</b> ${escape(item.fullName)}\n` +
+        (item.purpose ? `📝 <b>งานที่ต้องทำ:</b> ${escape(item.purpose)}\n` : '') +
+        (item.taskId ? `🆔 <b>รหัสงาน/Plan:</b> <code>${escape(item.taskId)}</code>\n` : '') +
+        `━━━━━━━━━━━━━━━━━━\n` +
+        `👉 <i>กรุณาเตรียมอุปกรณ์และวางแผนการเดินทางล่วงหน้า</i>`
+      );
+
+      if (typeof sendTelegramRaw_ === 'function') {
+        try {
+          sendTelegramRaw_(settings.TELEGRAM_BOT_TOKEN, item.userChatId, personalMsg);
+          item.sentOk = true;
+          personalSentCount++;
+        } catch (sendErr) {
+          console.error(`Personal reminder row ${item.rowIdx} failed: ${sendErr.message}`);
+          errorsList.push(`DM ${item.username}: ${sendErr.message}`);
+        }
+      }
+    });
+
+    // จัดกลุ่มรายการตามไซต์งาน (สำหรับการส่งเข้ากลุ่มประจำไซต์ และสรุปเข้ากลุ่มส่วนกลาง)
+    const siteGroupsMap = {};
+    pendingItems.forEach(item => {
+      const siteKey = item.site || 'ไม่ระบุไซต์งาน';
+      if (!siteGroupsMap[siteKey]) siteGroupsMap[siteKey] = [];
+      siteGroupsMap[siteKey].push(item);
+    });
+
+    // 2. ส่งเข้ากลุ่ม Telegram ประจำไซต์งาน (หากเปิดใช้งาน)
+    if (settings.CALENDAR_NOTIFY_SITE_GROUP !== false && settings.SITE_TELEGRAM_CHAT_IDS) {
+      Object.keys(siteGroupsMap).forEach(siteName => {
+        const siteChatId = String(settings.SITE_TELEGRAM_CHAT_IDS[siteName] || '').trim();
+        if (!siteChatId || typeof sendTelegramRaw_ !== 'function') return;
+
+        const siteItems = siteGroupsMap[siteName];
+        const workerLines = siteItems.map(it => {
+          const pTxt = it.purpose ? ` — <i>${escape(it.purpose)}</i>` : '';
+          return `  • <b>${escape(it.fullName)}</b> (@${escape(it.username)})${pTxt}`;
+        }).join('\n');
+
+        const siteGroupMsg = (
+          `${reminderHeader}\n` +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `🏢 <b>ไซต์งาน:</b> ${escape(siteName)}\n` +
+          `${dateLine}\n` +
+          `👷 <b>ผู้ปฏิบัติงาน (${siteItems.length} คน):</b>\n${workerLines}\n` +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `👉 <i>แจ้งเตือนอัตโนมัติจาก Work Tracker & Site Calendar</i>`
+        );
+
+        try {
+          sendTelegramRaw_(settings.TELEGRAM_BOT_TOKEN, siteChatId, siteGroupMsg);
+          siteGroupSentCount++;
+          siteItems.forEach(it => { it.sentOk = true; });
+        } catch (sgErr) {
+          console.error(`Site group reminder (${siteName}) failed: ${sgErr.message}`);
+          errorsList.push(`SiteGroup ${siteName}: ${sgErr.message}`);
+        }
+      });
+    }
+
+    // 3. ส่งสรุปภาพรวมเข้ากลุ่มส่วนกลาง (หากเปิดใช้งานและตั้งค่า TELEGRAM_CHAT_ID)
+    if (settings.CALENDAR_NOTIFY_MAIN_GROUP === true && settings.TELEGRAM_CHAT_ID && typeof sendTelegramRaw_ === 'function') {
+      const mainChatId = String(settings.TELEGRAM_CHAT_ID).trim();
+      if (mainChatId) {
+        const siteBlocks = Object.keys(siteGroupsMap).map(siteName => {
+          const siteItems = siteGroupsMap[siteName];
+          const wLines = siteItems.map(it => {
+            const pTxt = it.purpose ? ` (${escape(it.purpose)})` : '';
+            return `   • <b>${escape(it.fullName)}</b>${pTxt}`;
+          }).join('\n');
+          return `🏢 <b>${escape(siteName)}</b>\n${wLines}`;
+        }).join('\n\n');
+
+        const mainGroupMsg = (
+          `${reminderHeader}\n` +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `${dateLine}\n` +
+          `📋 <b>สรุปคิวเข้าไซต์งานทั้งหมด (${pendingItems.length} คน / ${Object.keys(siteGroupsMap).length} ไซต์):</b>\n\n` +
+          `${siteBlocks}\n` +
+          `━━━━━━━━━━━━━━━━━━\n` +
+          `👉 <i>แจ้งเตือนอัตโนมัติจาก Work Tracker & Site Calendar</i>`
+        );
+
+        try {
+          sendTelegramRaw_(settings.TELEGRAM_BOT_TOKEN, mainChatId, mainGroupMsg);
+          mainGroupSentCount++;
+          pendingItems.forEach(it => { it.sentOk = true; });
+        } catch (mgErr) {
+          console.error(`Main group reminder failed: ${mgErr.message}`);
+          errorsList.push(`MainGroup: ${mgErr.message}`);
         }
       }
     }
 
-    console.log(`✅ Daily site schedule reminders processed: sent ${sentCount} notices for ${targetIso}`);
-    return { success: true, sentCount: sentCount, targetDate: targetIso };
+    // อัปเดตสถานะ ReminderSent = true เฉพาะรายการที่ส่งออกได้อย่างน้อย 1 ช่องทาง
+    let markedSentCount = 0;
+    pendingItems.forEach(item => {
+      if (item.sentOk) {
+        sheet.getRange(item.rowIdx, 10).setValue(true);
+        markedSentCount++;
+      }
+    });
+
+    const summaryParts = [];
+    if (personalSentCount > 0) summaryParts.push(`แชตส่วนตัว ${personalSentCount} คน`);
+    if (siteGroupSentCount > 0) summaryParts.push(`กลุ่มไซต์ ${siteGroupSentCount} กลุ่ม`);
+    if (mainGroupSentCount > 0) summaryParts.push(`กลุ่มส่วนกลาง ${mainGroupSentCount} ข้อความ`);
+
+    let finalMsg = '';
+    if (markedSentCount > 0) {
+      finalMsg = `ส่งแจ้งเตือนสำหรับวันที่ ${targetThai} สำเร็จ ${markedSentCount}/${pendingItems.length} รายการ (${summaryParts.join(', ')})`;
+    } else if (missingChatSet.size > 0 && settings.CALENDAR_NOTIFY_MAIN_GROUP !== true && !settings.SITE_TELEGRAM_CHAT_IDS) {
+      finalMsg = `พบ ${pendingItems.length} รายการสำหรับวันที่ ${targetThai} แต่ไม่สามารส่งได้เนื่องจากผู้ปฏิบัติงานยังไม่มี Telegram Chat ID ส่วนตัว และไม่ได้เปิดส่งเข้ากลุ่มส่วนกลาง`;
+    } else {
+      finalMsg = `พบ ${pendingItems.length} รายการสำหรับวันที่ ${targetThai} แต่ไม่สามารถส่งแจ้งเตือนได้${errorsList.length ? ' (' + errorsList[0] + ')' : ''}`;
+    }
+
+    console.log(`✅ Daily site schedule reminders: ${finalMsg}`);
+    return {
+      success: true,
+      targetDate: targetIso,
+      targetThai: targetThai,
+      daysBefore: daysBefore,
+      foundCount: pendingItems.length,
+      totalForDate: totalForDate,
+      alreadySentCount: alreadySentCount,
+      sentCount: markedSentCount,
+      personalSentCount: personalSentCount,
+      siteGroupSentCount: siteGroupSentCount,
+      mainGroupSentCount: mainGroupSentCount,
+      missingChatIdUsers: Array.from(missingChatSet),
+      errors: errorsList,
+      message: finalMsg
+    };
   } catch (error) {
     console.error('sendDailySiteScheduleReminders error: ' + error.message);
-    return { success: false, message: error.message };
+    return { success: false, message: error.message, sentCount: 0, foundCount: 0 };
   }
 }
 
 /**
- * ติดตั้งหรือรีเซ็ต Trigger อัตโนมัติสำหรับส่งแจ้งเตือนรอบเช้าตามเวลาที่ตั้งค่าไว้
+ * Dispatcher แบบเบาที่ทำงานทุก 5 นาทีเพื่อตรวจสอบและส่งแจ้งเตือนตรงเวลาประเทศไทย (HH:mm) เป๊ะทุกนาที
+ */
+function checkAndRunSiteCalendarReminders() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(5000)) return;
+
+  try {
+    const props = PropertiesService.getScriptProperties();
+    let enabledStr = props.getProperty('CAL_REMINDER_ENABLED');
+    let timeStr = props.getProperty('CAL_REMINDER_TIME');
+
+    // หาก PropertiesService ยังว่าง ให้ดึงจากชีต Settings มาซิงค์ไว้
+    if (enabledStr === null || !timeStr) {
+      const settings = (typeof getSettings_ === 'function') ? getSettings_() : null;
+      if (settings) {
+        enabledStr = String(settings.CALENDAR_ENABLE_ADVANCE_REMINDER !== false);
+        timeStr = (typeof normalizeThailandTime24h_ === 'function')
+          ? normalizeThailandTime24h_(settings.CALENDAR_REMINDER_TIME)
+          : (settings.CALENDAR_REMINDER_TIME || '07:00');
+        props.setProperty('CAL_REMINDER_ENABLED', enabledStr);
+        props.setProperty('CAL_REMINDER_TIME', timeStr);
+        props.setProperty('CAL_REMINDER_DAYS_BEFORE', String(settings.CALENDAR_REMINDER_DAYS_BEFORE || '1'));
+      }
+    }
+
+    if (enabledStr === 'false') return;
+    if (!timeStr || !timeStr.includes(':')) timeStr = '07:00';
+
+    const tParts = timeStr.split(':');
+    const targetH = parseInt(tParts[0], 10);
+    const targetM = parseInt(tParts[1], 10);
+    if (isNaN(targetH) || isNaN(targetM)) return;
+    const targetTotalMins = targetH * 60 + targetM;
+
+    const now = new Date();
+    const todayIso = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd');
+    const nowTimeStr = Utilities.formatDate(now, 'Asia/Bangkok', 'HH:mm');
+    const nParts = nowTimeStr.split(':');
+    const nowTotalMins = parseInt(nParts[0], 10) * 60 + parseInt(nParts[1], 10);
+
+    // ตรวจสอบว่าเข้าสู่ช่วงเวลาที่กำหนด (+0 ถึง +90 นาที เพื่อ Catch-up กรณี Trigger ดีเลย์เล็กน้อย)
+    if (nowTotalMins < targetTotalMins || nowTotalMins > targetTotalMins + 90) {
+      return;
+    }
+
+    const slotKey = `${todayIso}@${timeStr}`;
+    const lastSlot = props.getProperty('CAL_LAST_REMINDER_SLOT');
+    if (lastSlot === slotKey) {
+      return; // ส่งแล้วสำหรับ slot เวลานี้ของวันนี้
+    }
+
+    // บันทึก slot ก่อนยิงเพื่อป้องกันซ้ำซ้อน
+    const nowFullStr = Utilities.formatDate(now, 'Asia/Bangkok', 'yyyy-MM-dd HH:mm:ss');
+    props.setProperty('CAL_LAST_REMINDER_SLOT', slotKey);
+    props.setProperty('CAL_LAST_REMINDER_DATE', todayIso);
+    props.setProperty('CAL_LAST_REMINDER_AT', nowFullStr);
+
+    const res = sendDailySiteScheduleReminders({ source: 'trigger' });
+    props.setProperty('CAL_LAST_REMINDER_RESULT', (res && res.message) ? res.message : 'ดำเนินการแล้ว');
+  } catch (err) {
+    console.error('checkAndRunSiteCalendarReminders error: ' + err.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * ตรวจสอบสถานะการติดตั้งและประวัติการทำงานของ Time Trigger ปฏิทินเข้าไซต์งาน
+ */
+function getCalendarTriggerStatus() {
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const settings = (typeof getSettings_ === 'function') ? getSettings_() : {};
+    const configuredTime = settings.CALENDAR_REMINDER_TIME || props.getProperty('CAL_REMINDER_TIME') || '07:00';
+    const enabled = settings.CALENDAR_ENABLE_ADVANCE_REMINDER !== false;
+
+    const triggers = ScriptApp.getProjectTriggers();
+    const matchingTriggers = triggers.filter(t => {
+      const fn = t.getHandlerFunction();
+      return fn === 'checkAndRunSiteCalendarReminders' || fn === 'sendDailySiteScheduleReminders';
+    });
+
+    const hasExactDispatcher = matchingTriggers.some(t => t.getHandlerFunction() === 'checkAndRunSiteCalendarReminders');
+
+    return {
+      success: true,
+      installed: matchingTriggers.length > 0,
+      isExactMode: hasExactDispatcher,
+      triggerCount: matchingTriggers.length,
+      configuredTime: configuredTime,
+      enabled: enabled,
+      lastRunAt: props.getProperty('CAL_LAST_REMINDER_AT') || '',
+      lastRunResult: props.getProperty('CAL_LAST_REMINDER_RESULT') || ''
+    };
+  } catch (error) {
+    console.error('getCalendarTriggerStatus error: ' + error.message);
+    return {
+      success: false,
+      installed: false,
+      triggerCount: 0,
+      authError: error.message,
+      message: error.message
+    };
+  }
+}
+
+/**
+ * ติดตั้งหรือรีเซ็ต Trigger อัตโนมัติแบบละเอียดทุก 5 นาที (รองรับตรงเวลาทุกนาที HH:mm)
  */
 function setupScheduleReminderTrigger() {
   try {
@@ -781,35 +1103,33 @@ function setupScheduleReminderTrigger() {
     const rawTime = (settings && settings.CALENDAR_REMINDER_TIME) ? settings.CALENDAR_REMINDER_TIME : '07:00';
     const timeStr = (typeof normalizeThailandTime24h_ === 'function') ? normalizeThailandTime24h_(rawTime) : '07:00';
 
-    let targetHour = 7;
-    let targetMinute = 0;
-    if (timeStr && timeStr.includes(':')) {
-      const parts = timeStr.split(':');
-      const h = parseInt(parts[0], 10);
-      const m = parseInt(parts[1], 10);
-      if (!isNaN(h) && h >= 0 && h <= 23) targetHour = h;
-      if (!isNaN(m) && m >= 0 && m <= 59) targetMinute = m;
-    }
+    // ซิงค์ค่าลง ScriptProperties
+    const props = PropertiesService.getScriptProperties();
+    props.setProperty('CAL_REMINDER_ENABLED', String(!settings || settings.CALENDAR_ENABLE_ADVANCE_REMINDER !== false));
+    props.setProperty('CAL_REMINDER_TIME', timeStr);
+    props.setProperty('CAL_REMINDER_DAYS_BEFORE', String((settings && settings.CALENDAR_REMINDER_DAYS_BEFORE !== undefined) ? settings.CALENDAR_REMINDER_DAYS_BEFORE : '1'));
 
     const triggers = ScriptApp.getProjectTriggers();
-    // ลบ trigger เดิมเพื่อรีเซ็ตชั่วโมงใหม่ให้ตรงกับการตั้งค่า
+    // ลบ trigger เก่าทั้งแบบเดิมและแบบใหม่เพื่อป้องกันซ้ำซ้อน
     triggers.forEach(t => {
-      if (t.getHandlerFunction() === 'sendDailySiteScheduleReminders') {
+      const fn = t.getHandlerFunction();
+      if (fn === 'sendDailySiteScheduleReminders' || fn === 'checkAndRunSiteCalendarReminders') {
         ScriptApp.deleteTrigger(t);
       }
     });
 
-    ScriptApp.newTrigger('sendDailySiteScheduleReminders')
+    // ติดตั้ง Dispatcher ทุก 5 นาที เพื่อให้ยิงเตือนได้ตรงเวลาทุกชั่วโมงและนาทีตามที่ตั้งค่า
+    ScriptApp.newTrigger('checkAndRunSiteCalendarReminders')
       .timeBased()
-      .atHour(targetHour)
-      .everyDays(1)
-      .inTimezone('Asia/Bangkok')
+      .everyMinutes(5)
       .create();
 
+    const triggerStatus = getCalendarTriggerStatus();
     const formattedTime = timeStr + ' น. (เวลาประเทศไทย 24 ชม.)';
-    return { 
-      success: true, 
-      message: `ติดตั้งระบบแจ้งเตือนอัตโนมัติรอบเช้าเวลา ${formattedTime} ทุกวัน เรียบร้อยแล้ว` 
+    return {
+      success: true,
+      triggerStatus: triggerStatus,
+      message: `ติดตั้งระบบแจ้งเตือนอัตโนมัติเรียบร้อย (ตรวจสอบทุก 5 นาที พร้อมส่งเวลา ${formattedTime} ทุกวัน)`
     };
   } catch (error) {
     console.error('setupScheduleReminderTrigger error: ' + error.message);
@@ -818,12 +1138,15 @@ function setupScheduleReminderTrigger() {
 }
 
 /**
- * ฟังก์ชันสำหรับ Admin ทดสอบยิงแจ้งเตือนล่วงหน้ารอบเช้าทันที (ไม่ต้องรอ 07:00 น.)
+ * ฟังก์ชันสำหรับ Admin ทดสอบยิงแจ้งเตือนล่วงหน้ารอบเช้าทันที (ไม่ต้องรอเวลา Trigger)
+ * @param {string} operatorUsername ผู้ทำรายการ
+ * @param {Object} [options] เช่น { forceResend: true }
  */
-function triggerDailySiteScheduleRemindersNow(operatorUsername) {
+function triggerDailySiteScheduleRemindersNow(operatorUsername, options) {
   const isAdminOrSup = checkIsAdminOrSupervisor_(operatorUsername);
   if (!isAdminOrSup) {
     return { success: false, message: 'เฉพาะ Admin หรือ Supervisor เท่านั้นที่สามารถทดสอบยิงได้' };
   }
-  return sendDailySiteScheduleReminders();
+  const opts = Object.assign({}, options || {}, { source: 'manual' });
+  return sendDailySiteScheduleReminders(opts);
 }

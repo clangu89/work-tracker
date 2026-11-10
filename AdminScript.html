@@ -1375,7 +1375,7 @@ function renderAdminAuditLogs() {
 // --------------------------------------------------------------------
 
 /**
- * จัดฟอร์แมตค่าเวลาให้อยู่ในรูปแบบ 24 ชั่วโมงประเทศไทย (HH:mm) เช่น 07:00
+ * จัดฟอร์แมตค่าเวลาให้อยู่ในรูปแบบ 24 ชั่วโมงประเทศไทย (HH:mm) เช่น 07:00 หรือ 17:00
  */
 function formatTo24HourTime(val) {
   if (val === undefined || val === null || val === '') return '07:00';
@@ -1386,6 +1386,13 @@ function formatTo24HourTime(val) {
   if (s.includes('1899') || s.includes('GMT')) {
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
+      if (d.getFullYear() < 1920) {
+        // ใช้ Fixed +07:00 สำหรับปี 1899 เพื่อไม่ให้ LMT คลาดเคลื่อน 18 นาที
+        const bkk = new Date(d.getTime() + 7 * 3600000);
+        const hh = String(bkk.getUTCHours()).padStart(2, '0');
+        const mm = String(bkk.getUTCMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
       try {
         const parts = new Intl.DateTimeFormat('en-GB', {
           timeZone: 'Asia/Bangkok',
@@ -1420,17 +1427,133 @@ function formatTo24HourTime(val) {
 window.formatTo24HourTime = formatTo24HourTime;
 
 /**
+ * เติมตัวเลือกนาที 00-59 ลงใน Dropdown นาที (รองรับทุกนาทีอย่างละเอียด)
+ */
+function ensureCalMinuteOptions() {
+  const minSelect = document.getElementById("cal-cfg-reminder-minute");
+  if (!minSelect || minSelect.options.length === 60) return;
+  const currentVal = minSelect.value || "00";
+  let html = "";
+  for (let m = 0; m < 60; m++) {
+    const pad = String(m).padStart(2, "0");
+    html += `<option value="${pad}">${pad}</option>`;
+  }
+  minSelect.innerHTML = html;
+  minSelect.value = currentVal;
+}
+
+/**
+ * ซิงค์ค่าจาก Dropdown ชั่วโมง + นาที (24 ชม.) ไปยัง Hidden Input
+ */
+function syncCalTimeHiddenFromSelects() {
+  const hrEl = document.getElementById("cal-cfg-reminder-hour");
+  const minEl = document.getElementById("cal-cfg-reminder-minute");
+  const hiddenEl = document.getElementById("cal-cfg-reminder-time");
+  if (hrEl && minEl && hiddenEl) {
+    const hh = String(hrEl.value || "07").padStart(2, "0");
+    const mm = String(minEl.value || "00").padStart(2, "0");
+    hiddenEl.value = `${hh}:${mm}`;
+  }
+}
+window.syncCalTimeHiddenFromSelects = syncCalTimeHiddenFromSelects;
+
+/**
+ * ตั้งค่า Dropdown ชั่วโมง + นาที (24 ชม.) จากสตริง HH:mm
+ */
+function setCalTimeSelects(timeVal) {
+  ensureCalMinuteOptions();
+  const clean = formatTo24HourTime(timeVal);
+  const parts = clean.split(":");
+  const hh = parts[0] || "07";
+  const mm = parts[1] || "00";
+
+  const hrEl = document.getElementById("cal-cfg-reminder-hour");
+  const minEl = document.getElementById("cal-cfg-reminder-minute");
+  const hiddenEl = document.getElementById("cal-cfg-reminder-time");
+
+  if (hrEl) hrEl.value = hh;
+  if (minEl) minEl.value = mm;
+  if (hiddenEl) hiddenEl.value = `${hh}:${mm}`;
+}
+
+/**
  * กำหนดเวลาแจ้งเตือนด่วนจากปุ่ม Preset
  */
 function setCalendarReminderPreset(timeStr) {
-  const input = document.getElementById("cal-cfg-reminder-time");
-  if (input) {
-    input.value = timeStr;
-    input.focus();
-    showToast(`เลือกเวลาส่งแจ้งเตือน: ${timeStr} น.`, "info", 1200);
-  }
+  setCalTimeSelects(timeStr);
+  showToast(`เลือกเวลาส่งแจ้งเตือน: ${timeStr} น. (24 ชม.)`, "info", 1200);
 }
 window.setCalendarReminderPreset = setCalendarReminderPreset;
+
+/**
+ * โหลดและแสดงสถานะ Time Trigger ของระบบปฏิทินเข้าไซต์งาน
+ */
+function loadCalendarTriggerStatus() {
+  const textEl = document.getElementById("cal-trigger-status-text");
+  const dotEl = document.getElementById("cal-trigger-status-dot");
+  if (textEl) textEl.textContent = "กำลังตรวจสอบสถานะ Time Trigger...";
+  if (dotEl) dotEl.className = "w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse shrink-0";
+
+  if (typeof google === 'undefined' || !google.script || !google.script.run) return;
+  google.script.run
+    .withSuccessHandler(res => {
+      renderCalendarTriggerStatus(res);
+    })
+    .withFailureHandler(err => {
+      renderCalendarTriggerStatus({ success: false, installed: false, authError: err.message });
+    })
+    .getCalendarTriggerStatus();
+}
+
+/**
+ * เรนเดอร์สถานะ Time Trigger บนหน้าจอ Admin Center
+ */
+function renderCalendarTriggerStatus(statusObj) {
+  const banner = document.getElementById("cal-trigger-status-banner");
+  const dot = document.getElementById("cal-trigger-status-dot");
+  const textEl = document.getElementById("cal-trigger-status-text");
+  const lastRunEl = document.getElementById("cal-trigger-last-run");
+  if (!banner || !dot || !textEl) return;
+
+  if (!statusObj || statusObj.authError) {
+    banner.className = "flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl border border-rose-200 bg-rose-50/80 text-xs";
+    dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0";
+    textEl.className = "font-semibold text-rose-800";
+    textEl.textContent = "ไม่สามารถตรวจสอบ Trigger ได้" + (statusObj?.authError ? ` (${statusObj.authError})` : "");
+    if (lastRunEl) lastRunEl.textContent = "";
+    return;
+  }
+
+  if (statusObj.installed) {
+    const modeLabel = statusObj.isExactMode ? "ตรวจสอบทุก 5 นาที (ตรงเวลาเป๊ะ)" : "แบบรายวันเดิม (แนะนำกดติดตั้ง/รีเซ็ตใหม่)";
+    const timeBadge = statusObj.configuredTime ? `เวลา ${statusObj.configuredTime} น.` : "";
+    const activeState = statusObj.enabled === false ? "⚠️ ปิดการเตือนล่วงหน้าอยู่" : "🟢 พร้อมทำงานอัตโนมัติ";
+
+    banner.className = statusObj.enabled === false
+      ? "flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl border border-amber-200 bg-amber-50/70 text-xs"
+      : "flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl border border-emerald-200 bg-emerald-50/70 text-xs";
+    dot.className = statusObj.enabled === false
+      ? "w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0"
+      : "w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0";
+    textEl.className = statusObj.enabled === false ? "font-semibold text-amber-900" : "font-semibold text-emerald-900";
+    textEl.textContent = `${activeState} • ${modeLabel} (${timeBadge})`;
+
+    if (lastRunEl) {
+      if (statusObj.lastRunAt) {
+        lastRunEl.textContent = `ทำงานล่าสุด: ${statusObj.lastRunAt}`;
+        lastRunEl.title = statusObj.lastRunResult || "";
+      } else {
+        lastRunEl.textContent = "ยังไม่เคยส่งรอบอัตโนมัติ";
+      }
+    }
+  } else {
+    banner.className = "flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl border border-rose-200 bg-rose-50/80 text-xs";
+    dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0";
+    textEl.className = "font-semibold text-rose-800";
+    textEl.textContent = "🔴 ยังไม่ได้ติดตั้ง Time Trigger (กรุณากด 'ติดตั้ง/รีเซ็ต Time Trigger' หรือ 'บันทึกการตั้งค่าทั้งหมด')";
+    if (lastRunEl) lastRunEl.textContent = "";
+  }
+}
 
 /**
  * เติมค่าการตั้งค่าระบบปฏิทินเข้าไซต์งานลงในฟอร์ม Admin Center
@@ -1440,7 +1563,6 @@ function populateCalendarSettings() {
 
   const enableAdvance = document.getElementById("cal-cfg-enable-advance-reminder");
   const reminderDays = document.getElementById("cal-cfg-reminder-days");
-  const reminderTime = document.getElementById("cal-cfg-reminder-time");
 
   const notifyImmediate = document.getElementById("cal-cfg-notify-immediate");
   const notifySiteGroup = document.getElementById("cal-cfg-notify-site-group");
@@ -1456,9 +1578,8 @@ function populateCalendarSettings() {
   if (reminderDays) {
     reminderDays.value = String(s.CALENDAR_REMINDER_DAYS_BEFORE !== undefined ? s.CALENDAR_REMINDER_DAYS_BEFORE : "1");
   }
-  if (reminderTime) {
-    reminderTime.value = formatTo24HourTime(s.CALENDAR_REMINDER_TIME);
-  }
+
+  setCalTimeSelects(s.CALENDAR_REMINDER_TIME);
 
   if (notifyImmediate) {
     notifyImmediate.checked = (s.CALENDAR_NOTIFY_ON_SCHEDULE !== false && s.CALENDAR_NOTIFY_ON_SCHEDULE !== "false");
@@ -1479,19 +1600,23 @@ function populateCalendarSettings() {
   if (maxChips) {
     maxChips.value = String(s.CALENDAR_MAX_CHIPS_PER_CELL !== undefined ? s.CALENDAR_MAX_CHIPS_PER_CELL : "3");
   }
+
+  // โหลดสถานะ Time Trigger ล่าสุด
+  loadCalendarTriggerStatus();
 }
 
 /**
- * บันทึกการตั้งค่าระบบปฏิทินเข้าไซต์งาน
+ * บันทึกการตั้งค่าระบบปฏิทินเข้าไซต์งาน พร้อมติดตั้ง/ซิงค์ Time Trigger ให้อัตโนมัติ
  */
 function saveCalendarSettings() {
   const btn = document.getElementById("btnSaveCalendarSettings");
   const origHtml = btn ? btn.innerHTML : "";
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>กำลังบันทึก...';
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1.5"></i>กำลังบันทึกและซิงค์ Trigger...';
   }
 
+  syncCalTimeHiddenFromSelects();
   const rawReminderTime = document.getElementById("cal-cfg-reminder-time")?.value;
   const cleanReminderTime = formatTo24HourTime(rawReminderTime);
 
@@ -1514,11 +1639,16 @@ function saveCalendarSettings() {
         btn.innerHTML = origHtml;
       }
       if (res && res.success) {
-        showToast("บันทึกการตั้งค่าระบบปฏิทินเข้าไซต์งานเรียบร้อย", "success");
+        showToast(`บันทึกการตั้งค่าและซิงค์เวลาส่ง ${cleanReminderTime} น. เรียบร้อย`, "success");
         if (!adminState.settings) adminState.settings = {};
         Object.assign(adminState.settings, newSettings);
         if (window.state && state.settings) {
           Object.assign(state.settings, newSettings);
+        }
+        if (res.triggerStatus) {
+          renderCalendarTriggerStatus(res.triggerStatus);
+        } else {
+          loadCalendarTriggerStatus();
         }
       } else {
         showToast((res && res.message) || "เกิดข้อผิดพลาดในการบันทึก", "error");
@@ -1536,28 +1666,53 @@ function saveCalendarSettings() {
 
 /**
  * ทดสอบยิงแจ้งเตือนล่วงหน้ารอบเช้าทันที (ไม่ต้องรอเวลา Trigger)
+ * @param {boolean} [forceResend] บังคับส่งซ้ำแม้เคยส่งเตือนไปแล้ว
  */
-function testCalendarReminderNow() {
+function testCalendarReminderNow(forceResend = false) {
   const currentUsername = (state && state.currentUser) ? state.currentUser.username : "";
-  showToast("กำลังส่งการแจ้งเตือนรอบเช้า...", "info", 2000);
+  showToast(forceResend ? "กำลังบังคับส่งแจ้งเตือนทดสอบซ้ำ..." : "กำลังตรวจสอบและส่งแจ้งเตือน...", "info", 2000);
 
   google.script.run
     .withSuccessHandler(res => {
       if (res && res.success) {
+        loadCalendarTriggerStatus();
         if (typeof Swal !== 'undefined') {
+          const hasAlreadySent = (res.alreadySentCount > 0 && res.foundCount === 0);
+          const missingUsers = Array.isArray(res.missingChatIdUsers) ? res.missingChatIdUsers : [];
+
+          let detailsHtml = `<div class="text-xs text-left space-y-1.5 bg-[#FAF8F2] p-3.5 rounded-xl border border-[#EFE9DC]">
+            <p><b>สรุปผล:</b> ${escapeHtml(res.message || '-')}</p>
+            <p><b>วันที่เป้าหมาย:</b> ${escapeHtml(res.targetThai || res.targetDate || '-')}</p>
+            <p><b>คิวงานในวันเป้าหมาย:</b> ทั้งหมด ${res.totalForDate || 0} รายการ | รอส่ง ${res.foundCount || 0} | ส่งแล้วก่อนหน้า ${res.alreadySentCount || 0}</p>
+            <div class="pt-1 border-t border-[#EFE9DC]/80 grid grid-cols-3 gap-1.5 text-[11px]">
+              <span class="bg-white px-2 py-1 rounded border border-[#EFE9DC]">📱 ส่วนตัว: <b>${res.personalSentCount || 0}</b></span>
+              <span class="bg-white px-2 py-1 rounded border border-[#EFE9DC]">👥 กลุ่มไซต์: <b>${res.siteGroupSentCount || 0}</b></span>
+              <span class="bg-white px-2 py-1 rounded border border-[#EFE9DC]">📢 ส่วนกลาง: <b>${res.mainGroupSentCount || 0}</b></span>
+            </div>`;
+
+          if (missingUsers.length > 0) {
+            detailsHtml += `<p class="text-[11px] text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 mt-1.5">
+              <b>⚠️ ผู้ใช้ที่ยังไม่มี Telegram Chat ID ส่วนตัว:</b> ${escapeHtml(missingUsers.join(', '))}
+            </p>`;
+          }
+          detailsHtml += `</div>`;
+
           Swal.fire({
-            title: 'ทดสอบส่งแจ้งเตือนสำเร็จ!',
-            html: `<div class="text-xs text-left space-y-1.5 bg-[#FAF8F2] p-3 rounded-xl border border-[#EFE9DC]">
-                     <p><b>ข้อความ:</b> ${escapeHtml(res.message || '')}</p>
-                     <p><b>ส่งสำเร็จ:</b> ${res.sentCount || 0} รายการ</p>
-                     <p><b>พบรายการ:</b> ${res.foundCount || 0} รายการ</p>
-                   </div>`,
-            icon: 'success',
+            title: (res.sentCount > 0) ? 'ทดสอบส่งแจ้งเตือนสำเร็จ!' : 'ผลการตรวจสอบและทดสอบ',
+            html: detailsHtml,
+            icon: (res.sentCount > 0) ? 'success' : 'info',
+            showCancelButton: hasAlreadySent,
             confirmButtonText: 'ตกลง',
-            confirmButtonColor: '#059669'
+            confirmButtonColor: '#059669',
+            cancelButtonText: 'บังคับส่งทดสอบซ้ำอีกครั้ง',
+            cancelButtonColor: '#D97706'
+          }).then(result => {
+            if (result.dismiss === Swal.DismissReason.cancel && hasAlreadySent) {
+              testCalendarReminderNow(true);
+            }
           });
         } else {
-          showToast(res.message || "ส่งแจ้งเตือนสำเร็จ", "success");
+          showToast(res.message || "ทดสอบแจ้งเตือนเรียบร้อย", "success");
         }
       } else {
         showToast((res && res.message) || "ไม่สามารถส่งแจ้งเตือนได้", "error");
@@ -1566,11 +1721,11 @@ function testCalendarReminderNow() {
     .withFailureHandler(err => {
       showToast("เกิดข้อผิดพลาดในการทดสอบ: " + (err.message || err), "error");
     })
-    .triggerDailySiteScheduleRemindersNow(currentUsername);
+    .triggerDailySiteScheduleRemindersNow(currentUsername, { forceResend: Boolean(forceResend) });
 }
 
 /**
- * ติดตั้งหรือรีเซ็ต Apps Script Time-driven Trigger รอบเช้า
+ * ติดตั้งหรือรีเซ็ต Apps Script Time-driven Trigger แบบละเอียดทุก 5 นาที
  */
 function setupCalendarTrigger() {
   showToast("กำลังตรวจสอบและติดตั้ง Time Trigger...", "info", 2000);
@@ -1578,10 +1733,15 @@ function setupCalendarTrigger() {
   google.script.run
     .withSuccessHandler(res => {
       if (res && res.success) {
+        if (res.triggerStatus) {
+          renderCalendarTriggerStatus(res.triggerStatus);
+        } else {
+          loadCalendarTriggerStatus();
+        }
         if (typeof Swal !== 'undefined') {
           Swal.fire({
             title: 'ติดตั้ง Time Trigger สำเร็จ!',
-            text: res.message || 'ระบบจะส่งแจ้งเตือนรอบเช้าทุกวันตามเวลาที่กำหนด',
+            text: res.message || 'ระบบจะตรวจสอบและส่งแจ้งเตือนอัตโนมัติตรงเวลาที่กำหนดทุกวัน',
             icon: 'success',
             confirmButtonText: 'ตกลง',
             confirmButtonColor: '#059669'

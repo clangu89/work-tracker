@@ -154,7 +154,9 @@ function doPost(e) {
       deleteSiteSchedule: deleteSiteSchedule,
       sendDailySiteScheduleReminders: sendDailySiteScheduleReminders,
       setupScheduleReminderTrigger: setupScheduleReminderTrigger,
-      triggerDailySiteScheduleRemindersNow: triggerDailySiteScheduleRemindersNow
+      triggerDailySiteScheduleRemindersNow: triggerDailySiteScheduleRemindersNow,
+      getCalendarTriggerStatus: getCalendarTriggerStatus,
+      checkAndRunSiteCalendarReminders: checkAndRunSiteCalendarReminders
     };
 
     const targetFn = PUBLIC_API_ACTIONS[payload.action];
@@ -481,7 +483,10 @@ function normalizeThailandTime24h_(rawVal) {
 
   if (rawVal instanceof Date) {
     try {
-      return Utilities.formatDate(rawVal, 'Asia/Bangkok', 'HH:mm');
+      // Google Sheets แปลงเวลาล้วนเป็นปี 1899 ซึ่ง TimeZone Asia/Bangkok สมัยนั้นใช้ LMT (+06:42:04)
+      // ใช้ GMT+7 สำหรับปี < 1920 เพื่อป้องกันเวลาคลาดเคลื่อน -18 นาที
+      const tz = rawVal.getFullYear() < 1920 ? 'GMT+7' : 'Asia/Bangkok';
+      return Utilities.formatDate(rawVal, tz, 'HH:mm');
     } catch (e) {
       return '07:00';
     }
@@ -494,8 +499,9 @@ function normalizeThailandTime24h_(rawVal) {
     const d = new Date(s);
     if (!isNaN(d.getTime())) {
       try {
-        const timeStr = Utilities.formatDate(d, 'Asia/Bangkok', 'HH:mm');
-        if (timeStr && timeStr !== '00:00' && !timeStr.includes('NaN')) {
+        const tz = d.getFullYear() < 1920 ? 'GMT+7' : 'Asia/Bangkok';
+        const timeStr = Utilities.formatDate(d, tz, 'HH:mm');
+        if (timeStr && !timeStr.includes('NaN')) {
           return timeStr;
         }
       } catch (e) {}
@@ -630,10 +636,13 @@ function saveSettings(newSettings) {
         if (asPlainText) cell.setNumberFormat('@');
         cell.setValue(value);
       } else {
-        sheet.appendRow([key, value, desc || '']);
-        if (asPlainText) {
-          sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
-        }
+        const nextRow = sheet.getLastRow() + 1;
+        sheet.getRange(nextRow, 1).setValue(key);
+        const valCell = sheet.getRange(nextRow, 2);
+        if (asPlainText) valCell.setNumberFormat('@'); // ตั้งเป็น Text ก่อนเขียนค่า ป้องกัน Sheets แปลงเป็น Date
+        valCell.setValue(value);
+        sheet.getRange(nextRow, 3).setValue(desc || '');
+        keysMap[key] = nextRow;
       }
     };
 
@@ -683,15 +692,19 @@ function saveSettings(newSettings) {
     if (newSettings.SITES !== undefined && Array.isArray(newSettings.SITES)) {
       updateOrAdd('SITES', JSON.stringify(newSettings.SITES), 'รายชื่อไซต์งานทั้งหมด');
     }
+    let hasCalendarReminderUpdate = false;
     if (newSettings.CALENDAR_ENABLE_ADVANCE_REMINDER !== undefined) {
       updateOrAdd('CALENDAR_ENABLE_ADVANCE_REMINDER', String(newSettings.CALENDAR_ENABLE_ADVANCE_REMINDER), 'เปิดเตือนความจำล่วงหน้ารอบเช้า (true/false)');
+      hasCalendarReminderUpdate = true;
     }
     if (newSettings.CALENDAR_REMINDER_DAYS_BEFORE !== undefined) {
       updateOrAdd('CALENDAR_REMINDER_DAYS_BEFORE', String(newSettings.CALENDAR_REMINDER_DAYS_BEFORE), 'จำนวนวันเตือนล่วงหน้า');
+      hasCalendarReminderUpdate = true;
     }
     if (newSettings.CALENDAR_REMINDER_TIME !== undefined) {
       const cleanTime = normalizeThailandTime24h_(newSettings.CALENDAR_REMINDER_TIME);
       updateOrAdd('CALENDAR_REMINDER_TIME', cleanTime, 'เวลาส่งแจ้งเตือนรอบเช้า (เวลาประเทศไทย 24 ชม.)', true);
+      hasCalendarReminderUpdate = true;
     }
     if (newSettings.CALENDAR_NOTIFY_ON_SCHEDULE !== undefined) {
       updateOrAdd('CALENDAR_NOTIFY_ON_SCHEDULE', String(newSettings.CALENDAR_NOTIFY_ON_SCHEDULE), 'แจ้งเตือนทันทีเมื่อลงตาราง (true/false)');
@@ -712,7 +725,37 @@ function saveSettings(newSettings) {
       updateOrAdd('CALENDAR_MAX_CHIPS_PER_CELL', String(newSettings.CALENDAR_MAX_CHIPS_PER_CELL), 'จำนวนชิปรายชื่อสูงสุดในช่องวัน');
     }
 
-    return { success: true, message: 'บันทึกการตั้งค่าสำเร็จ' };
+    // ซิงค์ค่าการตั้งค่าแจ้งเตือนเข้า PropertiesService และตรวจสอบการติดตั้ง Trigger อัตโนมัติ
+    let triggerStatus = null;
+    if (hasCalendarReminderUpdate) {
+      try {
+        const props = PropertiesService.getScriptProperties();
+        if (newSettings.CALENDAR_ENABLE_ADVANCE_REMINDER !== undefined) {
+          props.setProperty('CAL_REMINDER_ENABLED', String(newSettings.CALENDAR_ENABLE_ADVANCE_REMINDER));
+        }
+        if (newSettings.CALENDAR_REMINDER_TIME !== undefined) {
+          const cleanTime = normalizeThailandTime24h_(newSettings.CALENDAR_REMINDER_TIME);
+          const prevTime = props.getProperty('CAL_REMINDER_TIME');
+          props.setProperty('CAL_REMINDER_TIME', cleanTime);
+          // หากเปลี่ยนเวลาเตือนใหม่ ให้ล้าง slot เดิมเพื่อให้ทดสอบส่งในเวลาใหม่ของวันนี้ได้ทันที
+          if (prevTime !== cleanTime) {
+            props.deleteProperty('CAL_LAST_REMINDER_SLOT');
+            props.deleteProperty('CAL_LAST_REMINDER_DATE');
+          }
+        }
+        if (newSettings.CALENDAR_REMINDER_DAYS_BEFORE !== undefined) {
+          props.setProperty('CAL_REMINDER_DAYS_BEFORE', String(newSettings.CALENDAR_REMINDER_DAYS_BEFORE));
+        }
+        if (typeof setupScheduleReminderTrigger === 'function') {
+          const trigRes = setupScheduleReminderTrigger();
+          triggerStatus = (trigRes && trigRes.triggerStatus) ? trigRes.triggerStatus : trigRes;
+        }
+      } catch (syncErr) {
+        console.warn('Auto sync calendar trigger warning: ' + syncErr.message);
+      }
+    }
+
+    return { success: true, message: 'บันทึกการตั้งค่าสำเร็จ', triggerStatus: triggerStatus };
   } catch (error) {
     return { success: false, message: error.message };
   }
@@ -749,10 +792,13 @@ function saveSitesList(sitesArray, siteChatIds) {
         if (asPlainText) cell.setNumberFormat('@');
         cell.setValue(value);
       } else {
-        sheet.appendRow([key, value, desc || '']);
-        if (asPlainText) {
-          sheet.getRange(sheet.getLastRow(), 2).setNumberFormat('@');
-        }
+        const nextRow = sheet.getLastRow() + 1;
+        sheet.getRange(nextRow, 1).setValue(key);
+        const valCell = sheet.getRange(nextRow, 2);
+        if (asPlainText) valCell.setNumberFormat('@'); // ตั้งเป็น Text ก่อนเขียนค่า ป้องกัน Sheets แปลงเป็น Date
+        valCell.setValue(value);
+        sheet.getRange(nextRow, 3).setValue(desc || '');
+        keysMap[key] = nextRow;
       }
     };
 
