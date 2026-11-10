@@ -1212,9 +1212,13 @@ function openCreateTaskModal(defaultStatus = 'รอดำเนินการ'
   // วันครบกำหนดตั้งเป็นค่าว่าง
   setDateInputValue('taskDueDate', '');
 
-  // รีเซ็ตการเลือกไซต์งาน
+  // กำหนดค่าเริ่มต้นไซต์งาน: หากกำลังกรองไซต์งานอยู่ ให้ใช้ไซต์นั้น หากไม่ให้ใช้ sites[0]
   renderSiteFormOptions();
-  document.getElementById('taskSiteSelect').value = state.sites[0] || '';
+  let defaultSite = state.sites[0] || '';
+  if (state.filters.site && state.filters.site !== 'ALL' && state.sites.includes(state.filters.site)) {
+    defaultSite = state.filters.site;
+  }
+  document.getElementById('taskSiteSelect').value = defaultSite;
   document.getElementById('customSiteWrapper').classList.add('hidden');
   document.getElementById('taskSiteCustom').value = '';
 
@@ -1280,13 +1284,25 @@ function openEditTaskModal(taskId) {
   // จัดการตัวเลือกไซต์งาน
   renderSiteFormOptions();
   const siteSelect = document.getElementById('taskSiteSelect');
-  if (state.sites.includes(task.site)) {
-    siteSelect.value = task.site;
+  const taskSiteTrim = String(task.site || '').trim();
+  const matchedSite = state.sites.find(s => s.trim().toLowerCase() === taskSiteTrim.toLowerCase());
+  if (matchedSite) {
+    siteSelect.value = matchedSite;
     document.getElementById('customSiteWrapper').classList.add('hidden');
   } else {
-    siteSelect.value = '__NEW__';
-    document.getElementById('customSiteWrapper').classList.remove('hidden');
-    document.getElementById('taskSiteCustom').value = task.site;
+    // หากไม่ใช่ Admin หรือตัวเลือก __NEW__ ไม่มี ให้สร้าง option เฉพาะสำหรับไซต์งานนี้เพื่อป้องกัน select เด้งกลับไปตัวแรก
+    if (!Array.from(siteSelect.options).some(opt => opt.value === '__NEW__')) {
+      const opt = document.createElement('option');
+      opt.value = taskSiteTrim;
+      opt.text = taskSiteTrim;
+      siteSelect.add(opt);
+      siteSelect.value = taskSiteTrim;
+      document.getElementById('customSiteWrapper').classList.add('hidden');
+    } else {
+      siteSelect.value = '__NEW__';
+      document.getElementById('customSiteWrapper').classList.remove('hidden');
+      document.getElementById('taskSiteCustom').value = task.site;
+    }
   }
 
   // จัดการตัวเลือกผู้รับผิดชอบ
