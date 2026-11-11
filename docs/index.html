@@ -10,6 +10,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+  <!-- Preconnect Google Apps Script API Endpoints -->
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -636,7 +640,7 @@
                 <div id="loginUsernameDisplay" class="text-[10px] text-[#0a84ff] font-medium">-</div>
               </div>
             </div>
-            <button onclick="backToStep1()" class="text-xs text-[#6e6862] hover:text-[#0a84ff] underline transition-colors cursor-pointer">
+            <button type="button" onclick="backToStep1()" class="text-xs text-[#6e6862] hover:text-[#0a84ff] underline transition-colors cursor-pointer">
               เปลี่ยนผู้ใช้
             </button>
           </div>
@@ -709,11 +713,11 @@
         </form>
       </div>
 
-      <!-- Security Micro Badge -->
+      <!-- Security & Connection Status Micro Badge -->
       <div class="mt-6 pt-4 border-t border-black/10 flex items-center justify-between text-[11px] text-[#6e6862]">
-        <span class="flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-[#30d158]"></span>
-          <span>Secure 256-bit TLS</span>
+        <span class="flex items-center gap-1.5" id="loginConnStatusBadge">
+          <span id="loginConnDot" class="w-2 h-2 rounded-full bg-[#30d158] transition-colors"></span>
+          <span id="loginConnText">Secure 256-bit TLS</span>
         </span>
         <span>Liquid Glass UI</span>
       </div>
@@ -4307,9 +4311,11 @@
  * =========================================================================
  * GOOGLE APPS SCRIPT API BRIDGE FOR GITHUB PAGES
  * Polyfill layer intercepting google.script.run and routing to Google Apps Script Web App
+ * Includes Timeout, Cross-Origin Safeguards, Warmup Ping, and Exponential Backoff Retry
  * =========================================================================
  */
 const GAS_API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyox_uV2XJjgn96jK-XMKlr4vgucWG9FD1WqJR6Rhvu-L82El1nNhq7LyNvtwEBSjlrkg/exec';
+window.GAS_API_ENDPOINT = GAS_API_ENDPOINT;
 
 (function() {
   const isExternal = typeof window.google === 'undefined' || !window.google.script || !window.google.script.run;
@@ -4317,6 +4323,103 @@ const GAS_API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyox_uV2XJjgn9
     console.log('🌐 [API Bridge] Initialized on GitHub Pages / External Host');
     window.google = window.google || {};
     window.google.script = window.google.script || {};
+
+    const RETRIABLE_ACTIONS = new Set([
+      'loginWithPassword',
+      'requestLoginPin',
+      'verifyLoginPin',
+      'getInitialData',
+      'checkTasksUpdate',
+      'getArchivedTasks',
+      'getUsersList',
+      'pingOnlineUser',
+      'getOnlineUsers',
+      'logoutOnlineUser',
+      'getRdpInitialData',
+      'getRdpGroups',
+      'getRdpAuditLogs',
+      'getAdminOverviewData',
+      'getReportTasksData',
+      'getSiteSchedules',
+      'getCalendarBootstrapData',
+      'getCalendarTriggerStatus',
+      'testTelegramConnection'
+    ]);
+
+    function waitMs(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    function isRetriableError(err, httpStatus) {
+      if (httpStatus && (httpStatus === 429 || httpStatus >= 500)) return true;
+      if (!err) return false;
+      if (err.name === 'TypeError' || err.name === 'AbortError') return true;
+      const msg = String(err.message || '');
+      return /failed to fetch|networkerror|load failed|network request failed|timed? out|abort/i.test(msg);
+    }
+
+    function buildFriendlyError(err, propKey) {
+      const rawMsg = String((err && err.message) || err || 'Unknown error');
+      const isNetworkOrTimeout =
+        (err && (err.name === 'TypeError' || err.name === 'AbortError')) ||
+        /failed to fetch|networkerror|load failed|network request failed|timed? out/i.test(rawMsg);
+
+      let displayMsg = rawMsg;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        displayMsg = 'ไม่พบการเชื่อมต่ออินเทอร์เน็ต กรุณาตรวจสอบ Wi-Fi หรือเครือข่ายแล้วลองใหม่อีกครั้ง';
+      } else if (err && err.name === 'AbortError') {
+        displayMsg = 'การเชื่อมต่อเซิร์ฟเวอร์ใช้เวลานานเกินกำหนด (Timeout) กรุณาลองใหม่อีกครั้ง';
+      } else if (isNetworkOrTimeout) {
+        displayMsg = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ชั่วคราว (Network / CORS Redirect) กรุณาลองกดใหม่อีกครั้ง';
+      }
+
+      const wrapped = new Error(displayMsg);
+      wrapped.rawMessage = rawMsg;
+      wrapped.isNetworkError = isNetworkOrTimeout;
+      wrapped.action = propKey;
+      return wrapped;
+    }
+
+    async function fetchWithTimeout(url, options, timeoutMs) {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timerId = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+      try {
+        return await fetch(url, {
+          ...options,
+          credentials: 'omit',
+          cache: 'no-store',
+          redirect: 'follow',
+          signal: controller ? controller.signal : undefined
+        });
+      } finally {
+        if (timerId) clearTimeout(timerId);
+      }
+    }
+
+    let activeWarmupPromise = null;
+    window.warmupGasBackend = function(forceNew, timeoutMs) {
+      if (!forceNew && activeWarmupPromise) return activeWarmupPromise;
+      const pingTimeout = typeof timeoutMs === 'number' ? timeoutMs : 15000;
+      const runPing = async () => {
+        const startedAt = Date.now();
+        try {
+          const res = await fetchWithTimeout(
+            GAS_API_ENDPOINT + '?action=ping&_t=' + Date.now(),
+            { method: 'GET' },
+            pingTimeout
+          );
+          if (!res.ok) return { ok: false, status: res.status, latencyMs: Date.now() - startedAt };
+          const data = await res.json().catch(() => null);
+          return { ok: Boolean(data && data.success), data: data, latencyMs: Date.now() - startedAt };
+        } catch (err) {
+          return { ok: false, error: err && err.message ? err.message : String(err), latencyMs: Date.now() - startedAt };
+        } finally {
+          setTimeout(() => { activeWarmupPromise = null; }, 2000);
+        }
+      };
+      activeWarmupPromise = runPing();
+      return activeWarmupPromise;
+    };
 
     function createGasProxy(successCb, failureCb) {
       return new Proxy({}, {
@@ -4328,28 +4431,53 @@ const GAS_API_ENDPOINT = 'https://script.google.com/macros/s/AKfycbyox_uV2XJjgn9
             return function(cb) { return createGasProxy(successCb, cb); };
           }
           return async function(...args) {
-            try {
-              const response = await fetch(GAS_API_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                body: JSON.stringify({ action: propKey, args: args })
-              });
-              if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            const isUpload = String(propKey).toLowerCase().includes('upload');
+            const timeoutMs = isUpload ? 60000 : 25000;
+            const maxAttempts = RETRIABLE_ACTIONS.has(propKey) ? 3 : 1;
+
+            let lastErr = null;
+            for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+              let httpStatus = 0;
+              try {
+                const response = await fetchWithTimeout(GAS_API_ENDPOINT, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                  body: JSON.stringify({ action: propKey, args: args })
+                }, timeoutMs);
+
+                httpStatus = response.status;
+                if (!response.ok) {
+                  throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                if (data && data.isServerException) {
+                  throw new Error(data.message || data.error || 'Server Exception');
+                }
+                if (typeof successCb === 'function') {
+                  successCb(data);
+                }
+                return data;
+              } catch (err) {
+                lastErr = err;
+                const canRetry = attempt < maxAttempts && isRetriableError(err, httpStatus);
+                console.warn(`⚠️ [API Bridge] ${propKey} attempt ${attempt}/${maxAttempts} failed:`, err && err.message ? err.message : err);
+                if (canRetry) {
+                  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    break;
+                  }
+                  const backoffMs = 700 * Math.pow(2, attempt - 1);
+                  await waitMs(backoffMs);
+                  continue;
+                }
+                break;
               }
-              const data = await response.json();
-              if (data && data.isServerException) {
-                throw new Error(data.message || data.error || 'Server Exception');
-              }
-              if (typeof successCb === 'function') {
-                successCb(data);
-              }
-              return data;
-            } catch (err) {
-              console.error(`❌ [API Bridge Error] ${propKey}:`, err);
-              if (typeof failureCb === 'function') {
-                failureCb(err);
-              }
+            }
+
+            const finalErr = buildFriendlyError(lastErr, propKey);
+            console.error(`❌ [API Bridge Error] ${propKey}:`, lastErr);
+            if (typeof failureCb === 'function') {
+              failureCb(finalErr);
             }
           };
         }
@@ -7790,6 +7918,63 @@ document.addEventListener('visibilitychange', () => {
  * =========================================================================
  */
 
+function generateClientRequestId_() {
+  return 'req_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+function setLoginConnBadge_(mode, text) {
+  const dot = document.getElementById('loginConnDot');
+  const label = document.getElementById('loginConnText');
+  if (dot) {
+    if (mode === 'warming') {
+      dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse transition-colors';
+    } else if (mode === 'offline' || mode === 'error') {
+      dot.className = 'w-2 h-2 rounded-full bg-rose-500 transition-colors';
+    } else {
+      dot.className = 'w-2 h-2 rounded-full bg-[#30d158] transition-colors';
+    }
+  }
+  if (label && text) {
+    label.textContent = text;
+  }
+}
+
+async function warmupBackendConnection(forceNew = false) {
+  if (typeof window.warmupGasBackend !== 'function') {
+    setLoginConnBadge_('ready', 'Secure 256-bit TLS');
+    return;
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    setLoginConnBadge_('offline', 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต');
+    return;
+  }
+  setLoginConnBadge_('warming', 'กำลังเตรียมการเชื่อมต่อ...');
+  const res = await window.warmupGasBackend(forceNew, 15000);
+  if (res && res.ok) {
+    setLoginConnBadge_('ready', 'เซิร์ฟเวอร์พร้อมใช้งาน • 256-bit TLS');
+  } else {
+    setLoginConnBadge_('ready', 'Secure 256-bit TLS');
+  }
+}
+
+function formatLoginConnectionError(err) {
+  const raw = String((err && err.message) || err || '');
+  const isNetwork =
+    Boolean(err && err.isNetworkError) ||
+    /failed to fetch|networkerror|load failed|network request failed|timeout|abort|เชื่อมต่อเซิร์ฟเวอร์/i.test(raw);
+  if (isNetwork) {
+    warmupBackendConnection(true);
+    return {
+      title: 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ',
+      text: raw || 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ชั่วคราว กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง'
+    };
+  }
+  return {
+    title: 'เกิดข้อผิดพลาด',
+    text: raw || 'ไม่สามารถทำรายการได้ กรุณาลองใหม่อีกครั้ง'
+  };
+}
+
 function checkAuthSession() {
   const sessionStr = sessionStorage.getItem('work_tracker_session');
   if (sessionStr) {
@@ -7830,6 +8015,7 @@ function checkAuthSession() {
   switchLoginMethod('pin');
   document.getElementById('loginStep1').classList.remove('hidden');
   document.getElementById('loginStep2').classList.add('hidden');
+  warmupBackendConnection(false);
   setTimeout(() => {
     const input = document.getElementById('loginUsername');
     if (input) input.focus();
@@ -7859,8 +8045,16 @@ function updateNavbarUser() {
  * ขอรหัส PIN 6 หลักผ่าน Telegram
  */
 function handleRequestPin() {
+  const btn = document.getElementById('btnRequestPin');
+  const btnResend = document.getElementById('btnResendPin');
+  const step2Visible = !document.getElementById('loginStep2')?.classList.contains('hidden');
+  if ((!step2Visible && btn && btn.disabled) || (step2Visible && btnResend && btnResend.disabled)) {
+    return;
+  }
+
   const usernameInput = document.getElementById('loginUsername');
-  const username = (state.loginUsername || usernameInput.value).trim().toLowerCase();
+  const rawUser = step2Visible ? (state.loginUsername || usernameInput.value) : usernameInput.value;
+  const username = String(rawUser || '').trim().toLowerCase();
 
   if (!username) {
     Swal.fire({ icon: 'warning', title: 'กรุณากรอกชื่อผู้ใช้', text: 'กรุณาระบุชื่อผู้ใช้ (Username) ของคุณ' });
@@ -7870,8 +8064,6 @@ function handleRequestPin() {
 
   state.loginUsername = username;
 
-  const btn = document.getElementById('btnRequestPin');
-  const btnResend = document.getElementById('btnResendPin');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังส่ง PIN เข้า Telegram...';
@@ -7880,6 +8072,8 @@ function handleRequestPin() {
     btnResend.disabled = true;
     btnResend.innerText = 'กำลังส่งรหัส...';
   }
+
+  const requestId = generateClientRequestId_();
 
   google.script.run
     .withSuccessHandler((res) => {
@@ -7892,8 +8086,8 @@ function handleRequestPin() {
         btnResend.innerHTML = 'ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>';
       }
 
-      if (!res.success) {
-        Swal.fire({ icon: 'error', title: 'ขอรหัสไม่สำเร็จ', text: res.message });
+      if (!res || !res.success) {
+        Swal.fire({ icon: 'error', title: 'ขอรหัสไม่สำเร็จ', text: (res && res.message) || 'ไม่สามารถส่งรหัส PIN ได้' });
         return;
       }
 
@@ -7927,13 +8121,15 @@ function handleRequestPin() {
         btnResend.disabled = false;
         btnResend.innerHTML = 'ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>';
       }
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+      const friendly = formatLoginConnectionError(err);
+      Swal.fire({ icon: 'error', title: friendly.title, text: friendly.text });
     })
-    .requestLoginPin(username);
+    .requestLoginPin(username, requestId);
 }
 
 function backToStep1() {
   if (state.countdownInterval) clearInterval(state.countdownInterval);
+  state.loginUsername = '';
   document.getElementById('loginStep2').classList.add('hidden');
   document.getElementById('loginStep1').classList.remove('hidden');
   clearPinInputs();
@@ -8052,6 +8248,9 @@ function checkAndAutoSubmitPin() {
  * ยืนยันรหัส PIN 6 หลักเพื่อเข้าสู่ระบบ
  */
 function handleVerifyPin() {
+  const btn = document.getElementById('btnVerifyPin');
+  if (btn && btn.disabled) return;
+
   let pin = '';
   for (let i = 0; i < 6; i++) {
     const val = document.getElementById('pin-' + i).value;
@@ -8063,17 +8262,22 @@ function handleVerifyPin() {
     return;
   }
 
-  const btn = document.getElementById('btnVerifyPin');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบรหัส...';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบรหัส...';
+  }
+
+  const requestId = generateClientRequestId_();
 
   google.script.run
     .withSuccessHandler((res) => {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs mr-1"></i> เข้าสู่ระบบ';
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs"></i> <span>เข้าสู่ระบบด้วย PIN</span>';
+      }
 
-      if (!res.success) {
-        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: res.message });
+      if (!res || !res.success) {
+        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: (res && res.message) || 'ไม่สามารถยืนยันรหัส PIN ได้' });
         clearPinInputs();
         return;
       }
@@ -8100,11 +8304,14 @@ function handleVerifyPin() {
       openAppLauncher();
     })
     .withFailureHandler((err) => {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs mr-1"></i> เข้าสู่ระบบ';
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs"></i> <span>เข้าสู่ระบบด้วย PIN</span>';
+      }
+      const friendly = formatLoginConnectionError(err);
+      Swal.fire({ icon: 'error', title: friendly.title, text: friendly.text });
     })
-    .verifyLoginPin(state.loginUsername, pin);
+    .verifyLoginPin(state.loginUsername, pin, requestId);
 }
 
 /**
@@ -10251,6 +10458,9 @@ function switchLoginMethod(method) {
 
 function handlePasswordLogin(event) {
   event.preventDefault();
+  const btn = document.getElementById('btnLoginPassword');
+  if (btn && btn.disabled) return;
+
   const username = document.getElementById('loginPassUsername').value.trim().toLowerCase();
   const password = document.getElementById('loginPassPassword').value;
 
@@ -10259,7 +10469,6 @@ function handlePasswordLogin(event) {
     return;
   }
 
-  const btn = document.getElementById('btnLoginPassword');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบ...';
@@ -10269,11 +10478,11 @@ function handlePasswordLogin(event) {
     .withSuccessHandler((res) => {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs mr-1"></i> เข้าสู่ระบบด้วยรหัสผ่าน';
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs"></i> <span>เข้าสู่ระบบด้วยรหัสผ่าน</span>';
       }
 
-      if (!res.success) {
-        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: res.message });
+      if (!res || !res.success) {
+        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: (res && res.message) || 'ไม่สามารถเข้าสู่ระบบได้' });
         return;
       }
 
@@ -10298,9 +10507,10 @@ function handlePasswordLogin(event) {
     .withFailureHandler((err) => {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs mr-1"></i> เข้าสู่ระบบด้วยรหัสผ่าน';
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs"></i> <span>เข้าสู่ระบบด้วยรหัสผ่าน</span>';
       }
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+      const friendly = formatLoginConnectionError(err);
+      Swal.fire({ icon: 'error', title: friendly.title, text: friendly.text });
     })
     .loginWithPassword(username, password);
 }

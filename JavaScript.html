@@ -3427,6 +3427,63 @@ document.addEventListener('visibilitychange', () => {
  * =========================================================================
  */
 
+function generateClientRequestId_() {
+  return 'req_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+}
+
+function setLoginConnBadge_(mode, text) {
+  const dot = document.getElementById('loginConnDot');
+  const label = document.getElementById('loginConnText');
+  if (dot) {
+    if (mode === 'warming') {
+      dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse transition-colors';
+    } else if (mode === 'offline' || mode === 'error') {
+      dot.className = 'w-2 h-2 rounded-full bg-rose-500 transition-colors';
+    } else {
+      dot.className = 'w-2 h-2 rounded-full bg-[#30d158] transition-colors';
+    }
+  }
+  if (label && text) {
+    label.textContent = text;
+  }
+}
+
+async function warmupBackendConnection(forceNew = false) {
+  if (typeof window.warmupGasBackend !== 'function') {
+    setLoginConnBadge_('ready', 'Secure 256-bit TLS');
+    return;
+  }
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    setLoginConnBadge_('offline', 'ไม่มีการเชื่อมต่ออินเทอร์เน็ต');
+    return;
+  }
+  setLoginConnBadge_('warming', 'กำลังเตรียมการเชื่อมต่อ...');
+  const res = await window.warmupGasBackend(forceNew, 15000);
+  if (res && res.ok) {
+    setLoginConnBadge_('ready', 'เซิร์ฟเวอร์พร้อมใช้งาน • 256-bit TLS');
+  } else {
+    setLoginConnBadge_('ready', 'Secure 256-bit TLS');
+  }
+}
+
+function formatLoginConnectionError(err) {
+  const raw = String((err && err.message) || err || '');
+  const isNetwork =
+    Boolean(err && err.isNetworkError) ||
+    /failed to fetch|networkerror|load failed|network request failed|timeout|abort|เชื่อมต่อเซิร์ฟเวอร์/i.test(raw);
+  if (isNetwork) {
+    warmupBackendConnection(true);
+    return {
+      title: 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ',
+      text: raw || 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ชั่วคราว กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่อีกครั้ง'
+    };
+  }
+  return {
+    title: 'เกิดข้อผิดพลาด',
+    text: raw || 'ไม่สามารถทำรายการได้ กรุณาลองใหม่อีกครั้ง'
+  };
+}
+
 function checkAuthSession() {
   const sessionStr = sessionStorage.getItem('work_tracker_session');
   if (sessionStr) {
@@ -3467,6 +3524,7 @@ function checkAuthSession() {
   switchLoginMethod('pin');
   document.getElementById('loginStep1').classList.remove('hidden');
   document.getElementById('loginStep2').classList.add('hidden');
+  warmupBackendConnection(false);
   setTimeout(() => {
     const input = document.getElementById('loginUsername');
     if (input) input.focus();
@@ -3496,8 +3554,16 @@ function updateNavbarUser() {
  * ขอรหัส PIN 6 หลักผ่าน Telegram
  */
 function handleRequestPin() {
+  const btn = document.getElementById('btnRequestPin');
+  const btnResend = document.getElementById('btnResendPin');
+  const step2Visible = !document.getElementById('loginStep2')?.classList.contains('hidden');
+  if ((!step2Visible && btn && btn.disabled) || (step2Visible && btnResend && btnResend.disabled)) {
+    return;
+  }
+
   const usernameInput = document.getElementById('loginUsername');
-  const username = (state.loginUsername || usernameInput.value).trim().toLowerCase();
+  const rawUser = step2Visible ? (state.loginUsername || usernameInput.value) : usernameInput.value;
+  const username = String(rawUser || '').trim().toLowerCase();
 
   if (!username) {
     Swal.fire({ icon: 'warning', title: 'กรุณากรอกชื่อผู้ใช้', text: 'กรุณาระบุชื่อผู้ใช้ (Username) ของคุณ' });
@@ -3507,8 +3573,6 @@ function handleRequestPin() {
 
   state.loginUsername = username;
 
-  const btn = document.getElementById('btnRequestPin');
-  const btnResend = document.getElementById('btnResendPin');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังส่ง PIN เข้า Telegram...';
@@ -3517,6 +3581,8 @@ function handleRequestPin() {
     btnResend.disabled = true;
     btnResend.innerText = 'กำลังส่งรหัส...';
   }
+
+  const requestId = generateClientRequestId_();
 
   google.script.run
     .withSuccessHandler((res) => {
@@ -3529,8 +3595,8 @@ function handleRequestPin() {
         btnResend.innerHTML = 'ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>';
       }
 
-      if (!res.success) {
-        Swal.fire({ icon: 'error', title: 'ขอรหัสไม่สำเร็จ', text: res.message });
+      if (!res || !res.success) {
+        Swal.fire({ icon: 'error', title: 'ขอรหัสไม่สำเร็จ', text: (res && res.message) || 'ไม่สามารถส่งรหัส PIN ได้' });
         return;
       }
 
@@ -3564,13 +3630,15 @@ function handleRequestPin() {
         btnResend.disabled = false;
         btnResend.innerHTML = 'ไม่ได้รับรหัส? <span class="underline">ส่งรหัสใหม่อีกครั้ง</span>';
       }
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+      const friendly = formatLoginConnectionError(err);
+      Swal.fire({ icon: 'error', title: friendly.title, text: friendly.text });
     })
-    .requestLoginPin(username);
+    .requestLoginPin(username, requestId);
 }
 
 function backToStep1() {
   if (state.countdownInterval) clearInterval(state.countdownInterval);
+  state.loginUsername = '';
   document.getElementById('loginStep2').classList.add('hidden');
   document.getElementById('loginStep1').classList.remove('hidden');
   clearPinInputs();
@@ -3689,6 +3757,9 @@ function checkAndAutoSubmitPin() {
  * ยืนยันรหัส PIN 6 หลักเพื่อเข้าสู่ระบบ
  */
 function handleVerifyPin() {
+  const btn = document.getElementById('btnVerifyPin');
+  if (btn && btn.disabled) return;
+
   let pin = '';
   for (let i = 0; i < 6; i++) {
     const val = document.getElementById('pin-' + i).value;
@@ -3700,17 +3771,22 @@ function handleVerifyPin() {
     return;
   }
 
-  const btn = document.getElementById('btnVerifyPin');
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบรหัส...';
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบรหัส...';
+  }
+
+  const requestId = generateClientRequestId_();
 
   google.script.run
     .withSuccessHandler((res) => {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs mr-1"></i> เข้าสู่ระบบ';
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs"></i> <span>เข้าสู่ระบบด้วย PIN</span>';
+      }
 
-      if (!res.success) {
-        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: res.message });
+      if (!res || !res.success) {
+        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: (res && res.message) || 'ไม่สามารถยืนยันรหัส PIN ได้' });
         clearPinInputs();
         return;
       }
@@ -3737,11 +3813,14 @@ function handleVerifyPin() {
       openAppLauncher();
     })
     .withFailureHandler((err) => {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs mr-1"></i> เข้าสู่ระบบ';
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-lock-open text-xs"></i> <span>เข้าสู่ระบบด้วย PIN</span>';
+      }
+      const friendly = formatLoginConnectionError(err);
+      Swal.fire({ icon: 'error', title: friendly.title, text: friendly.text });
     })
-    .verifyLoginPin(state.loginUsername, pin);
+    .verifyLoginPin(state.loginUsername, pin, requestId);
 }
 
 /**
@@ -5888,6 +5967,9 @@ function switchLoginMethod(method) {
 
 function handlePasswordLogin(event) {
   event.preventDefault();
+  const btn = document.getElementById('btnLoginPassword');
+  if (btn && btn.disabled) return;
+
   const username = document.getElementById('loginPassUsername').value.trim().toLowerCase();
   const password = document.getElementById('loginPassPassword').value;
 
@@ -5896,7 +5978,6 @@ function handlePasswordLogin(event) {
     return;
   }
 
-  const btn = document.getElementById('btnLoginPassword');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1"></i> กำลังตรวจสอบ...';
@@ -5906,11 +5987,11 @@ function handlePasswordLogin(event) {
     .withSuccessHandler((res) => {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs mr-1"></i> เข้าสู่ระบบด้วยรหัสผ่าน';
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs"></i> <span>เข้าสู่ระบบด้วยรหัสผ่าน</span>';
       }
 
-      if (!res.success) {
-        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: res.message });
+      if (!res || !res.success) {
+        Swal.fire({ icon: 'error', title: 'เข้าสู่ระบบไม่สำเร็จ', text: (res && res.message) || 'ไม่สามารถเข้าสู่ระบบได้' });
         return;
       }
 
@@ -5935,9 +6016,10 @@ function handlePasswordLogin(event) {
     .withFailureHandler((err) => {
       if (btn) {
         btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs mr-1"></i> เข้าสู่ระบบด้วยรหัสผ่าน';
+        btn.innerHTML = '<i class="fa-solid fa-right-to-bracket text-xs"></i> <span>เข้าสู่ระบบด้วยรหัสผ่าน</span>';
       }
-      Swal.fire({ icon: 'error', title: 'เกิดข้อผิดพลาด', text: err.message });
+      const friendly = formatLoginConnectionError(err);
+      Swal.fire({ icon: 'error', title: friendly.title, text: friendly.text });
     })
     .loginWithPassword(username, password);
 }

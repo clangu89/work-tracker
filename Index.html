@@ -10,6 +10,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
+  <!-- Preconnect Google Apps Script API Endpoints -->
+  <link rel="preconnect" href="https://script.google.com" crossorigin>
+  <link rel="preconnect" href="https://script.googleusercontent.com" crossorigin>
+
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -126,7 +130,7 @@
                 <div id="loginUsernameDisplay" class="text-[10px] text-[#0a84ff] font-medium">-</div>
               </div>
             </div>
-            <button onclick="backToStep1()" class="text-xs text-[#6e6862] hover:text-[#0a84ff] underline transition-colors cursor-pointer">
+            <button type="button" onclick="backToStep1()" class="text-xs text-[#6e6862] hover:text-[#0a84ff] underline transition-colors cursor-pointer">
               เปลี่ยนผู้ใช้
             </button>
           </div>
@@ -199,11 +203,11 @@
         </form>
       </div>
 
-      <!-- Security Micro Badge -->
+      <!-- Security & Connection Status Micro Badge -->
       <div class="mt-6 pt-4 border-t border-black/10 flex items-center justify-between text-[11px] text-[#6e6862]">
-        <span class="flex items-center gap-1.5">
-          <span class="w-2 h-2 rounded-full bg-[#30d158]"></span>
-          <span>Secure 256-bit TLS</span>
+        <span class="flex items-center gap-1.5" id="loginConnStatusBadge">
+          <span id="loginConnDot" class="w-2 h-2 rounded-full bg-[#30d158] transition-colors"></span>
+          <span id="loginConnText">Secure 256-bit TLS</span>
         </span>
         <span>Liquid Glass UI</span>
       </div>

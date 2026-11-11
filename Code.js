@@ -2591,13 +2591,22 @@ function testTelegramConnection(token, chatId, siteName) {
 /**
  * ผู้ใช้ขอรหัส PIN 6 หลักเพื่อเข้าสู่ระบบ (ส่งเข้า Telegram ส่วนตัว)
  */
-function requestLoginPin(username) {
+function requestLoginPin(username, requestId) {
   try {
     if (!username) {
       return { success: false, message: 'กรุณากรอกชื่อผู้ใช้ (Username)' };
     }
 
     username = String(username).trim().toLowerCase();
+    const reqId = requestId ? String(requestId).trim() : '';
+    const cache = CacheService.getScriptCache();
+    if (reqId) {
+      const cachedReq = cache.get('PIN_REQ_' + reqId);
+      if (cachedReq) {
+        try { return JSON.parse(cachedReq); } catch (e) {}
+      }
+    }
+
     const ss = getDb_();
     let userSheet = ss.getSheetByName(SHEET_USERS);
     if (!userSheet) {
@@ -2647,7 +2656,6 @@ function requestLoginPin(username) {
     const pin = String(Math.floor(100000 + Math.random() * 900000));
 
     // จัดเก็บใน CacheService กำหนดอายุ 300 วินาที (5 นาที)
-    const cache = CacheService.getScriptCache();
     cache.put('PIN_' + username, pin, 300);
     cache.put('ATTEMPTS_' + username, '0', 300);
 
@@ -2668,13 +2676,17 @@ function requestLoginPin(username) {
       ? '***' + foundUser.telegramChatId.slice(-4) 
       : '****';
 
-    return {
+    const result = {
       success: true,
       message: `ส่งรหัส PIN ไปยัง Telegram (${maskedChatId}) เรียบร้อยแล้ว`,
       username: foundUser.username,
       fullName: foundUser.fullName,
       expiresIn: 300
     };
+    if (reqId) {
+      try { cache.put('PIN_REQ_' + reqId, JSON.stringify(result), 30); } catch (e) {}
+    }
+    return result;
   } catch (error) {
     return { success: false, message: 'ส่งรหัส PIN ไม่สำเร็จ: ' + error.message };
   }
@@ -2683,7 +2695,7 @@ function requestLoginPin(username) {
 /**
  * ตรวจสอบรหัส PIN 6 หลักเพื่อเข้าสู่ระบบ
  */
-function verifyLoginPin(username, pin) {
+function verifyLoginPin(username, pin, requestId) {
   try {
     if (!username || !pin) {
       return { success: false, message: 'กรุณากรอกทั้งชื่อผู้ใช้และรหัส PIN' };
@@ -2691,19 +2703,34 @@ function verifyLoginPin(username, pin) {
 
     username = String(username).trim().toLowerCase();
     pin = String(pin).trim();
+    const reqId = requestId ? String(requestId).trim() : '';
 
     const cache = CacheService.getScriptCache();
+    if (reqId) {
+      const cachedVer = cache.get('PIN_VER_' + reqId);
+      if (cachedVer) {
+        try { return JSON.parse(cachedVer); } catch (e) {}
+      }
+    }
+
+    const cacheReply_ = (payload) => {
+      if (reqId) {
+        try { cache.put('PIN_VER_' + reqId, JSON.stringify(payload), 30); } catch (e) {}
+      }
+      return payload;
+    };
+
     const cachedPin = cache.get('PIN_' + username);
 
     if (!cachedPin) {
-      return { success: false, message: 'รหัส PIN หมดอายุหรือยังไม่ได้ขอรหัส กรุณากดขอรหัสใหม่อีกครั้ง' };
+      return cacheReply_({ success: false, message: 'รหัส PIN หมดอายุหรือยังไม่ได้ขอรหัส กรุณากดขอรหัสใหม่อีกครั้ง' });
     }
 
     let attempts = parseInt(cache.get('ATTEMPTS_' + username) || '0', 10);
     if (attempts >= 3) {
       cache.remove('PIN_' + username);
       cache.remove('ATTEMPTS_' + username);
-      return { success: false, message: 'คุณกรอกรหัสผิดเกิน 3 ครั้ง รหัสถูกยกเลิกแล้ว กรุณากดขอรหัส PIN ใหม่' };
+      return cacheReply_({ success: false, message: 'คุณกรอกรหัสผิดเกิน 3 ครั้ง รหัสถูกยกเลิกแล้ว กรุณากดขอรหัส PIN ใหม่' });
     }
 
     if (cachedPin !== pin) {
@@ -2711,11 +2738,11 @@ function verifyLoginPin(username, pin) {
       const remaining = 3 - attempts;
       if (remaining > 0) {
         cache.put('ATTEMPTS_' + username, String(attempts), 300);
-        return { success: false, message: `รหัส PIN ไม่ถูกต้อง (เหลือโอกาสกรอกอีก ${remaining} ครั้ง)` };
+        return cacheReply_({ success: false, message: `รหัส PIN ไม่ถูกต้อง (เหลือโอกาสกรอกอีก ${remaining} ครั้ง)` });
       } else {
         cache.remove('PIN_' + username);
         cache.remove('ATTEMPTS_' + username);
-        return { success: false, message: 'คุณกรอกรหัสผิดเกินกำหนด รหัสถูกยกเลิกแล้ว กรุณากดขอรหัสใหม่' };
+        return cacheReply_({ success: false, message: 'คุณกรอกรหัสผิดเกินกำหนด รหัสถูกยกเลิกแล้ว กรุณากดขอรหัสใหม่' });
       }
     }
 
@@ -2788,12 +2815,12 @@ function verifyLoginPin(username, pin) {
       writeRdpAuditLog_(username, 'LOGIN_PIN', '-', `เข้าสู่ระบบด้วย Telegram OTP PIN 6 หลักสำเร็จ (${username})`);
     }
 
-    return {
+    return cacheReply_({
       success: true,
       message: 'เข้าสู่ระบบสำเร็จ',
       token: sessionToken,
       user: profile || { username: username, fullName: username, role: 'Member', allowedSites: 'ALL', allowedApps: ['work_tracker', 'rdp_manager'], allowedRdpSites: 'ALL', hasPassword: false }
-    };
+    });
   } catch (error) {
     return { success: false, message: 'เกิดข้อผิดพลาด: ' + error.message };
   }
@@ -2810,8 +2837,11 @@ function loginWithPassword(username, password) {
 
     username = String(username).trim().toLowerCase();
     const ss = getDb_();
-    setupDatabase();
-    const userSheet = ss.getSheetByName(SHEET_USERS);
+    let userSheet = ss.getSheetByName(SHEET_USERS);
+    if (!userSheet) {
+      setupDatabase();
+      userSheet = ss.getSheetByName(SHEET_USERS);
+    }
     if (!userSheet) return { success: false, message: 'ไม่พบตาราง Users ในระบบ' };
 
     const userData = userSheet.getDataRange().getValues();
