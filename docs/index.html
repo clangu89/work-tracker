@@ -1399,9 +1399,20 @@
             <div class="md:col-span-7 space-y-4">
               <!-- ไซต์งาน -->
               <div>
-                <label class="block text-xs font-semibold text-[#201E1C] mb-1">
-                  ไซต์งาน / สถานที่ <span class="text-rose-500">*</span>
-                </label>
+                <div class="flex items-center justify-between gap-2 mb-1">
+                  <label for="taskSiteSelect" class="block text-xs font-semibold text-[#201E1C]">
+                    ไซต์งาน / สถานที่ <span class="text-rose-500">*</span>
+                    <span id="taskSiteLockedBadge" class="hidden inline-flex items-center gap-1 ml-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                      <i class="fa-solid fa-lock text-[9px]"></i> ล็อค
+                    </span>
+                  </label>
+                  <button type="button" id="btnUnlockTaskSite" onclick="toggleTaskSiteUnlock()"
+                          class="hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-colors cursor-pointer"
+                          title="ปลดล็อคเพื่อเปลี่ยนไซต์งาน (เฉพาะ Admin)">
+                    <i class="fa-solid fa-unlock-keyhole text-[10px]"></i>
+                    <span>ปลดล็อค (Admin)</span>
+                  </button>
+                </div>
                 <select id="taskSiteSelect" class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] cursor-pointer">
                   <!-- Rendered via JS -->
                 </select>
@@ -4379,6 +4390,8 @@ const state = {
   taskFileQueue: [],
   currentEditingAttachments: [],
   currentEditingChecklist: [],
+  editingOriginalTaskSite: '',
+  isTaskSiteUnlockedByAdmin: false,
   sheetUrl: '',
   webAppUrl: '',
   filters: {
@@ -5545,6 +5558,106 @@ function handleAddChecklistFromInput() {
 }
 
 /**
+ * กำหนดสถานะล็อค/ปลดล็อคช่องเลือกไซต์งานบนฟอร์มสร้าง/แก้ไขงาน
+ */
+function setTaskSiteFieldLocked(isLocked, options = {}) {
+  const siteSelect = document.getElementById('taskSiteSelect');
+  const lockedBadge = document.getElementById('taskSiteLockedBadge');
+  const unlockBtn = document.getElementById('btnUnlockTaskSite');
+  const customWrapper = document.getElementById('customSiteWrapper');
+  const isEditMode = Boolean(options.isEditMode);
+  const isAdmin = state.currentUser && state.currentUser.role === 'Admin';
+  if (!siteSelect) return;
+
+  siteSelect.disabled = Boolean(isLocked);
+  if (isLocked) {
+    siteSelect.className = 'w-full px-3 py-2 text-sm bg-[#EDE7DA]/60 border border-[#DFD8C8] rounded-xl text-[#6E6862] font-medium cursor-not-allowed opacity-90 outline-none';
+    if (customWrapper) customWrapper.classList.add('hidden');
+    if (lockedBadge) {
+      if (isEditMode) {
+        lockedBadge.innerHTML = '<i class="fa-solid fa-lock text-[9px]"></i> ล็อค (ไม่สามารถแก้ไขไซต์งานได้)';
+        lockedBadge.className = 'inline-flex items-center gap-1 ml-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200';
+      } else {
+        lockedBadge.className = 'hidden';
+      }
+    }
+  } else {
+    siteSelect.className = 'w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] cursor-pointer';
+    if (lockedBadge) {
+      if (isEditMode) {
+        lockedBadge.innerHTML = '<i class="fa-solid fa-unlock text-[9px]"></i> ปลดล็อคแล้ว (Admin)';
+        lockedBadge.className = 'inline-flex items-center gap-1 ml-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-blue-100 text-blue-800 border border-blue-200';
+      } else {
+        lockedBadge.className = 'hidden';
+      }
+    }
+  }
+
+  if (unlockBtn) {
+    if (isEditMode && isAdmin) {
+      unlockBtn.classList.remove('hidden');
+      if (isLocked) {
+        unlockBtn.innerHTML = '<i class="fa-solid fa-unlock-keyhole text-[10px]"></i><span>ปลดล็อค (Admin)</span>';
+        unlockBtn.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-colors cursor-pointer';
+        unlockBtn.title = 'ปลดล็อคเพื่อเปลี่ยนไซต์งาน (เฉพาะ Admin)';
+      } else {
+        unlockBtn.innerHTML = '<i class="fa-solid fa-lock text-[10px]"></i><span>ล็อคกลับ</span>';
+        unlockBtn.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-colors cursor-pointer';
+        unlockBtn.title = 'ล็อคกลับเป็นไซต์งานเดิม';
+      }
+    } else {
+      unlockBtn.classList.add('hidden');
+    }
+  }
+}
+
+/**
+ * เลือกไซต์งานเดิมใน select หรือเพิ่ม option ชั่วคราวหากไม่อยู่ในรายการมาตรฐาน
+ */
+function selectOrInjectSiteOption(siteSelect, siteValue) {
+  if (!siteSelect) return;
+  const siteTrim = String(siteValue || '').trim();
+  if (!siteTrim) return;
+
+  const matchedOpt = Array.from(siteSelect.options).find(
+    opt => opt.value !== '__NEW__' && opt.value.trim().toLowerCase() === siteTrim.toLowerCase()
+  );
+  if (matchedOpt) {
+    siteSelect.value = matchedOpt.value;
+  } else {
+    const opt = document.createElement('option');
+    opt.value = siteTrim;
+    opt.text = siteTrim;
+    const newOptIndex = Array.from(siteSelect.options).findIndex(o => o.value === '__NEW__');
+    if (newOptIndex !== -1) {
+      siteSelect.add(opt, newOptIndex);
+    } else {
+      siteSelect.add(opt);
+    }
+    siteSelect.value = siteTrim;
+  }
+}
+
+/**
+ * สลับการล็อค/ปลดล็อคไซต์งานบนหน้าจอแก้ไขงาน (อนุญาตเฉพาะ Admin)
+ */
+function toggleTaskSiteUnlock() {
+  if (!state.currentUser || state.currentUser.role !== 'Admin') return;
+  const taskId = document.getElementById('taskId')?.value.trim();
+  if (!taskId) return;
+
+  state.isTaskSiteUnlockedByAdmin = !state.isTaskSiteUnlockedByAdmin;
+  const siteSelect = document.getElementById('taskSiteSelect');
+  if (!state.isTaskSiteUnlockedByAdmin && state.editingOriginalTaskSite) {
+    selectOrInjectSiteOption(siteSelect, state.editingOriginalTaskSite);
+    const customSiteInput = document.getElementById('taskSiteCustom');
+    if (customSiteInput) customSiteInput.value = '';
+  }
+  setTaskSiteFieldLocked(!state.isTaskSiteUnlockedByAdmin, { isEditMode: true });
+}
+window.toggleTaskSiteUnlock = toggleTaskSiteUnlock;
+
+/**
  * เปิด Modal สำหรับสร้างงานใหม่
  */
 function openCreateTaskModal(defaultStatus = 'รอดำเนินการ') {
@@ -5564,6 +5677,9 @@ function openCreateTaskModal(defaultStatus = 'รอดำเนินการ'
   // วันครบกำหนดตั้งเป็นค่าว่าง
   setDateInputValue('taskDueDate', '');
 
+  state.editingOriginalTaskSite = '';
+  state.isTaskSiteUnlockedByAdmin = false;
+
   // กำหนดค่าเริ่มต้นไซต์งาน: หากกำลังกรองไซต์งานอยู่ ให้ใช้ไซต์นั้น หากไม่ให้ใช้ sites[0]
   renderSiteFormOptions();
   let defaultSite = state.sites[0] || '';
@@ -5573,6 +5689,7 @@ function openCreateTaskModal(defaultStatus = 'รอดำเนินการ'
   document.getElementById('taskSiteSelect').value = defaultSite;
   document.getElementById('customSiteWrapper').classList.add('hidden');
   document.getElementById('taskSiteCustom').value = '';
+  setTaskSiteFieldLocked(false, { isEditMode: false });
 
   // รีเซ็ตการเลือกผู้รับผิดชอบ
   renderAssigneeFormOptions('');
@@ -5633,29 +5750,15 @@ function openEditTaskModal(taskId) {
   document.getElementById('taskStatus').value = task.status;
   setDateInputValue('taskDueDate', task.dueDate || '');
 
-  // จัดการตัวเลือกไซต์งาน
+  // จัดการตัวเลือกไซต์งาน และล็อคเป็นค่าเริ่มต้นในหน้าแก้ไขงาน (Admin สามารถกดปลดล็อคได้เมื่อจำเป็น)
+  state.editingOriginalTaskSite = String(task.site || '').trim();
+  state.isTaskSiteUnlockedByAdmin = false;
   renderSiteFormOptions();
   const siteSelect = document.getElementById('taskSiteSelect');
-  const taskSiteTrim = String(task.site || '').trim();
-  const matchedSite = state.sites.find(s => s.trim().toLowerCase() === taskSiteTrim.toLowerCase());
-  if (matchedSite) {
-    siteSelect.value = matchedSite;
-    document.getElementById('customSiteWrapper').classList.add('hidden');
-  } else {
-    // หากไม่ใช่ Admin หรือตัวเลือก __NEW__ ไม่มี ให้สร้าง option เฉพาะสำหรับไซต์งานนี้เพื่อป้องกัน select เด้งกลับไปตัวแรก
-    if (!Array.from(siteSelect.options).some(opt => opt.value === '__NEW__')) {
-      const opt = document.createElement('option');
-      opt.value = taskSiteTrim;
-      opt.text = taskSiteTrim;
-      siteSelect.add(opt);
-      siteSelect.value = taskSiteTrim;
-      document.getElementById('customSiteWrapper').classList.add('hidden');
-    } else {
-      siteSelect.value = '__NEW__';
-      document.getElementById('customSiteWrapper').classList.remove('hidden');
-      document.getElementById('taskSiteCustom').value = task.site;
-    }
-  }
+  selectOrInjectSiteOption(siteSelect, state.editingOriginalTaskSite);
+  document.getElementById('customSiteWrapper').classList.add('hidden');
+  document.getElementById('taskSiteCustom').value = '';
+  setTaskSiteFieldLocked(true, { isEditMode: true });
 
   // จัดการตัวเลือกผู้รับผิดชอบ
   renderAssigneeFormOptions(task.assignee);
@@ -5734,6 +5837,8 @@ function closeTaskModal() {
   state.taskFileQueue = [];
   state.currentEditingAttachments = [];
   state.currentEditingChecklist = [];
+  state.editingOriginalTaskSite = '';
+  state.isTaskSiteUnlockedByAdmin = false;
   const checklistInput = document.getElementById('newChecklistItemInput');
   if (checklistInput) checklistInput.value = '';
   const fileInput = document.getElementById('taskFileInput');
@@ -5752,9 +5857,16 @@ function closeTaskModal() {
 function handleTaskFormSubmit(e) {
   e.preventDefault();
 
+  const editingTaskId = document.getElementById('taskId').value.trim();
+  const isEditing = Boolean(editingTaskId);
+  const canChangeSite = !isEditing || (state.isTaskSiteUnlockedByAdmin && state.currentUser && state.currentUser.role === 'Admin');
+
   const siteSelectVal = document.getElementById('taskSiteSelect').value;
   let finalSite = siteSelectVal;
-  if (siteSelectVal === '__NEW__') {
+  if (!canChangeSite) {
+    const originalTask = state.tasks.find(t => t.id === editingTaskId);
+    finalSite = state.editingOriginalTaskSite || (originalTask ? originalTask.site : siteSelectVal);
+  } else if (siteSelectVal === '__NEW__') {
     finalSite = document.getElementById('taskSiteCustom').value.trim();
     if (!finalSite) {
       Swal.fire({ icon: 'warning', title: 'ข้อมูลไม่ครบ', text: 'กรุณาระบุชื่อไซต์งาน' });
@@ -5800,7 +5912,7 @@ function handleTaskFormSubmit(e) {
   }
 
   const taskData = {
-    id: document.getElementById('taskId').value.trim(),
+    id: editingTaskId,
     site: finalSite,
     title: document.getElementById('taskTitle').value.trim(),
     description: document.getElementById('taskDesc').value.trim(),
@@ -5810,7 +5922,9 @@ function handleTaskFormSubmit(e) {
     priority: document.getElementById('taskPriority').value,
     status: document.getElementById('taskStatus').value,
     dueDate: finalDueDate,
-    checklist: state.currentEditingChecklist || []
+    checklist: state.currentEditingChecklist || [],
+    allowSiteChange: Boolean(isEditing && canChangeSite),
+    requestUsername: state.currentUser ? state.currentUser.username : ''
   };
 
   if (!taskData.title) {

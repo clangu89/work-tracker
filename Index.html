@@ -889,9 +889,20 @@
             <div class="md:col-span-7 space-y-4">
               <!-- ไซต์งาน -->
               <div>
-                <label class="block text-xs font-semibold text-[#201E1C] mb-1">
-                  ไซต์งาน / สถานที่ <span class="text-rose-500">*</span>
-                </label>
+                <div class="flex items-center justify-between gap-2 mb-1">
+                  <label for="taskSiteSelect" class="block text-xs font-semibold text-[#201E1C]">
+                    ไซต์งาน / สถานที่ <span class="text-rose-500">*</span>
+                    <span id="taskSiteLockedBadge" class="hidden inline-flex items-center gap-1 ml-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200">
+                      <i class="fa-solid fa-lock text-[9px]"></i> ล็อค
+                    </span>
+                  </label>
+                  <button type="button" id="btnUnlockTaskSite" onclick="toggleTaskSiteUnlock()"
+                          class="hidden inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-semibold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200/80 transition-colors cursor-pointer"
+                          title="ปลดล็อคเพื่อเปลี่ยนไซต์งาน (เฉพาะ Admin)">
+                    <i class="fa-solid fa-unlock-keyhole text-[10px]"></i>
+                    <span>ปลดล็อค (Admin)</span>
+                  </button>
+                </div>
                 <select id="taskSiteSelect" class="w-full px-3 py-2 text-sm bg-[#FAF8F2] border border-[#EFE9DC] rounded-xl focus:ring-2 focus:ring-[#2491FA]/30 focus:border-[#2491FA] focus:bg-white outline-none text-[#201E1C] cursor-pointer">
                   <!-- Rendered via JS -->
                 </select>

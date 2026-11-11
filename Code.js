@@ -1262,6 +1262,7 @@ function saveTask(taskData) {
     }
 
     let finalTaskId = taskData.id;
+    let persistedSite = String(taskData.site || '').trim() || 'ไม่ระบุไซต์งาน';
 
     if (rowIndex === -1) {
       // สร้างงานใหม่: สร้างรหัส TSK-XXXX
@@ -1281,7 +1282,7 @@ function saveTask(taskData) {
 
       const newRow = [
         finalTaskId,
-        taskData.site || 'ไม่ระบุไซต์งาน',
+        persistedSite,
         taskData.title || 'ไม่มีชื่อเรื่อง',
         taskData.description || '',
         taskData.assignee || 'ไม่ระบุ',
@@ -1301,9 +1302,19 @@ function saveTask(taskData) {
       sheet.appendRow(newRow);
       SpreadsheetApp.flush();
     } else {
+      // ล็อคไซต์งานเมื่อแก้ไข: อนุญาตให้เปลี่ยนไซต์งานได้เฉพาะกรณี Admin กดปลดล็อคโดยตรงเท่านั้น
+      persistedSite = String((oldTask && oldTask.site) || '').trim() || persistedSite;
+      const requestedSite = String(taskData.site || '').trim();
+      if (requestedSite && oldTask && requestedSite !== String(oldTask.site || '').trim()) {
+        const userProfile = taskData.allowSiteChange === true ? getUserProfile_(taskData.requestUsername) : null;
+        if (taskData.allowSiteChange === true && userProfile && userProfile.role === 'Admin') {
+          persistedSite = requestedSite;
+        }
+      }
+
       // อัปเดตงานเดิม
       sheet.getRange(rowIndex, 2, 1, 7).setValues([[
-        taskData.site || 'ไม่ระบุไซต์งาน',
+        persistedSite,
         taskData.title || 'ไม่มีชื่อเรื่อง',
         taskData.description || '',
         taskData.assignee || 'ไม่ระบุ',
@@ -1329,12 +1340,12 @@ function saveTask(taskData) {
       }
       SpreadsheetApp.flush();
 
-      // หากไซต์งานเปลี่ยน ให้ย้ายโฟลเดอร์ใน Drive ไปยังโฟลเดอร์ไซต์ใหม่ด้วย (ถ้ามี)
-      if (oldTask && oldTask.site !== taskData.site) {
+      // หากไซต์งานเปลี่ยน (โดย Admin ปลดล็อค) ให้ย้ายโฟลเดอร์ใน Drive ไปยังโฟลเดอร์ไซต์ใหม่ด้วย (ถ้ามี)
+      if (oldTask && String(oldTask.site || '').trim() !== persistedSite) {
         const folderId = values[rowIndex - 1][11];
         if (folderId) {
           try {
-            relocateTaskFolder_(folderId, taskData.site);
+            relocateTaskFolder_(folderId, persistedSite);
           } catch (e) {
             console.warn('relocateTaskFolder_ warning: ' + e.message);
           }
@@ -1355,7 +1366,7 @@ function saveTask(taskData) {
 
     const savedTask = {
       id: finalTaskId,
-      site: taskData.site,
+      site: persistedSite,
       title: taskData.title,
       description: taskData.description,
       assignee: taskData.assignee,
