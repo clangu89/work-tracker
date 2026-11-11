@@ -27,6 +27,11 @@ const DEFAULT_SITES = [
 ];
 
 /**
+ * ลิงก์ Google Apps Script Editor สำหรับการยืนยันสิทธิ์ OAuth 1 ครั้ง
+ */
+const SCRIPT_EDITOR_URL = 'https://script.google.com/d/1cd4_bnt_nnuKTQzu3F6gDmMpwWoeBBcuNyqPCn3lDBsAfmguacW1aUBE/edit';
+
+/**
  * =========================================================================
  * ฟังก์ชันสำหรับให้ผู้ดูแลระบบกด "เรียกใช้ (Run)" ใน Google Apps Script Editor ครั้งแรก
  * เพื่อยินยอมสิทธิ์การเข้าถึง Google Drive (One-time OAuth Authorization)
@@ -37,6 +42,24 @@ function authorizeDriveApp() {
   const root = getAttachmentsRootFolder_();
   console.log('✅ ยืนยันสิทธิ์ Google Drive สำเร็จ! โฟลเดอร์ราก:', root.getName(), 'ID:', root.getId());
   return 'ยืนยันสิทธิ์ Google Drive สำเร็จเรียบร้อยแล้ว!';
+}
+
+/**
+ * =========================================================================
+ * ฟังก์ชันสำหรับให้เจ้าของสคริปต์กด "เรียกใช้ (Run)" ใน Google Apps Script Editor 1 ครั้ง
+ * เพื่อยินยอมสิทธิ์ ScriptApp (https://www.googleapis.com/auth/script.scriptapp)
+ * และติดตั้ง Time Trigger ปฏิทินเข้าไซต์งานให้ทำงานอัตโนมัติทันที
+ * =========================================================================
+ */
+function authorizeCalendarTrigger() {
+  getDb_();
+  getAttachmentsRootFolder_();
+  const existingTriggers = ScriptApp.getProjectTriggers();
+  console.log('จำนวน Trigger เดิมในโปรเจกต์:', existingTriggers.length);
+
+  const setupRes = setupScheduleReminderTrigger();
+  console.log('✅ ยืนยันสิทธิ์และติดตั้ง Calendar Trigger สำเร็จ:', JSON.stringify(setupRes));
+  return setupRes;
 }
 
 /**
@@ -752,6 +775,9 @@ function saveSettings(newSettings) {
         }
       } catch (syncErr) {
         console.warn('Auto sync calendar trigger warning: ' + syncErr.message);
+        triggerStatus = (typeof buildTriggerErrorResponse_ === 'function')
+          ? buildTriggerErrorResponse_(syncErr)
+          : { success: false, installed: false, triggerCount: 0, authError: syncErr.message, scriptEditorUrl: SCRIPT_EDITOR_URL, message: syncErr.message };
       }
     }
 

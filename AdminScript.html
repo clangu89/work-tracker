@@ -1505,6 +1505,57 @@ function loadCalendarTriggerStatus() {
     .getCalendarTriggerStatus();
 }
 
+const DEFAULT_GAS_EDITOR_URL = "https://script.google.com/d/1cd4_bnt_nnuKTQzu3F6gDmMpwWoeBBcuNyqPCn3lDBsAfmguacW1aUBE/edit";
+
+/**
+ * ตรวจสอบว่า Error จาก Trigger เกิดจากขาดสิทธิ์ ScriptApp OAuth หรือไม่
+ */
+function isCalendarTriggerAuthError(statusOrMsg) {
+  if (statusOrMsg && typeof statusOrMsg === "object" && statusOrMsg.needsAuth === true) return true;
+  const raw = (statusOrMsg && typeof statusOrMsg === "object")
+    ? (statusOrMsg.authError || statusOrMsg.message || "")
+    : String(statusOrMsg || "");
+  const msg = raw.toLowerCase();
+  return msg.includes("script.scriptapp") ||
+    msg.includes("getprojecttriggers") ||
+    msg.includes("newtrigger") ||
+    msg.includes("ไม่ได้รับอนุญาต") ||
+    msg.includes("permission") ||
+    msg.includes("authorization");
+}
+
+/**
+ * แสดงคำแนะนำการกดอนุญาตสิทธิ์ ScriptApp 1 ครั้งใน Google Apps Script Editor
+ */
+function showCalendarTriggerAuthModal(editorUrl) {
+  const targetUrl = editorUrl || DEFAULT_GAS_EDITOR_URL;
+  if (typeof Swal === "undefined") {
+    showToast("กรุณาเปิด Apps Script Editor แล้วรันฟังก์ชัน authorizeCalendarTrigger เพื่ออนุญาตสิทธิ์ 1 ครั้ง", "warning", 5000);
+    return;
+  }
+  Swal.fire({
+    title: "ต้องกดอนุญาตสิทธิ์ Time Trigger (ทำครั้งเดียว)",
+    icon: "warning",
+    html: `<div class="text-xs text-left space-y-2.5 bg-amber-50/80 p-3.5 rounded-2xl border border-amber-200 text-[#201E1C]">
+      <p class="leading-relaxed">บัญชีเจ้าของสคริปต์ยังไม่ได้กดอนุมัติสิทธิ์ <b>script.scriptapp</b> ผ่านหน้า Editor (การอัปเดตโค้ดผ่าน CLI จะไม่อนุมัติ OAuth ให้อัตโนมัติ)</p>
+      <div class="bg-white rounded-xl p-3 border border-amber-200/80 space-y-1.5">
+        <div class="font-bold text-amber-900">ขั้นตอนแก้ไข 3 ขั้นตอน:</div>
+        <div>1. กดปุ่ม <b>"เปิด Apps Script Editor"</b> ด้านล่าง</div>
+        <div>2. เลือกฟังก์ชัน <code class="px-1.5 py-0.5 rounded bg-amber-100 font-mono font-bold text-amber-950">authorizeCalendarTrigger</code> ด้านบน แล้วกด <b>เรียกใช้ (Run)</b></div>
+        <div>3. กด <b>Review Permissions → Advanced → Allow</b> เสร็จแล้วกลับมาหน้านี้กด <b>ตรวจสอบอีกครั้ง</b></div>
+      </div>
+    </div>`,
+    showCancelButton: true,
+    confirmButtonText: '<i class="fa-solid fa-up-right-from-square mr-1"></i> เปิด Apps Script Editor',
+    confirmButtonColor: "#2491FA",
+    cancelButtonText: "ปิด"
+  }).then(result => {
+    if (result.isConfirmed) {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    }
+  });
+}
+
 /**
  * เรนเดอร์สถานะ Time Trigger บนหน้าจอ Admin Center
  */
@@ -1513,16 +1564,33 @@ function renderCalendarTriggerStatus(statusObj) {
   const dot = document.getElementById("cal-trigger-status-dot");
   const textEl = document.getElementById("cal-trigger-status-text");
   const lastRunEl = document.getElementById("cal-trigger-last-run");
+  const authGuide = document.getElementById("cal-trigger-auth-guide");
+  const editorBtn = document.getElementById("btnOpenGasEditorForTrigger");
   if (!banner || !dot || !textEl) return;
 
-  if (!statusObj || statusObj.authError) {
+  const errText = statusObj ? (statusObj.authError || (statusObj.success === false ? statusObj.message : "")) : "";
+  if (!statusObj || errText) {
+    const isAuthErr = isCalendarTriggerAuthError(statusObj || errText);
     banner.className = "flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-3.5 py-2.5 rounded-2xl border border-rose-200 bg-rose-50/80 text-xs";
     dot.className = "w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0";
     textEl.className = "font-semibold text-rose-800";
-    textEl.textContent = "ไม่สามารถตรวจสอบ Trigger ได้" + (statusObj?.authError ? ` (${statusObj.authError})` : "");
+
+    if (isAuthErr) {
+      textEl.textContent = "⚠️ ยังไม่ได้รับอนุญาตสิทธิ์ ScriptApp (กรุณารันฟังก์ชัน authorizeCalendarTrigger ใน Apps Script Editor 1 ครั้งตามคำแนะนำด้านล่าง)";
+      if (editorBtn && statusObj && statusObj.scriptEditorUrl) {
+        editorBtn.href = statusObj.scriptEditorUrl;
+      }
+      if (authGuide) authGuide.classList.remove("hidden");
+    } else {
+      textEl.textContent = "ไม่สามารถตรวจสอบ Trigger ได้" + (errText ? ` (${errText})` : "");
+      if (authGuide) authGuide.classList.add("hidden");
+    }
+
     if (lastRunEl) lastRunEl.textContent = "";
     return;
   }
+
+  if (authGuide) authGuide.classList.add("hidden");
 
   if (statusObj.installed) {
     const modeLabel = statusObj.isExactMode ? "ตรวจสอบทุก 5 นาที (ตรงเวลาเป๊ะ)" : "แบบรายวันเดิม (แนะนำกดติดตั้ง/รีเซ็ตใหม่)";
@@ -1639,7 +1707,6 @@ function saveCalendarSettings() {
         btn.innerHTML = origHtml;
       }
       if (res && res.success) {
-        showToast(`บันทึกการตั้งค่าและซิงค์เวลาส่ง ${cleanReminderTime} น. เรียบร้อย`, "success");
         if (!adminState.settings) adminState.settings = {};
         Object.assign(adminState.settings, newSettings);
         if (window.state && state.settings) {
@@ -1647,7 +1714,17 @@ function saveCalendarSettings() {
         }
         if (res.triggerStatus) {
           renderCalendarTriggerStatus(res.triggerStatus);
+          if (res.triggerStatus.success === false) {
+            showToast(
+              `บันทึกการตั้งค่าลงชีตแล้ว แต่ยังติดตั้ง Trigger ไม่ได้ (${isCalendarTriggerAuthError(res.triggerStatus) ? "ต้องกดอนุญาตสิทธิ์ ScriptApp ก่อน" : (res.triggerStatus.message || "เกิดข้อผิดพลาด")})`,
+              "warning",
+              4500
+            );
+          } else {
+            showToast(`บันทึกการตั้งค่าและซิงค์เวลาส่ง ${cleanReminderTime} น. เรียบร้อย`, "success");
+          }
         } else {
+          showToast(`บันทึกการตั้งค่าเวลา ${cleanReminderTime} น. เรียบร้อย`, "success");
           loadCalendarTriggerStatus();
         }
       } else {
@@ -1750,11 +1827,22 @@ function setupCalendarTrigger() {
           showToast(res.message || "ติดตั้ง Trigger สำเร็จ", "success");
         }
       } else {
-        showToast((res && res.message) || "ไม่สามารถติดตั้ง Trigger ได้", "error");
+        renderCalendarTriggerStatus(res || { success: false, installed: false, message: "ไม่สามารถติดตั้ง Trigger ได้" });
+        if (isCalendarTriggerAuthError(res)) {
+          showCalendarTriggerAuthModal(res && res.scriptEditorUrl);
+        } else {
+          showToast((res && res.message) || "ไม่สามารถติดตั้ง Trigger ได้", "error");
+        }
       }
     })
     .withFailureHandler(err => {
-      showToast("เกิดข้อผิดพลาดในการติดตั้ง Trigger: " + (err.message || err), "error");
+      const errMsg = (err && err.message) ? err.message : String(err || "");
+      renderCalendarTriggerStatus({ success: false, installed: false, authError: errMsg });
+      if (isCalendarTriggerAuthError(errMsg)) {
+        showCalendarTriggerAuthModal();
+      } else {
+        showToast("เกิดข้อผิดพลาดในการติดตั้ง Trigger: " + errMsg, "error");
+      }
     })
     .setupScheduleReminderTrigger();
 }

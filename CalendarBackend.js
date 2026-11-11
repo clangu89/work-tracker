@@ -1055,6 +1055,38 @@ function checkAndRunSiteCalendarReminders() {
 }
 
 /**
+ * ตรวจสอบว่าข้อความ Error เกี่ยวข้องกับสิทธิ์ ScriptApp OAuth หรือไม่
+ */
+function isScriptAppAuthError_(errMsg) {
+  const msg = String(errMsg || '').toLowerCase();
+  return msg.includes('script.scriptapp') ||
+    msg.includes('getprojecttriggers') ||
+    msg.includes('newtrigger') ||
+    msg.includes('ไม่ได้รับอนุญาต') ||
+    msg.includes('permission') ||
+    msg.includes('authorization');
+}
+
+/**
+ * สร้าง Response มาตรฐานเมื่อตรวจสอบหรือติดตั้ง Time Trigger ไม่สำเร็จ
+ */
+function buildTriggerErrorResponse_(error) {
+  const errMsg = (error && error.message) ? error.message : String(error || 'Unknown error');
+  const needsAuth = isScriptAppAuthError_(errMsg);
+  return {
+    success: false,
+    installed: false,
+    triggerCount: 0,
+    needsAuth: needsAuth,
+    authError: errMsg,
+    scriptEditorUrl: (typeof SCRIPT_EDITOR_URL !== 'undefined')
+      ? SCRIPT_EDITOR_URL
+      : 'https://script.google.com/d/1cd4_bnt_nnuKTQzu3F6gDmMpwWoeBBcuNyqPCn3lDBsAfmguacW1aUBE/edit',
+    message: errMsg
+  };
+}
+
+/**
  * ตรวจสอบสถานะการติดตั้งและประวัติการทำงานของ Time Trigger ปฏิทินเข้าไซต์งาน
  */
 function getCalendarTriggerStatus() {
@@ -1077,6 +1109,7 @@ function getCalendarTriggerStatus() {
       installed: matchingTriggers.length > 0,
       isExactMode: hasExactDispatcher,
       triggerCount: matchingTriggers.length,
+      needsAuth: false,
       configuredTime: configuredTime,
       enabled: enabled,
       lastRunAt: props.getProperty('CAL_LAST_REMINDER_AT') || '',
@@ -1084,13 +1117,7 @@ function getCalendarTriggerStatus() {
     };
   } catch (error) {
     console.error('getCalendarTriggerStatus error: ' + error.message);
-    return {
-      success: false,
-      installed: false,
-      triggerCount: 0,
-      authError: error.message,
-      message: error.message
-    };
+    return buildTriggerErrorResponse_(error);
   }
 }
 
@@ -1128,12 +1155,15 @@ function setupScheduleReminderTrigger() {
     const formattedTime = timeStr + ' น. (เวลาประเทศไทย 24 ชม.)';
     return {
       success: true,
+      installed: Boolean(triggerStatus && triggerStatus.installed),
+      triggerCount: triggerStatus ? triggerStatus.triggerCount : 1,
+      needsAuth: false,
       triggerStatus: triggerStatus,
       message: `ติดตั้งระบบแจ้งเตือนอัตโนมัติเรียบร้อย (ตรวจสอบทุก 5 นาที พร้อมส่งเวลา ${formattedTime} ทุกวัน)`
     };
   } catch (error) {
     console.error('setupScheduleReminderTrigger error: ' + error.message);
-    return { success: false, message: error.message };
+    return buildTriggerErrorResponse_(error);
   }
 }
 
